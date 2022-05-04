@@ -1,6 +1,6 @@
 package com.gnssAug.Android.models;
 
-public class AndroidSatellite extends AndroidGNSSLog {
+public class Satellite extends GNSSLog {
 
 	// Note this is GPS System time at time of Transmission
 	private double t;
@@ -11,7 +11,7 @@ public class AndroidSatellite extends AndroidGNSSLog {
 	private double[] satEci;
 	private double[] elevAzm;
 
-	public AndroidSatellite(AndroidGNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel) {
+	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel) {
 		super(log);
 		this.t = t;
 		this.pseudorange = pseudorange;
@@ -57,4 +57,7 @@ public class AndroidSatellite extends AndroidGNSSLog {
 		return elevAzm;
 	}
 
+	public void setElevAzm(double[] elevAzm) {
+		this.elevAzm = elevAzm;
+	}
 }

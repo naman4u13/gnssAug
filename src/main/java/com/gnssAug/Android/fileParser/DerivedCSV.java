@@ -26,11 +26,10 @@ public class DerivedCSV {
 			// reads one line at a time
 			while ((line = reader.readNext()) != null) {
 
-				double millisSinceGpsEpoch = Double.parseDouble(line[2]);
+				long millisSinceGpsEpoch = Long.parseLong(line[2]);
 				int svid = Integer.parseInt(line[4]);
 				String signalType = line[5];
 				String obsvCode = codeMap.get(signalType);
-
 				Derived derivedData = new Derived(Arrays.copyOfRange(line, 6, line.length));
 				long tRX = derivedData.gettSV() + Math.round((derivedData.getRawPrM() / SpeedofLight) * 1e9);
 				tRX = Math.round(tRX / 1e6);

@@ -9,15 +9,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.TreeMap;
 
-import com.gnssAug.Android.models.AndroidGNSSLog;
+import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.IMUsensor;
 import com.opencsv.CSVWriter;
 
-public class GNSSLog {
+public class GNSS_Log {
 
-	public static TreeMap<Long, HashMap<String, ArrayList<AndroidGNSSLog>>> process(String path) throws Exception {
+	public static TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> process(String path) throws Exception {
 
-		TreeMap<Long, HashMap<String, ArrayList<AndroidGNSSLog>>> map = new TreeMap<Long, HashMap<String, ArrayList<AndroidGNSSLog>>>();
+		TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> map = new TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>>();
 		ArrayList<IMUsensor> imuList = new ArrayList<IMUsensor>();
 		ArrayList<String[]> logs = new ArrayList<String[]>();
 		try {
@@ -41,12 +41,12 @@ public class GNSSLog {
 			for (String line : lines) {
 				String[] data = line.trim().split(",");
 				if (data[0].equals("Raw")) {
-					AndroidGNSSLog log = new AndroidGNSSLog(data);
+					GNSSLog log = new GNSSLog(data);
 					long tRx = Math.round(log.gettRx() * 1e3);
 					String obsvCode = log.getObsvCode();
 					int svid = log.getSvid();
-					map.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<AndroidGNSSLog>>())
-							.computeIfAbsent(obsvCode, k -> new ArrayList<AndroidGNSSLog>()).add(log);
+					map.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
+							.computeIfAbsent(obsvCode, k -> new ArrayList<GNSSLog>()).add(log);
 					logs.add(log.toString().split(","));
 					if ((log.getBootGPStime() - bootGPStime) / 1e6 > 1) {
 						if (bootGPStime == 0) {

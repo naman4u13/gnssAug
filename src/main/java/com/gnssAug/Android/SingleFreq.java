@@ -7,21 +7,21 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.TimeZone;
 
-import com.gnssAug.Android.models.AndroidGNSSLog;
-import com.gnssAug.Android.models.AndroidSatellite;
 import com.gnssAug.Android.models.Derived;
+import com.gnssAug.Android.models.GNSSLog;
+import com.gnssAug.Android.models.Satellite;
 
 public class SingleFreq {
 	private final static double SpeedofLight = 299792458;
 
-	public static ArrayList<AndroidSatellite> process(double tRX,
+	public static ArrayList<Satellite> process(double tRX,
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,
-			HashMap<String, ArrayList<AndroidGNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo) {
+			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo) {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/YYYY kk:mm:ss.SSS");
 		String errStr = sdf.format(time.getTime());
 		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-		ArrayList<AndroidSatellite> SV = new ArrayList<AndroidSatellite>();
+		ArrayList<Satellite> SV = new ArrayList<Satellite>();
 		long key = Math.round(tRX * 1e3);
 		HashMap<String, HashMap<Integer, Derived>> derObsvMap = null;
 
@@ -33,7 +33,7 @@ public class SingleFreq {
 			derObsvMap = derivedMap.get(key - 1);
 		} else {
 
-			ArrayList<AndroidGNSSLog> errLog = null;
+			ArrayList<GNSSLog> errLog = null;
 			for (int i = 0; i < obsvCodeList.length; i++) {
 				if (gnssLogMap.get(obsvCodeList[i]) != null) {
 					errLog = gnssLogMap.get(obsvCodeList[i]);
@@ -64,7 +64,7 @@ public class SingleFreq {
 			}
 
 			HashMap<Integer, Derived> navMap = derObsvMap.get(obsvCode);
-			ArrayList<AndroidGNSSLog> gnssLog = gnssLogMap.get(obsvCode);
+			ArrayList<GNSSLog> gnssLog = gnssLogMap.get(obsvCode);
 
 			if (gnssLog == null) {
 
@@ -77,7 +77,7 @@ public class SingleFreq {
 			int satCount = gnssLog.size();
 
 			for (int i = 0; i < satCount; i++) {
-				AndroidGNSSLog logObs = gnssLog.get(i);
+				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
 				if (!navMap.containsKey(svid)) {
 
@@ -96,8 +96,7 @@ public class SingleFreq {
 				double corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
 
 				// NOTE: satClkDrift require investigation
-				AndroidSatellite sat = new AndroidSatellite(logObs, t, corrPR, navData.getSatECEF(),
-						navData.getSatVel());
+				Satellite sat = new Satellite(logObs, t, corrPR, navData.getSatECEF(), navData.getSatVel());
 				SV.add(sat);
 
 			}
