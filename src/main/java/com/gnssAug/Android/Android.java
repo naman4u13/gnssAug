@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
@@ -22,13 +23,16 @@ import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
+import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
 import com.gnssAug.Android.helper.ComputeEleAzm;
+import com.gnssAug.Android.helper.INS.IMUconfigure;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
+import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.utility.GraphPlotter;
 import com.gnssAug.Android.utility.LatLonUtil;
@@ -47,7 +51,7 @@ public class Android {
 
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -55,9 +59,11 @@ public class Android {
 
 			ArrayList<double[]> rxLLH = GroundTruth.processCSV(GTcsv);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
-			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = null;
+
 			derivedMap = DerivedCSV.processCSV(derived_csv_path);
-			gnssLogMaps = GNSS_Log.process(gnss_log_path);
+			GNSS_Log.process(gnss_log_path);
+			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
+			ArrayList<IMUsensor> imuList = GNSS_Log.getImuList();
 
 			int gtIndex = 0;
 			for (long tRxMilli : gnssLogMaps.keySet()) {
@@ -80,6 +86,7 @@ public class Android {
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
 						weekNo);
 				if (satList.size() < 4) {
+					System.err.println("Less than 4 satellites");
 					continue;
 				}
 				double[] userEcef = LinearLeastSquare.process(satList, false);
@@ -112,6 +119,20 @@ public class Android {
 						.add(LatLonUtil.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }));
 				timeList.add(tRxMilli);
 			}
+
+			if (estimatorType == 4) {
+				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
+						imuList);
+				for (Map.Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry : imuMap.entrySet()) {
+					if (entry.getValue().size() != 3) {
+						System.err.println("FATAL ERROR in IMU map");
+						throw new Exception("Erroneous imu sampling rate");
+					}
+				}
+
+				System.out.print("");
+			}
+
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphEnuMap = new HashMap<String, ArrayList<double[]>>();
 			for (String key : estPosMap.keySet()) {

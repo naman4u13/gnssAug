@@ -13,7 +13,7 @@ public class IMUsensor {
 	private double biasX;
 	private double biasY;
 	private double biasZ;
-	private double tRx;
+	private long tRx;
 
 	public IMUsensor(String[] data) {
 		super();
@@ -29,6 +29,18 @@ public class IMUsensor {
 			this.biasY = data[7].isBlank() ? 0 : Double.parseDouble(data[7]);
 			this.biasZ = data[8].isBlank() ? 0 : Double.parseDouble(data[8]);
 		}
+	}
+
+	// Constructor used for interpolated IMU sensor values, don't require
+	// utcTimeMillis, elapsedRealtimeNanos and biases
+	public IMUsensor(AndroidSensor type, double xVal, double yVal, double zVal, long tRx, long utcTimeMillis) {
+		super();
+		this.type = type;
+		this.xVal = xVal;
+		this.yVal = yVal;
+		this.zVal = zVal;
+		this.tRx = tRx;
+		this.utcTimeMillis = utcTimeMillis;
 	}
 
 	public AndroidSensor getType() {
@@ -67,14 +79,14 @@ public class IMUsensor {
 		return biasZ;
 	}
 
-	public double gettRx() {
+	public long gettRx() {
 		return tRx;
 	}
 
-	// Accurate upto nanosec range, as bootGPStime is chosen as Long, IMU tRx
+	// In millisec, used for timestamp, IMU tRx
 	// doesn't need to be as accurate GNSS
 	public void settRx(long bootGPStime) {
-		tRx = (bootGPStime + elapsedRealtimeNanos) / 1e9;
+		tRx = (long) ((bootGPStime + elapsedRealtimeNanos) / 1e6);
 	}
 
 }

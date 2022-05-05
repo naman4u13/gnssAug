@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeMap;
 
@@ -15,10 +16,13 @@ import com.opencsv.CSVWriter;
 
 public class GNSS_Log {
 
-	public static TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> process(String path) throws Exception {
+	private static TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = null;
+	private static ArrayList<IMUsensor> imuList = null;
 
-		TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> map = new TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>>();
-		ArrayList<IMUsensor> imuList = new ArrayList<IMUsensor>();
+	public static void process(String path) throws Exception {
+
+		gnssLogMaps = new TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>>();
+		imuList = new ArrayList<IMUsensor>();
 		ArrayList<String[]> logs = new ArrayList<String[]>();
 		try {
 			Path fileName = Path.of(path);
@@ -45,7 +49,7 @@ public class GNSS_Log {
 					long tRx = Math.round(log.gettRx() * 1e3);
 					String obsvCode = log.getObsvCode();
 					int svid = log.getSvid();
-					map.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
+					gnssLogMaps.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
 							.computeIfAbsent(obsvCode, k -> new ArrayList<GNSSLog>()).add(log);
 					logs.add(log.toString().split(","));
 					if ((log.getBootGPStime() - bootGPStime) / 1e6 > 1) {
@@ -67,8 +71,8 @@ public class GNSS_Log {
 			for (IMUsensor imu : imuList) {
 				imu.settRx(bootGPStime);
 			}
+			Collections.sort(imuList, (o1, o2) -> (int) (o1.gettRx() - o2.gettRx()));
 
-			return map;
 			// recordGNSSLogCSV(logs);
 		} catch (Exception e) {
 			// TODO: handle exception
@@ -76,6 +80,14 @@ public class GNSS_Log {
 			throw new Exception(e);
 		}
 
+	}
+
+	public static TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> getGnssLogMaps() {
+		return gnssLogMaps;
+	}
+
+	public static ArrayList<IMUsensor> getImuList() {
+		return imuList;
 	}
 
 	public static void recordGNSSLogCSV(ArrayList<String[]> logs) {
