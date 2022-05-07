@@ -80,11 +80,19 @@ public class IMUconfigure {
 
 	private static IMUsensor interpolateIMU(long x0, long x1, long x, IMUsensor y0, IMUsensor y1) {
 		long[] X = new long[] { x0, x1 };
-		double xVal = Interpolator.linear(X, new double[] { y0.getX(), y1.getX() }, x);
-		double yVal = Interpolator.linear(X, new double[] { y0.getY(), y1.getY() }, x);
-		double zVal = Interpolator.linear(X, new double[] { y0.getZ(), y1.getZ() }, x);
+		double[] val = new double[3];
+		double[] y0Val = y0.getVal();
+		double[] y1Val = y1.getVal();
+		double[] bias = new double[3];
+		double[] y0Bias = y0.getBias();
+		double[] y1Bias = y1.getBias();
+		for (int i = 0; i < 3; i++) {
+			val[i] = Interpolator.linear(X, new double[] { y0Val[i], y1Val[i] }, x);
+			bias[i] = Interpolator.linear(X, new double[] { y0Bias[i], y1Bias[i] }, x);
+		}
+
 		double utcTimeMillis = Interpolator.linear(X, new double[] { y0.getUtcTimeMillis(), y1.getUtcTimeMillis() }, x);
-		IMUsensor y = new IMUsensor(y0.getType(), xVal, yVal, zVal, x, (long) utcTimeMillis);
+		IMUsensor y = new IMUsensor(y0.getType(), val, bias, x, (long) utcTimeMillis);
 		return y;
 	}
 

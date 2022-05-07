@@ -7,12 +7,8 @@ public class IMUsensor {
 	private AndroidSensor type;
 	private long utcTimeMillis;
 	private long elapsedRealtimeNanos;
-	private double xVal;
-	private double yVal;
-	private double zVal;
-	private double biasX;
-	private double biasY;
-	private double biasZ;
+	private double[] val = new double[3];
+	private double[] bias = new double[3];
 	private long tRx;
 
 	public IMUsensor(String[] data) {
@@ -21,24 +17,23 @@ public class IMUsensor {
 				: data[0].equals("UncalGyro") ? AndroidSensor.Gyroscope : AndroidSensor.Magnetometer;
 		this.utcTimeMillis = Long.parseLong(data[1]);
 		this.elapsedRealtimeNanos = Long.parseLong(data[2]);
-		this.xVal = Double.parseDouble(data[3]);
-		this.yVal = Double.parseDouble(data[4]);
-		this.zVal = Double.parseDouble(data[5]);
+		this.val[0] = Double.parseDouble(data[3]);
+		this.val[1] = Double.parseDouble(data[4]);
+		this.val[2] = Double.parseDouble(data[5]);
 		if (data.length > 6) {
-			this.biasX = data[6].isBlank() ? 0 : Double.parseDouble(data[6]);
-			this.biasY = data[7].isBlank() ? 0 : Double.parseDouble(data[7]);
-			this.biasZ = data[8].isBlank() ? 0 : Double.parseDouble(data[8]);
+			this.bias[0] = data[6].isBlank() ? 0 : Double.parseDouble(data[6]);
+			this.bias[1] = data[7].isBlank() ? 0 : Double.parseDouble(data[7]);
+			this.bias[2] = data[8].isBlank() ? 0 : Double.parseDouble(data[8]);
 		}
 	}
 
 	// Constructor used for interpolated IMU sensor values, don't require
 	// utcTimeMillis, elapsedRealtimeNanos and biases
-	public IMUsensor(AndroidSensor type, double xVal, double yVal, double zVal, long tRx, long utcTimeMillis) {
+	public IMUsensor(AndroidSensor type, double[] val, double[] bias, long tRx, long utcTimeMillis) {
 		super();
 		this.type = type;
-		this.xVal = xVal;
-		this.yVal = yVal;
-		this.zVal = zVal;
+		this.val = val;
+		this.bias = bias;
 		this.tRx = tRx;
 		this.utcTimeMillis = utcTimeMillis;
 	}
@@ -55,28 +50,12 @@ public class IMUsensor {
 		return elapsedRealtimeNanos;
 	}
 
-	public double getX() {
-		return xVal;
+	public double[] getVal() {
+		return val;
 	}
 
-	public double getY() {
-		return yVal;
-	}
-
-	public double getZ() {
-		return zVal;
-	}
-
-	public double getBiasX() {
-		return biasX;
-	}
-
-	public double getBiasY() {
-		return biasY;
-	}
-
-	public double getBiasZ() {
-		return biasZ;
+	public double[] getBias() {
+		return bias;
 	}
 
 	public long gettRx() {

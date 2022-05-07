@@ -30,6 +30,7 @@ import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
 import com.gnssAug.Android.helper.ComputeEleAzm;
 import com.gnssAug.Android.helper.INS.IMUconfigure;
+import com.gnssAug.Android.helper.INS.StateInitialization;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.IMUsensor;
@@ -48,7 +49,7 @@ public class Android {
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
 			ArrayList<double[]> trueECEFlist = new ArrayList<double[]>();
-
+			ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
 			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test2";
@@ -114,6 +115,7 @@ public class Android {
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 
 				}
+				SVlist.add(satList);
 				trueLLHlist.add(trueUserLLH);
 				trueECEFlist
 						.add(LatLonUtil.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }));
@@ -130,7 +132,8 @@ public class Android {
 					}
 				}
 
-				System.out.print("");
+				StateInitialization.initialize(imuMap, SVlist);
+
 			}
 
 			// Calculate Accuracy Metrics
