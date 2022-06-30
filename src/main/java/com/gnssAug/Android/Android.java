@@ -43,6 +43,7 @@ public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv) {
 		try {
+
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 			HashMap<String, ArrayList<HashMap<String, Double>>> ErrMap = new HashMap<String, ArrayList<HashMap<String, Double>>>();
 
@@ -52,7 +53,7 @@ public class Android {
 			ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test2";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test3";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -132,7 +133,9 @@ public class Android {
 					}
 				}
 
-				StateInitialization.initialize(imuMap, SVlist);
+				double[][] dcm = StateInitialization.initialize(imuMap, SVlist);
+
+				System.out.print("");
 
 			}
 

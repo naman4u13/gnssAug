@@ -187,56 +187,6 @@ public class LatLonUtil {
 		return s;
 	}
 
-	public static int lonAdd(int lon, int diff) {
-		lon = lon + diff;
-		if (lon >= 180) {
-			lon -= 360;
-		} else if (lon < -180) {
-			lon += 360;
-		}
-		return lon;
-	}
-
-	public static double lonAddD(double lon, int diff) {
-		lon = lon + diff;
-		if (lon >= 180) {
-			lon -= 360;
-		} else if (lon < -180) {
-			lon += 360;
-		}
-		return lon;
-	}
-
-	public static double lonAddDD(double lon, double diff) {
-		lon = lon + diff;
-		if (lon >= 180) {
-			lon -= 360;
-		} else if (lon < -180) {
-			lon += 360;
-		}
-		return lon;
-	}
-
-	// Only for IGP grid selection
-	// accounting for continuous longitude
-	public static double lonDiff(double x1, double x2) {
-		// Because the IGP grid class/algo this func will be used will only work with
-		// lats below 75, therefore lon
-		// spacing will never be greater than 10
-		double diff;
-		if (Math.abs(x2 - x1) > 10) {
-
-			if (x2 < 0) {
-				diff = 360 - x1 + x2;
-				return diff;
-			}
-			diff = -360 - x1 + x2;
-			return diff;
-		}
-		diff = x2 - x1;
-		return diff;
-	}
-
 	public static double[] ENUtoECEF(double[] enu, double[] ECEFr) {
 		double[] LLH = ecef2lla(ECEFr);
 		double lat = LLH[0];
@@ -279,4 +229,13 @@ public class LatLonUtil {
 		return enu;
 	}
 
+	/*
+	 * The radius of curvature for east-west motion is known as the transverse
+	 * radius of curvature, Re, it is also known as normal radius or prime vertical
+	 * radius
+	 */
+	public static double getNormalEarthRadius(double lat) {
+		double Re = a / Math.sqrt(1 - Math.pow(e * Math.sin(lat), 2));
+		return Re;
+	}
 }

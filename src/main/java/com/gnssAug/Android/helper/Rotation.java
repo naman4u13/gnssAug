@@ -1,12 +1,16 @@
 package com.gnssAug.Android.helper;
 
-public class RotationMatrix {
+import java.util.stream.IntStream;
+
+import org.ejml.simple.SimpleMatrix;
+
+public class Rotation {
 
 	public static double[] dcm2euler(double[][] dcm) {
 
-		double yaw = Math.atan2(dcm[1][0], dcm[0][0]);
-		double pitch = -Math.asin(dcm[2][0]);
-		double roll = Math.atan2(dcm[2][1], dcm[2][2]);
+		double yaw = Math.atan2(dcm[0][1], dcm[0][0]);
+		double pitch = -Math.asin(dcm[0][2]);
+		double roll = Math.atan2(dcm[1][2], dcm[2][2]);
 		return new double[] { yaw, pitch, roll };
 	}
 
@@ -44,4 +48,19 @@ public class RotationMatrix {
 			System.err.println("ERROR");
 		}
 	}
+
+	public static SimpleMatrix reorthonormDcm(SimpleMatrix A) {
+		SimpleMatrix[] a = new SimpleMatrix[3];
+		IntStream.range(0, 3).forEach(i -> a[i] = A.extractVector(true, i));
+		double delta12 = a[0].transpose().mult(a[1]).get(0);
+		double delta13 = a[0].transpose().mult(a[2]).get(0);
+		double delta23 = a[1].transpose().mult(a[2]).get(0);
+		SimpleMatrix[] a_new = new SimpleMatrix[3];
+		a_new[0] = a[0].minus(a[1].scale(0.5 * delta12)).minus(a[2].scale(0.5 * delta13));
+		a_new[1] = a[1].minus(a[0].scale(0.5 * delta12)).minus(a[2].scale(0.5 * delta23));
+		a_new[2] = a[2].minus(a[0].scale(0.5 * delta13)).minus(a[1].scale(0.5 * delta23));
+
+		return null;
+	}
+
 }

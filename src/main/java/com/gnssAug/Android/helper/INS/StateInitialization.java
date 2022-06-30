@@ -10,14 +10,15 @@ import java.util.TreeMap;
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.helper.GeomagneticField;
-import com.gnssAug.Android.helper.RotationMatrix;
+import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.utility.LatLonUtil;
+import com.gnssAug.Android.utility.Matrix;
 
 public class StateInitialization {
 
-	public static void initialize(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
+	public static double[][] initialize(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
 			ArrayList<ArrayList<Satellite>> SVlist) throws Exception {
 
 		double[] acc0 = new double[3];
@@ -52,13 +53,16 @@ public class StateInitialization {
 		// Calculate declination angle at initial position and time
 		GeomagneticField gmf = new GeomagneticField((float) llh0[0], (float) llh0[1], (float) llh0[2], utcTimeMilli);
 		double declinationAngle = Math.toRadians(gmf.getDeclination());
-		double[] euler = RotationMatrix.dcm2euler(dcm);
-		// Compensate for declination angle to obtain euler angles for geographic north
-		// frame
-		euler[0] = euler[0] + declinationAngle;
-		dcm = RotationMatrix.euler2dcm(euler);
-
-		System.out.print("");
+		// declination angle is angle from true north to magnetic north, need to provide
+		// negative of it
+		double[][] declinationRotMat = Rotation.euler2dcm(new double[] { -declinationAngle, 0, 0 });
+		dcm = Matrix.multiply(declinationRotMat, dcm);
+//		double[] euler = Rotation.dcm2euler(dcm);
+//		// Compensate for declination angle to obtain euler angles for geographic north
+//		// frame
+//		euler[0] = euler[0] + declinationAngle;
+//		dcm = Rotation.euler2dcm(euler);
+		return dcm;
 	}
 
 	private static double norm2(double[] vector) {
