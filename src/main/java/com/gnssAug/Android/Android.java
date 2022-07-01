@@ -133,6 +133,7 @@ public class Android {
 					}
 				}
 
+				// Body Frame to ENU
 				double[][] dcm = StateInitialization.initialize(imuMap, SVlist);
 
 				System.out.print("");

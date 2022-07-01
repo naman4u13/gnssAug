@@ -13,6 +13,10 @@ public class LatLonUtil {
 	public static final double b = 6356752.314245;
 	private static final double e = Math.sqrt((Math.pow(a, 2) - Math.pow(b, 2)) / Math.pow(a, 2));
 	public static final double e2 = Math.sqrt((Math.pow(a, 2) - Math.pow(b, 2)) / Math.pow(b, 2));
+	// Earth Angular rate
+	public static final double omega_ie = 7.292115e-5;
+	// Earth’s gravitational constant
+	public static final double mu = 3.986004418e14;
 
 	public static double[] ecef2lla(double[] ECEF) {
 
@@ -229,6 +233,28 @@ public class LatLonUtil {
 		return enu;
 	}
 
+	public static double[] enu_ned_convert(double[] x) {
+		SimpleMatrix Y = enu_ned_convert(new SimpleMatrix(3, 1, true, x));
+		double[] y = new double[] { Y.get(0), Y.get(1), Y.get(2) };
+		return y;
+	}
+
+	public static double[][] enu_ned_convert(double[][] x) {
+		SimpleMatrix Y = enu_ned_convert(new SimpleMatrix(x));
+		double[][] y = Matrix.matrix2Array(Y);
+		return y;
+	}
+
+	// DCM for ENU to NED and vice versa is same
+	public static SimpleMatrix enu_ned_convert(SimpleMatrix x) {
+
+		double[][] c = new double[][] { { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } };
+		SimpleMatrix C = new SimpleMatrix(c);
+		SimpleMatrix y = C.mult(x);
+		return y;
+
+	}
+
 	/*
 	 * The radius of curvature for east-west motion is known as the transverse
 	 * radius of curvature, Re, it is also known as normal radius or prime vertical
@@ -237,5 +263,18 @@ public class LatLonUtil {
 	public static double getNormalEarthRadius(double lat) {
 		double Re = a / Math.sqrt(1 - Math.pow(e * Math.sin(lat), 2));
 		return Re;
+	}
+
+	/*
+	 * Reference: Principles of GNSS, Inertial, and Multi-Sensor Integrated
+	 * Navigation Systems (GNSS Technology and Applications) by Paul D. Groves
+	 * Section: 2.3.5 Specific Force, Gravitation, and Gravity
+	 */
+	public static double getGravity(double lat, double alt) {
+		double g0 = (9.7803253359 * (1 + (0.001931853 * Math.pow(Math.sin(lat), 2))))
+				/ Math.sqrt(1 - Math.pow(e * Math.sin(lat), 2));
+		double g = g0
+				* (1 - ((2 * alt / a) * (1 + f + (Math.pow(omega_ie * a, 2) * b / mu))) + (3 * Math.pow(alt / a, 2)));
+		return g;
 	}
 }

@@ -1,5 +1,7 @@
 package com.gnssAug.Android.utility;
 
+import org.ejml.simple.SimpleMatrix;
+
 public class Matrix {
 
 	// Only for 3*3 matrix
@@ -19,5 +21,15 @@ public class Matrix {
 
 	public static double[][] getSkewSymMat(double[] a) {
 		return new double[][] { { 0, -a[2], a[1] }, { a[2], 0, -a[0] }, { -a[1], a[0], 0 } };
+	}
+
+	public static double[][] matrix2Array(SimpleMatrix matrix) {
+		double[][] array = new double[matrix.numRows()][matrix.numCols()];
+		for (int r = 0; r < matrix.numRows(); r++) {
+			for (int c = 0; c < matrix.numCols(); c++) {
+				array[r][c] = matrix.get(r, c);
+			}
+		}
+		return array;
 	}
 }
