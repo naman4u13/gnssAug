@@ -13,9 +13,9 @@ public class LatLonUtil {
 	public static final double b = 6356752.314245;
 	private static final double e = Math.sqrt((Math.pow(a, 2) - Math.pow(b, 2)) / Math.pow(a, 2));
 	public static final double e2 = Math.sqrt((Math.pow(a, 2) - Math.pow(b, 2)) / Math.pow(b, 2));
-	// Earth Angular rate
+	// Earth Angular rate in rad/s
 	public static final double omega_ie = 7.292115e-5;
-	// Earth’s gravitational constant
+	// Earth’s gravitational constant in m^3/s^2
 	public static final double mu = 3.986004418e14;
 
 	public static double[] ecef2lla(double[] ECEF) {
@@ -261,8 +261,17 @@ public class LatLonUtil {
 	 * radius
 	 */
 	public static double getNormalEarthRadius(double lat) {
-		double Re = a / Math.sqrt(1 - Math.pow(e * Math.sin(lat), 2));
-		return Re;
+		double Rn = a / Math.sqrt(1 - Math.pow(e * Math.sin(lat), 2));
+		return Rn;
+	}
+
+	/*
+	 * The radius of curvature for north-south motion is known as the meridian
+	 * radius
+	 */
+	public static double getMeridianEarthRadius(double lat) {
+		double Rm = (a * (1 - Math.pow(e, 2))) / Math.pow(1 - Math.pow(e * Math.sin(lat), 2), 1.5);
+		return Rm;
 	}
 
 	/*

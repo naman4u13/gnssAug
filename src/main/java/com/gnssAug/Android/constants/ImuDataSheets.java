@@ -24,6 +24,10 @@ public class ImuDataSheets {
 		public static double vrw = 180 * g * 1e-6;
 		// in rad/(s^0.5)
 		public static double arw = Math.toRadians(0.007);
+		// in sec
+		public static double accBiasCorrTime = 300;
+		// in sec
+		public static double gyroBiasCorrTime = 300;
 
 	}
 

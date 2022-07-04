@@ -5,8 +5,8 @@ public class State {
 	private double[] p;
 	private double[] v;
 	private double[][] dcm;
-	private double[] biasAcc;
-	private double[] biasGyro;
+	private double[] accBias;
+	private double[] gyroBias;
 
 	public State(double pX, double pY, double pZ, double vX, double vY, double vZ, double[][] dcm, double biasAccX,
 			double biasAccY, double biasAccZ, double biasGyroX, double biasGyroY, double biasGyroZ) {
@@ -18,12 +18,12 @@ public class State {
 		this.v[1] = vY;
 		this.v[2] = vZ;
 		this.dcm = dcm;
-		this.biasAcc[0] = biasAccX;
-		this.biasAcc[1] = biasAccY;
-		this.biasAcc[2] = biasAccZ;
-		this.biasGyro[0] = biasGyroX;
-		this.biasGyro[1] = biasGyroY;
-		this.biasGyro[2] = biasGyroZ;
+		this.accBias[0] = biasAccX;
+		this.accBias[1] = biasAccY;
+		this.accBias[2] = biasAccZ;
+		this.gyroBias[0] = biasGyroX;
+		this.gyroBias[1] = biasGyroY;
+		this.gyroBias[2] = biasGyroZ;
 	}
 
 	public double[] getP() {
@@ -50,20 +50,20 @@ public class State {
 		this.dcm = dcm;
 	}
 
-	public double[] getBiasAcc() {
-		return biasAcc;
+	public double[] getAccBias() {
+		return accBias;
 	}
 
-	public void setBiasAcc(double[] biasAcc) {
-		this.biasAcc = biasAcc;
+	public void setAccBias(double[] accBias) {
+		this.accBias = accBias;
 	}
 
-	public double[] getBiasGyro() {
-		return biasGyro;
+	public double[] getGyroBias() {
+		return gyroBias;
 	}
 
-	public void setBiasGyro(double[] biasGyro) {
-		this.biasGyro = biasGyro;
+	public void setGyroBias(double[] gyroBias) {
+		this.gyroBias = gyroBias;
 	}
 
 }
