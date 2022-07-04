@@ -40,6 +40,15 @@ public class INSfusion {
 		double gyroBiasCov = Math.pow(ImuDataSheets.Pixel4.gyroTurnOnBias, 2);
 		Covariance p = new Covariance(100, 100, 100, 0.1, 0.1, 0.1, 0.1156, 0.1156, 0.1156, accBiasCov, accBiasCov,
 				accBiasCov, gyroBiasCov, gyroBiasCov, gyroBiasCov);
+		// PSD of random walk - N
+		double acc_SN = Math.pow(ImuDataSheets.Pixel4.vrw, 2);
+		double gyro_SN = Math.pow(ImuDataSheets.Pixel4.arw, 2);
+		// PSD of Bias Instability - B
+		double acc_SB = 2 * Math.pow(ImuDataSheets.Pixel4.accInRunBias, 2) * Math.log(2)
+				/ (Math.PI * Math.pow(0.4365, 2) * ImuDataSheets.Pixel4.accBiasCorrTime);
+		double gyro_SB = 2 * Math.pow(ImuDataSheets.Pixel4.gyroInRunBias, 2) * Math.log(2)
+				/ (Math.PI * Math.pow(0.4365, 2) * ImuDataSheets.Pixel4.gyroBiasCorrTime);
+		double[] q = new double[] { acc_SN, gyro_SN, acc_SB, gyro_SB };
 		int n = SVlist.size();
 		if (n != timeList.size()) {
 			System.err.println("FATAL ERROR in INSfusion.java");
@@ -125,7 +134,7 @@ public class INSfusion {
 		x.setP(new double[] { newLat, newLon, newAlt });
 	}
 
-	private static void updateErrorState(State x, double[] estAcc, double[] estGyro, double tau) {
+	private static void updateErrorState(State x, double[] estAcc, double[] estGyro, double tau, double[] q) {
 
 		double lat = x.getP()[0];
 		double lon = x.getP()[1];
@@ -133,29 +142,68 @@ public class INSfusion {
 		double vn = x.getV()[0];
 		double ve = x.getV()[1];
 		double vd = x.getV()[2];
+		SimpleMatrix dcm = new SimpleMatrix(x.getDcm());
 		double Rn = LatLonUtil.getNormalEarthRadius(lat);
 		double Rm = LatLonUtil.getMeridianEarthRadius(lat);
 		double omega_ie = LatLonUtil.omega_ie;
 		double slat = Math.sin(lat);
 		double clat = Math.cos(lat);
 		double tlat = Math.tan(lat);
-		double lat_dot = vn / (Rm + alt);
-		double lon_dot = ve / (clat * (Rn + alt));
-		double omega_N = (lon_dot + omega_ie) * clat;
-		double omega_E = -lat_dot;
-		double omega_D = -(lon_dot + omega_ie) * slat;
+		// Instead of Re has used original denominator in rhos
+		double rhoE = -vn / (Rm + alt);
+		double rhoN = ve / (Rn + alt);
+		double rhoD = -ve * tlat / (Rn + alt);
+		double OmegaN = omega_ie * clat;
+		double OmegaD = -omega_ie * slat;
+		double omega_N = OmegaN + rhoN;
+		double omega_E = rhoE;
+		double omega_D = OmegaD + rhoD;
+		// Unsure whether to use Rn+alt or Rm+alt for Re
+		double Re = Rn + alt;
+		double kD = vd / Re;
+		double g = LatLonUtil.getGravity(lat, alt);
+		double F63 = Math.pow(rhoN, 2) + Math.pow(rhoE, 2) - (2 * g / Re);
 
-		double[][] Fpp = new double[][] { { 0, 0, -vn / Math.pow(Rm + alt, 2) },
+		SimpleMatrix Fpp = new SimpleMatrix(new double[][] { { 0, 0, -vn / Math.pow(Rm + alt, 2) },
 				{ ve * slat / ((Rn + alt) * Math.pow(clat, 2)), 0, -ve / (Math.pow(Rn + alt, 2) * clat) },
-				{ 0, 0, 0 } };
-		double[][] Fpv = new double[][] { { 1 / (Rm + alt), 0, 0 }, { 0, 1 / ((Rn + alt) * clat), 0 }, { 0, 0, -1 } };
-		double[][] Fpa = new double[3][3];
-		double[][] Fap = new double[][] { { omega_ie * slat, 0, ve / Math.pow(Rn + alt, 2) },
+				{ 0, 0, 0 } });
+		SimpleMatrix Fpv = new SimpleMatrix(
+				new double[][] { { 1 / (Rm + alt), 0, 0 }, { 0, 1 / ((Rn + alt) * clat), 0 }, { 0, 0, -1 } });
+		SimpleMatrix Fpj = new SimpleMatrix(new double[3][3]);
+		SimpleMatrix Fjp = new SimpleMatrix(new double[][] { { omega_ie * slat, 0, ve / Math.pow(Rn + alt, 2) },
 				{ 0, 0, -vn / Math.pow(Rm + alt, 2) }, { (omega_ie * clat) + (ve / ((Rn + alt) * Math.pow(clat, 2))), 0,
-						-(ve * tlat) / Math.pow(Rn + alt, 2) } };
-		double[][] Fav = new double[][] { { 0, -1 / (Rn + alt), 0 }, { 1 / (Rm + alt), 0, 0 },
-				{ 0, tlat / (Rn + alt), 0 } };
-		double[][] Faa = Matrix.getSkewSymMat(new double[] { -omega_N, -omega_E, -omega_D });
-		double[][] Fvp = new double[][] {};
+						-(ve * tlat) / Math.pow(Rn + alt, 2) } });
+		SimpleMatrix Fjv = new SimpleMatrix(
+				new double[][] { { 0, -1 / (Rn + alt), 0 }, { 1 / (Rm + alt), 0, 0 }, { 0, tlat / (Rn + alt), 0 } });
+		SimpleMatrix Fjj = new SimpleMatrix(Matrix.getSkewSymMat(new double[] { -omega_N, -omega_E, -omega_D }));
+		SimpleMatrix Fvp = new SimpleMatrix(new double[][] {
+				{ (-2 * OmegaN * ve) - (rhoN * ve / Math.pow(clat, 2)), 0, (rhoE * kD) - (rhoN * rhoD) },
+				{ (2 * ((OmegaN * vn) + (OmegaD * vd))) + (rhoN * vn / Math.pow(clat, 2)), 0,
+						(-rhoE * rhoD) - (kD * rhoN) },
+				{ -2 * ve * OmegaD, 0, F63 } });
+		SimpleMatrix Fvv = new SimpleMatrix(new double[][] { { kD, 2 * omega_D, -rhoE },
+				{ -(omega_D + OmegaD), kD - (rhoE * tlat), omega_N + OmegaN }, { 2 * rhoE, -2 * omega_N, 0 } });
+		SimpleMatrix Fvj = new SimpleMatrix(Matrix.getSkewSymMat(estAcc, true));
+		SimpleMatrix zero = new SimpleMatrix(3, 3);
+		SimpleMatrix identity = SimpleMatrix.identity(3);
+		SimpleMatrix Fva = identity;
+		SimpleMatrix Fjg = identity;
+		SimpleMatrix Faa = identity.scale(-1 / ImuDataSheets.Pixel4.accBiasCorrTime);
+		SimpleMatrix Fgg = identity.scale(-1 / ImuDataSheets.Pixel4.gyroBiasCorrTime);
+		SimpleMatrix F = (Fpp.concatColumns(Fpv, Fpj, zero, zero))
+				.concatRows(Fvp.concatColumns(Fvv, Fvj, dcm.scale(-1).mult(Fva), zero))
+				.concatRows(Fjp.concatColumns(Fjv, Fjj, zero, dcm.mult(Fjg)))
+				.concatRows(zero.concatColumns(zero, zero, Faa, zero))
+				.concatRows(zero.concatColumns(zero, zero, zero, Fgg));
+		// First order approx of phi
+		SimpleMatrix phi = SimpleMatrix.identity(15).plus(F.scale(tau));
+		SimpleMatrix G = (zero.concatColumns(zero, zero, zero))
+				.concatRows(dcm.scale(-1).concatColumns(zero, zero, zero))
+				.concatRows(zero.concatColumns(dcm, zero, zero)).concatRows(zero.concatColumns(zero, identity, zero))
+				.concatRows(zero.concatColumns(zero, zero, identity));
+		SimpleMatrix Q = new SimpleMatrix(4, 1, true, q);
+		// First order approx of Qk
+		SimpleMatrix Qk = G.mult(Q).mult(G.transpose()).scale(tau);
+
 	}
 }

@@ -1,5 +1,7 @@
 package com.gnssAug.Android.utility;
 
+import java.util.Arrays;
+
 import org.ejml.simple.SimpleMatrix;
 
 public class Matrix {
@@ -20,6 +22,13 @@ public class Matrix {
 	}
 
 	public static double[][] getSkewSymMat(double[] a) {
+		return getSkewSymMat(a, false);
+	}
+
+	public static double[][] getSkewSymMat(double[] a, boolean isNeg) {
+		if (isNeg) {
+			Arrays.stream(a).forEach(i -> i = -i);
+		}
 		return new double[][] { { 0, -a[2], a[1] }, { a[2], 0, -a[0] }, { -a[1], a[0], 0 } };
 	}
 
