@@ -13,21 +13,21 @@ public class ImuDataSheets {
 
 	public class Pixel4 {
 		// in m/s
-		public static double accInRunBias = 150 * g * 1e-3;
+		public static final double accInRunBias = 150 * g * 1e-3;
 		// in rad/s
-		public static double gyroInRunBias = Math.toRadians(3);
+		public static final double gyroInRunBias = Math.toRadians(3);
 		// in m/s
-		public static double accTurnOnBias = 150 * g * 1e-3;
+		public static final double accTurnOnBias = 150 * g * 1e-3;
 		// in rad/s
-		public static double gyroTurnOnBias = Math.toRadians(3);
+		public static final double gyroTurnOnBias = Math.toRadians(3);
 		// in m/(s^1.5)
-		public static double vrw = 180 * g * 1e-6;
+		public static final double vrw = 180 * g * 1e-6;
 		// in rad/(s^0.5)
-		public static double arw = Math.toRadians(0.007);
+		public static final double arw = Math.toRadians(0.007);
 		// in sec
-		public static double accBiasCorrTime = 300;
+		public static final double accBiasCorrTime = 300;
 		// in sec
-		public static double gyroBiasCorrTime = 300;
+		public static final double gyroBiasCorrTime = 300;
 
 	}
 

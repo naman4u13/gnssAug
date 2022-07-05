@@ -11,9 +11,9 @@ import java.util.stream.IntStream;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.ClockAllanVar;
 import com.gnssAug.Android.constants.ImuDataSheets;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
-import com.gnssAug.Android.estimation.KalmanFilter.Models.Covariance;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.State;
 import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
@@ -33,13 +33,16 @@ public class INSfusion {
 		IntStream.range(0, 2).forEach(i -> llh0[i] = Math.toRadians(llh0[i]));
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
-		State x = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0);
+		double rxClkOff = ecef0[3];
+		State x = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians
 		double accBiasCov = Math.pow(ImuDataSheets.Pixel4.accTurnOnBias, 2);
 		double gyroBiasCov = Math.pow(ImuDataSheets.Pixel4.gyroTurnOnBias, 2);
-		Covariance p = new Covariance(100, 100, 100, 0.1, 0.1, 0.1, 0.1156, 0.1156, 0.1156, accBiasCov, accBiasCov,
-				accBiasCov, gyroBiasCov, gyroBiasCov, gyroBiasCov);
+		double[] p0 = new double[] { 100, 100, 100, 0.1, 0.1, 0.1, 0.1156, 0.1156, 0.1156, accBiasCov, accBiasCov,
+				accBiasCov, gyroBiasCov, gyroBiasCov, gyroBiasCov, 5, 0.005 };
+		SimpleMatrix p = new SimpleMatrix(17, 17);
+		IntStream.range(0, 17).forEach(i -> p.set(i, i, p0[i]));
 		// PSD of random walk - N
 		double acc_SN = Math.pow(ImuDataSheets.Pixel4.vrw, 2);
 		double gyro_SN = Math.pow(ImuDataSheets.Pixel4.arw, 2);
@@ -48,12 +51,16 @@ public class INSfusion {
 				/ (Math.PI * Math.pow(0.4365, 2) * ImuDataSheets.Pixel4.accBiasCorrTime);
 		double gyro_SB = 2 * Math.pow(ImuDataSheets.Pixel4.gyroInRunBias, 2) * Math.log(2)
 				/ (Math.PI * Math.pow(0.4365, 2) * ImuDataSheets.Pixel4.gyroBiasCorrTime);
-		double[] q = new double[] { acc_SN, gyro_SN, acc_SB, gyro_SB };
+		// Receiver Clock phase and frequency PSD
+		double sf = ClockAllanVar.TCXO_low_qaulity.sf;
+		double sg = ClockAllanVar.TCXO_low_qaulity.sg;
+		double[] q = new double[] { acc_SN, gyro_SN, acc_SB, gyro_SB, sf, sg };
 		int n = SVlist.size();
 		if (n != timeList.size()) {
 			System.err.println("FATAL ERROR in INSfusion.java");
 			throw new Exception("size of SVlist and timelist does not match");
 		}
+
 		int i = 0;
 		Iterator<Entry<Long, HashMap<AndroidSensor, IMUsensor>>> iterator = imuMap.entrySet().iterator();
 		double prevTime = iterator.next().getKey();
@@ -64,8 +71,15 @@ public class INSfusion {
 				long time = entry.getKey();
 				HashMap<AndroidSensor, IMUsensor> imuSensor = entry.getValue();
 				double tau = time - prevTime;
-				updateTotalState(x, imuSensor, tau);
+				// Update Total State and get estimated INS observables - {acc,gyro}
+				double[][] estInsObs = updateTotalState(x, imuSensor, tau);
 				prevTime = time;
+				/*
+				 * Get transition matrix Phi and covariance matrix Qk, for discrete state space
+				 * filtering
+				 */
+				SimpleMatrix[] discParam = getDiscreteParams(x, estInsObs[0], estInsObs[1], tau, q);
+				updateErrorState(x, p, discParam[0], discParam[1]);
 				if (time == timeList.get(i)) {
 
 					i++;
@@ -76,7 +90,7 @@ public class INSfusion {
 
 	}
 
-	private static void updateTotalState(State x, HashMap<AndroidSensor, IMUsensor> imuSensor, double tau) {
+	private static double[][] updateTotalState(State x, HashMap<AndroidSensor, IMUsensor> imuSensor, double tau) {
 
 		// Update Bias state
 		double[] accBias = Arrays.stream(x.getAccBias())
@@ -127,14 +141,28 @@ public class INSfusion {
 		double newLon = lon + ((tau / 2) * ((oldVel.get(1) / ((Rn + alt) * Math.cos(lat)))
 				+ (newVel.get(1) / ((newRe + newAlt) * Math.cos(newLat)))));
 
+		// Receiver Clock update
+		double oldRxClkDrift = x.getRxClk()[1];
+		double oldRxClkOff = x.getRxClk()[0];
+		double newRxClkDrift = oldRxClkDrift;
+		double newRxClkOff = oldRxClkOff + (newRxClkDrift * tau);
+
 		x.setAccBias(accBias);
 		x.setGyroBias(gyroBias);
 		x.setDcm(Matrix.matrix2Array(newDcm));
 		x.setV(new double[] { newVel.get(0), newVel.get(1), newVel.get(2) });
 		x.setP(new double[] { newLat, newLon, newAlt });
+		x.setRxClk(new double[] { newRxClkOff, newRxClkDrift });
+
+		return new double[][] { estAcc, estGyro };
 	}
 
-	private static void updateErrorState(State x, double[] estAcc, double[] estGyro, double tau, double[] q) {
+	private static void updateErrorState(State x, SimpleMatrix p, SimpleMatrix phi, SimpleMatrix Qk) {
+		p = phi.mult(p).mult(phi.transpose()).plus(Qk);
+	}
+
+	private static SimpleMatrix[] getDiscreteParams(State x, double[] estAcc, double[] estGyro, double tau,
+			double[] q) {
 
 		double lat = x.getP()[0];
 		double lon = x.getP()[1];
@@ -195,15 +223,23 @@ public class INSfusion {
 				.concatRows(Fjp.concatColumns(Fjv, Fjj, zero, dcm.mult(Fjg)))
 				.concatRows(zero.concatColumns(zero, zero, Faa, zero))
 				.concatRows(zero.concatColumns(zero, zero, zero, Fgg));
+		F.concatColumns(new SimpleMatrix(15, 2));
+		F.concatRows(new SimpleMatrix(2, 17));
+		F.set(15, 16, 1);
 		// First order approx of phi
-		SimpleMatrix phi = SimpleMatrix.identity(15).plus(F.scale(tau));
+		SimpleMatrix phi = SimpleMatrix.identity(17).plus(F.scale(tau));
 		SimpleMatrix G = (zero.concatColumns(zero, zero, zero))
 				.concatRows(dcm.scale(-1).concatColumns(zero, zero, zero))
 				.concatRows(zero.concatColumns(dcm, zero, zero)).concatRows(zero.concatColumns(zero, identity, zero))
 				.concatRows(zero.concatColumns(zero, zero, identity));
-		SimpleMatrix Q = new SimpleMatrix(4, 1, true, q);
+		G.concatColumns(new SimpleMatrix(15, 2));
+		G.concatRows(new SimpleMatrix(2, 14));
+		G.set(15, 12, 1);
+		G.set(16, 13, 1);
+		SimpleMatrix Q = new SimpleMatrix(6, 1, true, q);
 		// First order approx of Qk
 		SimpleMatrix Qk = G.mult(Q).mult(G.transpose()).scale(tau);
+		return new SimpleMatrix[] { phi, Qk };
 
 	}
 }

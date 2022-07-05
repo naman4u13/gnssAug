@@ -153,4 +153,12 @@ public class Covariance {
 	public void set(int i, int j, double val) {
 		cov[i][j] = val;
 	}
+
+	public double[][] get() {
+		return cov;
+	}
+
+	public void set(double[][] cov) {
+
+	}
 }

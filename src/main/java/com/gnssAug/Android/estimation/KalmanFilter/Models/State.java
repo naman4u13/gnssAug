@@ -7,9 +7,11 @@ public class State {
 	private double[][] dcm;
 	private double[] accBias;
 	private double[] gyroBias;
+	private double[] rxClk;
 
 	public State(double pX, double pY, double pZ, double vX, double vY, double vZ, double[][] dcm, double biasAccX,
-			double biasAccY, double biasAccZ, double biasGyroX, double biasGyroY, double biasGyroZ) {
+			double biasAccY, double biasAccZ, double biasGyroX, double biasGyroY, double biasGyroZ, double clkOff,
+			double clkDrift) {
 		super();
 		this.p[0] = pX;
 		this.p[1] = pY;
@@ -24,6 +26,8 @@ public class State {
 		this.gyroBias[0] = biasGyroX;
 		this.gyroBias[1] = biasGyroY;
 		this.gyroBias[2] = biasGyroZ;
+		this.rxClk[0] = clkOff;
+		this.rxClk[1] = clkDrift;
 	}
 
 	public double[] getP() {
@@ -64,6 +68,14 @@ public class State {
 
 	public void setGyroBias(double[] gyroBias) {
 		this.gyroBias = gyroBias;
+	}
+
+	public double[] getRxClk() {
+		return rxClk;
+	}
+
+	public void setRxClk(double[] rxClk) {
+		this.rxClk = rxClk;
 	}
 
 }
