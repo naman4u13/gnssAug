@@ -15,6 +15,7 @@ import com.gnssAug.Android.constants.ClockAllanVar;
 import com.gnssAug.Android.constants.ImuDataSheets;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.State;
+import com.gnssAug.Android.helper.GeomagneticField;
 import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
@@ -34,15 +35,15 @@ public class INSfusion {
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
 		double rxClkOff = ecef0[3];
-		State x = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
+		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians
 		double accBiasCov = Math.pow(ImuDataSheets.Pixel4.accTurnOnBias, 2);
 		double gyroBiasCov = Math.pow(ImuDataSheets.Pixel4.gyroTurnOnBias, 2);
 		double[] p0 = new double[] { 100, 100, 100, 0.1, 0.1, 0.1, 0.1156, 0.1156, 0.1156, accBiasCov, accBiasCov,
 				accBiasCov, gyroBiasCov, gyroBiasCov, gyroBiasCov, 5, 0.005 };
-		SimpleMatrix p = new SimpleMatrix(17, 17);
-		IntStream.range(0, 17).forEach(i -> p.set(i, i, p0[i]));
+		SimpleMatrix P = new SimpleMatrix(17, 17);
+		IntStream.range(0, 17).forEach(i -> P.set(i, i, p0[i]));
 		// PSD of random walk - N
 		double acc_SN = Math.pow(ImuDataSheets.Pixel4.vrw, 2);
 		double gyro_SN = Math.pow(ImuDataSheets.Pixel4.arw, 2);
@@ -70,16 +71,16 @@ public class INSfusion {
 				Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry = iterator.next();
 				long time = entry.getKey();
 				HashMap<AndroidSensor, IMUsensor> imuSensor = entry.getValue();
-				double tau = time - prevTime;
+				double tau = (time - prevTime) * 1e-3;
 				// Update Total State and get estimated INS observables - {acc,gyro}
-				double[][] estInsObs = updateTotalState(x, imuSensor, tau);
+				double[][] estInsObs = predictTotalState(X, imuSensor, tau);
 				prevTime = time;
 				/*
 				 * Get transition matrix Phi and covariance matrix Qk, for discrete state space
 				 * filtering
 				 */
-				SimpleMatrix[] discParam = getDiscreteParams(x, estInsObs[0], estInsObs[1], tau, q);
-				updateErrorState(x, p, discParam[0], discParam[1]);
+				SimpleMatrix[] discParam = getDiscreteParams(X, estInsObs[0], estInsObs[1], tau, q);
+				predictErrorState(X, P, discParam[0], discParam[1]);
 				if (time == timeList.get(i)) {
 
 					i++;
@@ -90,12 +91,12 @@ public class INSfusion {
 
 	}
 
-	private static double[][] updateTotalState(State x, HashMap<AndroidSensor, IMUsensor> imuSensor, double tau) {
+	private static double[][] predictTotalState(State X, HashMap<AndroidSensor, IMUsensor> imuSensor, double tau) {
 
 		// Update Bias state
-		double[] accBias = Arrays.stream(x.getAccBias())
+		double[] accBias = Arrays.stream(X.getAccBias())
 				.map(i -> i * Math.exp(-tau / ImuDataSheets.Pixel4.accBiasCorrTime)).toArray();
-		double[] gyroBias = Arrays.stream(x.getGyroBias())
+		double[] gyroBias = Arrays.stream(X.getGyroBias())
 				.map(i -> i * Math.exp(-tau / ImuDataSheets.Pixel4.gyroBiasCorrTime)).toArray();
 
 		double[] obsAcc = imuSensor.get(AndroidSensor.Accelerometer).getVal();
@@ -103,16 +104,16 @@ public class INSfusion {
 		double[] obsGyro = imuSensor.get(AndroidSensor.Gyroscope).getVal();
 		double[] estGyro = IntStream.range(0, 3).mapToDouble(j -> obsGyro[j] - gyroBias[j]).toArray();
 
-		double lat = x.getP()[0];
-		double lon = x.getP()[1];
-		double alt = x.getP()[2];
-		double[] vel = x.getV();
+		double lat = X.getP()[0];
+		double lon = X.getP()[1];
+		double alt = X.getP()[2];
+		double[] vel = X.getV();
 		double Rn = LatLonUtil.getNormalEarthRadius(lat);
 		double Rm = LatLonUtil.getMeridianEarthRadius(lat);
 		double earthAngularRate = LatLonUtil.omega_ie;
 
 		// Attitude update
-		SimpleMatrix oldDcm = new SimpleMatrix(x.getDcm());
+		SimpleMatrix oldDcm = new SimpleMatrix(X.getDcm());
 		SimpleMatrix omega_b_ib = new SimpleMatrix(Matrix.getSkewSymMat(estGyro));
 		double[] _omega_n_ie = new double[] { earthAngularRate * Math.cos(lat), 0, -earthAngularRate * Math.sin(lat) };
 		SimpleMatrix omega_n_ie = new SimpleMatrix(Matrix.getSkewSymMat(_omega_n_ie));
@@ -142,35 +143,35 @@ public class INSfusion {
 				+ (newVel.get(1) / ((newRe + newAlt) * Math.cos(newLat)))));
 
 		// Receiver Clock update
-		double oldRxClkDrift = x.getRxClk()[1];
-		double oldRxClkOff = x.getRxClk()[0];
+		double oldRxClkDrift = X.getRxClk()[1];
+		double oldRxClkOff = X.getRxClk()[0];
 		double newRxClkDrift = oldRxClkDrift;
 		double newRxClkOff = oldRxClkOff + (newRxClkDrift * tau);
 
-		x.setAccBias(accBias);
-		x.setGyroBias(gyroBias);
-		x.setDcm(Matrix.matrix2Array(newDcm));
-		x.setV(new double[] { newVel.get(0), newVel.get(1), newVel.get(2) });
-		x.setP(new double[] { newLat, newLon, newAlt });
-		x.setRxClk(new double[] { newRxClkOff, newRxClkDrift });
+		X.setAccBias(accBias);
+		X.setGyroBias(gyroBias);
+		X.setDcm(Matrix.matrix2Array(newDcm));
+		X.setV(new double[] { newVel.get(0), newVel.get(1), newVel.get(2) });
+		X.setP(new double[] { newLat, newLon, newAlt });
+		X.setRxClk(new double[] { newRxClkOff, newRxClkDrift });
 
 		return new double[][] { estAcc, estGyro };
 	}
 
-	private static void updateErrorState(State x, SimpleMatrix p, SimpleMatrix phi, SimpleMatrix Qk) {
-		p = phi.mult(p).mult(phi.transpose()).plus(Qk);
+	private static void predictErrorState(State X, SimpleMatrix P, SimpleMatrix phi, SimpleMatrix Qk) {
+		P = phi.mult(P).mult(phi.transpose()).plus(Qk);
 	}
 
-	private static SimpleMatrix[] getDiscreteParams(State x, double[] estAcc, double[] estGyro, double tau,
+	private static SimpleMatrix[] getDiscreteParams(State X, double[] estAcc, double[] estGyro, double tau,
 			double[] q) {
 
-		double lat = x.getP()[0];
-		double lon = x.getP()[1];
-		double alt = x.getP()[2];
-		double vn = x.getV()[0];
-		double ve = x.getV()[1];
-		double vd = x.getV()[2];
-		SimpleMatrix dcm = new SimpleMatrix(x.getDcm());
+		double lat = X.getP()[0];
+		double lon = X.getP()[1];
+		double alt = X.getP()[2];
+		double vn = X.getV()[0];
+		double ve = X.getV()[1];
+		double vd = X.getV()[2];
+		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
 		double Rn = LatLonUtil.getNormalEarthRadius(lat);
 		double Rm = LatLonUtil.getMeridianEarthRadius(lat);
 		double omega_ie = LatLonUtil.omega_ie;
@@ -240,6 +241,54 @@ public class INSfusion {
 		// First order approx of Qk
 		SimpleMatrix Qk = G.mult(Q).mult(G.transpose()).scale(tau);
 		return new SimpleMatrix[] { phi, Qk };
+
+	}
+
+	private static void updateMagneto(State X, long utcTimeMilli, IMUsensor magData) {
+
+		double[] llh = X.getP();
+		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
+		GeomagneticField gmf = new GeomagneticField((float) llh[0], (float) llh[1], (float) llh[2], utcTimeMilli);
+		// True Magnetic Strength
+		double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
+		// Convert from nanotesla to microtesla
+		Arrays.stream(mag).forEach(i -> i = i * 1e-3);
+		// Subtract hard bias from magnetometer measurements, estimated magnetic
+		// strength
+		double[] mag_hat = IntStream.range(0, 3).mapToDouble(i -> magData.getVal()[i] - magData.getBias()[i]).toArray();
+
+		// Delta Magnetic
+		SimpleMatrix z = (SimpleMatrix) IntStream.range(0, 3).mapToDouble(i -> mag[i] - mag_hat[i]);
+		SimpleMatrix H = new SimpleMatrix(3, 17);
+		double[][] Mag = Matrix.getSkewSymMat(mag, true);
+		for (int i = 0; i < 3; i++) {
+			for (int j = 0; j < 3; j++) {
+				H.set(i, 6 + j, Mag[i][j]);
+			}
+		}
+		SimpleMatrix Ht = H.transpose();
+
+		/*
+		 * SimpleMatrix Vt = V.transpose();
+		 * 
+		 * // Kalman Gain SimpleMatrix K =
+		 * P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(V.mult(R).mult(Vt))).invert());
+		 * 
+		 * // Posterior State Estimate // As prior deltaX is zero, there is no 'ze'
+		 * SimpleMatrix deltaX = K.mult(z); SimpleMatrix KH = K.mult(H); SimpleMatrix I
+		 * = SimpleMatrix.identity(KH.numRows());
+		 * 
+		 * 
+		 * // Posterior Estimate Error Joseph Form to ensure Positive Definiteness P =
+		 * // (I-KH)P(I-KH)' + KRK'
+		 * 
+		 * P = ((I.minus(KH)).mult(P).mult((I.minus(KH)).transpose()))
+		 * .plus(K.mult(V.mult(R).mult(Vt)).mult(K.transpose()));
+		 */
+
+	}
+
+	public static void update() {
 
 	}
 }
