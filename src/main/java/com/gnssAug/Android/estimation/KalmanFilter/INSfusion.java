@@ -23,6 +23,7 @@ import com.gnssAug.Android.utility.LatLonUtil;
 import com.gnssAug.Android.utility.Matrix;
 
 public class INSfusion {
+	private final static double SpeedofLight = 299792458;
 
 	public static void process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
 			ArrayList<ArrayList<Satellite>> SVlist, ArrayList<Long> timeList, double[][] dcm) throws Exception {
@@ -34,7 +35,7 @@ public class INSfusion {
 		IntStream.range(0, 2).forEach(i -> llh0[i] = Math.toRadians(llh0[i]));
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
-		double rxClkOff = ecef0[3];
+		double rxClkOff = SpeedofLight * ecef0[3];
 		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians
@@ -288,7 +289,81 @@ public class INSfusion {
 
 	}
 
-	public static void update() {
+	public static void update(State X, long utcTimeMilli, IMUsensor magData, ArrayList<Satellite> SV) {
+
+		double[] llh = X.getP();
+		double[] vel = X.getV();
+		double rxClkOff = X.getRxClk()[0];
+		double rxClkDrift = X.getRxClk()[1];
+		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
+
+		double[] pos_ecef = LatLonUtil.lla2ecef(llh);
+		double[] vel_ecef = LatLonUtil.ned2ecef(vel, pos_ecef);
+		GeomagneticField gmf = new GeomagneticField((float) llh[0], (float) llh[1], (float) llh[2], utcTimeMilli);
+		// True Magnetic Strength
+		double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
+		// Convert from nanotesla to microtesla
+		Arrays.stream(mag).forEach(i -> i = i * 1e-3);
+		// Subtract hard bias from magnetometer measurements, estimated magnetic
+		// strength
+		double[] mag_hat = IntStream.range(0, 3).mapToDouble(i -> magData.getVal()[i] - magData.getBias()[i]).toArray();
+		double[][] Mag = Matrix.getSkewSymMat(mag, true);
+		int n = SV.size();
+		double[] z = new double[(2 * n) + 3];
+		double[][] a = new double[n][3];
+		SimpleMatrix R = new SimpleMatrix((2 * n) + 3, (2 * n) + 3);
+		for (int i = 0; i < n; i++) {
+			Satellite sat = SV.get(i);
+			double pseudorange = sat.getPseudorange();
+			double rangeRate = sat.getRangeRate();
+			// Its not really a ECI, therefore don't get confused
+			double[] satEcef = sat.getSatEci();
+			// Approx Geometric Range
+			double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - pos_ecef[j])
+					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+			final int index = i;
+			IntStream.range(0, 3).forEach(j -> a[index][j] = (satEcef[j] - pos_ecef[j]) / approxGR);
+			SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+			SimpleMatrix A = new SimpleMatrix(1, 3, true, a[index]);
+			/*
+			 * Observable derived from doppler and satellite velocity, refer Kaplan and
+			 * personal notes
+			 */
+			double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+			// Approx Pseudorange Range
+			double approxPR = approxGR + rxClkOff;
+			// Approx doppler derived observable
+			double approxDopplerDerivedObs = -A.mult(new SimpleMatrix(3, 1, true, vel_ecef)).get(0) + rxClkDrift;
+			// Delta PR
+			z[i] = pseudorange - approxPR;
+			// Delta Relative Vel
+			z[i + n] = dopplerDerivedObs - approxDopplerDerivedObs;
+
+			R.set(i, i, Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2));
+			R.set(i + n, i + n, Math.pow(sat.getPseudorangeRateUncertaintyMetersPerSecond(), 2));
+		}
+		IntStream.range(0, 3).forEach(i -> z[(2 * n) + i] = mag[i] - mag_hat[i]);
+		double[] magNoise = new double[3];
+		Arrays.stream(magNoise).forEach(i -> i = ImuDataSheets.Pixel4.magnetoNoise);
+		// Magnetometer noise covariance
+		SimpleMatrix Rm = dcm.mult(new SimpleMatrix(3, 1, true, magNoise)).mult(dcm.transpose());
+		SimpleMatrix H = new SimpleMatrix((2 * n) + 3, 17);
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < 3; j++) {
+				H.set(i, j, -a[i][j]);
+				H.set(i + n, j + 3, -a[i][j]);
+			}
+			H.set(i, 15, 1);
+			H.set(i + n, 16, 1);
+		}
+		for (int i = 0; i < 3; i++) {
+			for (int j = 0; j < 3; j++) {
+				H.set(i + (2 * n), 6 + j, Mag[i][j]);
+				R.set((2 * n) + i, (2 * n) + j, Rm.get(i, j));
+
+			}
+
+		}
 
 	}
 }

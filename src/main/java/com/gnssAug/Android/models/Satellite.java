@@ -10,13 +10,16 @@ public class Satellite extends GNSSLog {
 	private double[] satVel;
 	private double[] satEci;
 	private double[] elevAzm;
+	// Corrected range rate
+	private double rangeRate;
 
-	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel) {
+	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate) {
 		super(log);
 		this.t = t;
 		this.pseudorange = pseudorange;
 		this.satEcef = satEcef;
 		this.satVel = satVel;
+		this.rangeRate = rangeRate;
 		compECI();
 
 	}
@@ -60,4 +63,9 @@ public class Satellite extends GNSSLog {
 	public void setElevAzm(double[] elevAzm) {
 		this.elevAzm = elevAzm;
 	}
+
+	public double getRangeRate() {
+		return rangeRate;
+	}
+
 }

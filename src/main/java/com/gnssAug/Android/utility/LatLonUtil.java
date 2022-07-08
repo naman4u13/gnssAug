@@ -191,7 +191,7 @@ public class LatLonUtil {
 		return s;
 	}
 
-	public static double[] ENUtoECEF(double[] enu, double[] ECEFr) {
+	public static double[] enu2ecef(double[] enu, double[] ECEFr) {
 		double[] LLH = ecef2lla(ECEFr);
 		double lat = LLH[0];
 		double lon = LLH[1];
@@ -202,6 +202,16 @@ public class LatLonUtil {
 				+ (Math.cos(lat) * Math.sin(lon) * enu[2]) + ECEFr[1];
 		ECEF[2] = (0 * enu[0]) + (Math.cos(lat) * enu[1]) + (Math.sin(lat) * enu[2]) + ECEFr[2];
 		return ECEF;
+	}
+
+	public static double[] ned2ecef(double[] ned, double[] ECEFr) {
+		double[] ECEF = enu2ecef(enu_ned_convert(ned), ECEFr);
+		return ECEF;
+	}
+
+	public static double[] ecef2ned(double[] ecef, double[] refEcef) {
+		double[] ned = enu_ned_convert(ecef2enu(ecef, refEcef));
+		return ned;
 	}
 
 	// Geodetic Latitude to Geocentric Latitude
