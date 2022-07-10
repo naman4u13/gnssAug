@@ -52,7 +52,7 @@ public class Rotation {
 	// Perform reorthogonalization and renormalization of direction cosine matrix
 	public static SimpleMatrix reorthonormDcm(SimpleMatrix A) {
 		SimpleMatrix[] a = new SimpleMatrix[3];
-		IntStream.range(0, 3).forEach(i -> a[i] = A.extractVector(true, i));
+		IntStream.range(0, 3).forEach(i -> a[i] = A.extractVector(true, i).transpose());
 		double delta12 = a[0].transpose().mult(a[1]).get(0);
 		double delta13 = a[0].transpose().mult(a[2]).get(0);
 		double delta23 = a[1].transpose().mult(a[2]).get(0);
@@ -63,6 +63,7 @@ public class Rotation {
 		for (int i = 0; i < 3; i++) {
 			double delta = a_new[i].transpose().mult(a_new[i]).get(0);
 			a_new[i] = a_new[i].scale(2 / (1 + delta));
+			a_new[i] = a_new[i].transpose();
 		}
 		SimpleMatrix A_new = a_new[0].concatRows(a_new[1], a_new[2]);
 

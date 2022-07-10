@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -15,6 +18,21 @@ import org.jfree.data.xy.XYSeriesCollection;
 import org.jfree.ui.RefineryUtilities;
 
 public class GraphPlotter extends ApplicationFrame {
+
+	public GraphPlotter(TreeMap<Long, double[]> ecefMap) throws IOException {
+		super("GNSS/INS");
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart("GNSS/INS", "GPS-time", "GNSS/INS",
+				createDatasetGnssIns(ecefMap));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
 
 	public GraphPlotter(String applicationTitle, String chartTitle, HashMap<String, ArrayList<double[]>> dataMap,
 			ArrayList<Long> timeList) throws IOException {
@@ -104,6 +122,29 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			dataset.addSeries(series);
 		}
+
+		return dataset;
+
+	}
+
+	private XYDataset createDatasetGnssIns(TreeMap<Long, double[]> ecefMap) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries series = new XYSeries("GNSS/INS");
+		Iterator<Entry<Long, double[]>> iterator = ecefMap.entrySet().iterator();
+		double[] prev = iterator.next().getValue();
+		while (iterator.hasNext()) {
+			Entry<Long, double[]> entry = iterator.next();
+			long time = entry.getKey();
+			double[] ecef = entry.getValue();
+			double data = 0;
+			for (int i = 0; i < 3; i++) {
+				data += Math.pow(ecef[i] - prev[i], 2);
+			}
+			data = Math.sqrt(data);
+			series.add(time, data);
+			prev = ecef;
+		}
+		dataset.addSeries(series);
 
 		return dataset;
 

@@ -25,7 +25,7 @@ import com.gnssAug.Android.utility.Matrix;
 public class INSfusion {
 	private final static double SpeedofLight = 299792458;
 
-	public static void process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
+	public static TreeMap<Long, double[]> process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
 			ArrayList<ArrayList<Satellite>> SVlist, ArrayList<Long> timeList, double[][] dcm) throws Exception {
 
 		// Convert DCM from Body Frame to ENU to Body frame to NED
@@ -36,7 +36,8 @@ public class INSfusion {
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
 		double rxClkOff = SpeedofLight * ecef0[3];
-		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
+		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], new SimpleMatrix(dcm), 0, 0, 0, 0, 0,
+				0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians
 		double accBiasCov = Math.pow(ImuDataSheets.Pixel4.accTurnOnBias, 2);
@@ -56,7 +57,8 @@ public class INSfusion {
 		// Receiver Clock phase and frequency PSD
 		double sf = ClockAllanVar.TCXO_low_qaulity.sf;
 		double sg = ClockAllanVar.TCXO_low_qaulity.sg;
-		double[] q = new double[] { acc_SN, gyro_SN, acc_SB, gyro_SB, sf, sg };
+		double[] q = new double[] { acc_SN, acc_SN, acc_SN, gyro_SN, gyro_SN, gyro_SN, acc_SB, acc_SB, acc_SB, gyro_SB,
+				gyro_SB, gyro_SB, sf, sg };
 		int n = SVlist.size();
 		if (n != timeList.size()) {
 			System.err.println("FATAL ERROR in INSfusion.java");
@@ -66,29 +68,39 @@ public class INSfusion {
 		int i = 0;
 		Iterator<Entry<Long, HashMap<AndroidSensor, IMUsensor>>> iterator = imuMap.entrySet().iterator();
 		double prevTime = iterator.next().getKey();
-		do {
+		while (timeList.get(i) <= prevTime) {
+			i++;
+		}
+		long utcTimeMilli = SVlist.get(i).get(0).getUtcTimeMillis();
+		TreeMap<Long, double[]> ecefMap = new TreeMap<Long, double[]>();
+		while ((i < n) && iterator.hasNext()) {
 
-			while (iterator.hasNext()) {
-				Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry = iterator.next();
-				long time = entry.getKey();
-				HashMap<AndroidSensor, IMUsensor> imuSensor = entry.getValue();
-				double tau = (time - prevTime) * 1e-3;
-				// Update Total State and get estimated INS observables - {acc,gyro}
-				double[][] estInsObs = predictTotalState(X, imuSensor, tau);
-				prevTime = time;
-				/*
-				 * Get transition matrix Phi and covariance matrix Qk, for discrete state space
-				 * filtering
-				 */
-				SimpleMatrix[] discParam = getDiscreteParams(X, estInsObs[0], estInsObs[1], tau, q);
-				predictErrorState(X, P, discParam[0], discParam[1]);
-				if (time == timeList.get(i)) {
-
-					i++;
-				}
+			Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry = iterator.next();
+			long time = entry.getKey();
+			HashMap<AndroidSensor, IMUsensor> imuSensor = entry.getValue();
+			double tau = (time - prevTime) * 1e-3;
+			// Update Total State and get estimated INS observables - {acc,gyro}
+			double[][] estInsObs = predictTotalState(X, imuSensor, tau);
+			prevTime = time;
+			/*
+			 * Get transition matrix Phi and covariance matrix Qk, for discrete state space
+			 * filtering
+			 */
+			SimpleMatrix[] discParam = getDiscreteParams(X, estInsObs[0], estInsObs[1], tau, q);
+			predictErrorState(X, P, discParam[0], discParam[1]);
+			boolean onlyMagneto = true;
+			ArrayList<Satellite> SV = null;
+			if (time == timeList.get(i)) {
+				SV = SVlist.get(i);
+				utcTimeMilli = SV.get(0).getUtcTimeMillis();
+				onlyMagneto = false;
+				i++;
 
 			}
-		} while (i < n);
+			update(X, P, utcTimeMilli, imuSensor.get(AndroidSensor.Magnetometer), SV, onlyMagneto);
+			ecefMap.put(time, LatLonUtil.lla2ecef(X.getP(), false));
+		}
+		return ecefMap;
 
 	}
 
@@ -118,8 +130,8 @@ public class INSfusion {
 		SimpleMatrix omega_b_ib = new SimpleMatrix(Matrix.getSkewSymMat(estGyro));
 		double[] _omega_n_ie = new double[] { earthAngularRate * Math.cos(lat), 0, -earthAngularRate * Math.sin(lat) };
 		SimpleMatrix omega_n_ie = new SimpleMatrix(Matrix.getSkewSymMat(_omega_n_ie));
-		double[] _omega_n_en = new double[] { vel[0], -vel[1], -vel[0] * Math.tan(lat) };
-		Arrays.stream(_omega_n_en).forEach(i -> i = i / (Rn + alt));
+		double[] _omega_n_en = new double[] { vel[1] / (Rn + alt), -vel[0] / (Rm + alt),
+				-vel[1] * Math.tan(lat) / (Rn + alt) };
 		SimpleMatrix omega_n_en = new SimpleMatrix(Matrix.getSkewSymMat(_omega_n_en));
 		SimpleMatrix I = SimpleMatrix.identity(3);
 		SimpleMatrix newDcm = (oldDcm.mult(I.plus(omega_b_ib.scale(tau))))
@@ -128,13 +140,13 @@ public class INSfusion {
 
 		// Specific-Force Frame Transformation
 		SimpleMatrix f_b_ib = new SimpleMatrix(3, 1, true, estAcc);
-		SimpleMatrix f_n_ib = f_b_ib.scale(0.5).mult((oldDcm.plus(newDcm)));
+		SimpleMatrix f_n_ib = (oldDcm.plus(newDcm)).scale(0.5).mult(f_b_ib);
 
 		// Velocity Update
 		SimpleMatrix oldVel = new SimpleMatrix(3, 1, true, vel);
 		SimpleMatrix g_n_b = new SimpleMatrix(3, 1, true, new double[] { 0, 0, LatLonUtil.getGravity(lat, alt) });
 		SimpleMatrix newVel = oldVel
-				.plus((f_n_ib.plus(g_n_b).minus(oldVel.mult(omega_n_en.plus((omega_n_ie.scale(2)))))).scale(tau));
+				.plus((f_n_ib.plus(g_n_b).minus((omega_n_en.plus((omega_n_ie.scale(2)))).mult(oldVel))).scale(tau));
 
 		// Position Update
 		double newAlt = alt - ((tau / 2) * (oldVel.get(2) + newVel.get(2)));
@@ -151,7 +163,7 @@ public class INSfusion {
 
 		X.setAccBias(accBias);
 		X.setGyroBias(gyroBias);
-		X.setDcm(Matrix.matrix2Array(newDcm));
+		X.setDcm(newDcm);
 		X.setV(new double[] { newVel.get(0), newVel.get(1), newVel.get(2) });
 		X.setP(new double[] { newLat, newLon, newAlt });
 		X.setRxClk(new double[] { newRxClkOff, newRxClkDrift });
@@ -225,8 +237,8 @@ public class INSfusion {
 				.concatRows(Fjp.concatColumns(Fjv, Fjj, zero, dcm.mult(Fjg)))
 				.concatRows(zero.concatColumns(zero, zero, Faa, zero))
 				.concatRows(zero.concatColumns(zero, zero, zero, Fgg));
-		F.concatColumns(new SimpleMatrix(15, 2));
-		F.concatRows(new SimpleMatrix(2, 17));
+		F = F.concatColumns(new SimpleMatrix(15, 2));
+		F = F.concatRows(new SimpleMatrix(2, 17));
 		F.set(15, 16, 1);
 		// First order approx of phi
 		SimpleMatrix phi = SimpleMatrix.identity(17).plus(F.scale(tau));
@@ -234,136 +246,150 @@ public class INSfusion {
 				.concatRows(dcm.scale(-1).concatColumns(zero, zero, zero))
 				.concatRows(zero.concatColumns(dcm, zero, zero)).concatRows(zero.concatColumns(zero, identity, zero))
 				.concatRows(zero.concatColumns(zero, zero, identity));
-		G.concatColumns(new SimpleMatrix(15, 2));
-		G.concatRows(new SimpleMatrix(2, 14));
+		G = G.concatColumns(new SimpleMatrix(15, 2));
+		G = G.concatRows(new SimpleMatrix(2, 14));
 		G.set(15, 12, 1);
 		G.set(16, 13, 1);
-		SimpleMatrix Q = new SimpleMatrix(6, 1, true, q);
+		SimpleMatrix Q = new SimpleMatrix(14, 14);
+		IntStream.range(0, 14).forEach(i -> Q.set(i, i, q[i]));
 		// First order approx of Qk
 		SimpleMatrix Qk = G.mult(Q).mult(G.transpose()).scale(tau);
 		return new SimpleMatrix[] { phi, Qk };
 
 	}
 
-	private static void updateMagneto(State X, long utcTimeMilli, IMUsensor magData) {
-
-		double[] llh = X.getP();
-		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
-		GeomagneticField gmf = new GeomagneticField((float) llh[0], (float) llh[1], (float) llh[2], utcTimeMilli);
-		// True Magnetic Strength
-		double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
-		// Convert from nanotesla to microtesla
-		Arrays.stream(mag).forEach(i -> i = i * 1e-3);
-		// Subtract hard bias from magnetometer measurements, estimated magnetic
-		// strength
-		double[] mag_hat = IntStream.range(0, 3).mapToDouble(i -> magData.getVal()[i] - magData.getBias()[i]).toArray();
-
-		// Delta Magnetic
-		SimpleMatrix z = (SimpleMatrix) IntStream.range(0, 3).mapToDouble(i -> mag[i] - mag_hat[i]);
-		SimpleMatrix H = new SimpleMatrix(3, 17);
-		double[][] Mag = Matrix.getSkewSymMat(mag, true);
-		for (int i = 0; i < 3; i++) {
-			for (int j = 0; j < 3; j++) {
-				H.set(i, 6 + j, Mag[i][j]);
-			}
-		}
-		SimpleMatrix Ht = H.transpose();
-
-		/*
-		 * SimpleMatrix Vt = V.transpose();
-		 * 
-		 * // Kalman Gain SimpleMatrix K =
-		 * P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(V.mult(R).mult(Vt))).invert());
-		 * 
-		 * // Posterior State Estimate // As prior deltaX is zero, there is no 'ze'
-		 * SimpleMatrix deltaX = K.mult(z); SimpleMatrix KH = K.mult(H); SimpleMatrix I
-		 * = SimpleMatrix.identity(KH.numRows());
-		 * 
-		 * 
-		 * // Posterior Estimate Error Joseph Form to ensure Positive Definiteness P =
-		 * // (I-KH)P(I-KH)' + KRK'
-		 * 
-		 * P = ((I.minus(KH)).mult(P).mult((I.minus(KH)).transpose()))
-		 * .plus(K.mult(V.mult(R).mult(Vt)).mult(K.transpose()));
-		 */
-
-	}
-
-	public static void update(State X, long utcTimeMilli, IMUsensor magData, ArrayList<Satellite> SV) {
+	public static void update(State X, SimpleMatrix P, long utcTimeMilli, IMUsensor magData, ArrayList<Satellite> SV,
+			boolean onlyMagneto) {
 
 		double[] llh = X.getP();
 		double[] vel = X.getV();
 		double rxClkOff = X.getRxClk()[0];
 		double rxClkDrift = X.getRxClk()[1];
 		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
-
-		double[] pos_ecef = LatLonUtil.lla2ecef(llh);
+		double[] pos_ecef = LatLonUtil.lla2ecef(llh, false);
 		double[] vel_ecef = LatLonUtil.ned2ecef(vel, pos_ecef);
+
 		GeomagneticField gmf = new GeomagneticField((float) llh[0], (float) llh[1], (float) llh[2], utcTimeMilli);
 		// True Magnetic Strength
 		double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
 		// Convert from nanotesla to microtesla
 		Arrays.stream(mag).forEach(i -> i = i * 1e-3);
 		// Subtract hard bias from magnetometer measurements, estimated magnetic
-		// strength
-		double[] mag_hat = IntStream.range(0, 3).mapToDouble(i -> magData.getVal()[i] - magData.getBias()[i]).toArray();
+		// strength and convert from body frame to local-nav frame
+		final SimpleMatrix mag_hat = dcm.mult(new SimpleMatrix(3, 1, true,
+				IntStream.range(0, 3).mapToDouble(i -> magData.getVal()[i] - magData.getBias()[i]).toArray()));
+		double[] zm = IntStream.range(0, 3).mapToDouble(i -> mag[i] - mag_hat.get(i)).toArray();
 		double[][] Mag = Matrix.getSkewSymMat(mag, true);
-		int n = SV.size();
-		double[] z = new double[(2 * n) + 3];
-		double[][] a = new double[n][3];
-		SimpleMatrix R = new SimpleMatrix((2 * n) + 3, (2 * n) + 3);
-		for (int i = 0; i < n; i++) {
-			Satellite sat = SV.get(i);
-			double pseudorange = sat.getPseudorange();
-			double rangeRate = sat.getRangeRate();
-			// Its not really a ECI, therefore don't get confused
-			double[] satEcef = sat.getSatEci();
-			// Approx Geometric Range
-			double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - pos_ecef[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			final int index = i;
-			IntStream.range(0, 3).forEach(j -> a[index][j] = (satEcef[j] - pos_ecef[j]) / approxGR);
-			SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
-			SimpleMatrix A = new SimpleMatrix(1, 3, true, a[index]);
-			/*
-			 * Observable derived from doppler and satellite velocity, refer Kaplan and
-			 * personal notes
-			 */
-			double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
-			// Approx Pseudorange Range
-			double approxPR = approxGR + rxClkOff;
-			// Approx doppler derived observable
-			double approxDopplerDerivedObs = -A.mult(new SimpleMatrix(3, 1, true, vel_ecef)).get(0) + rxClkDrift;
-			// Delta PR
-			z[i] = pseudorange - approxPR;
-			// Delta Relative Vel
-			z[i + n] = dopplerDerivedObs - approxDopplerDerivedObs;
-
-			R.set(i, i, Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2));
-			R.set(i + n, i + n, Math.pow(sat.getPseudorangeRateUncertaintyMetersPerSecond(), 2));
-		}
-		IntStream.range(0, 3).forEach(i -> z[(2 * n) + i] = mag[i] - mag_hat[i]);
-		double[] magNoise = new double[3];
-		Arrays.stream(magNoise).forEach(i -> i = ImuDataSheets.Pixel4.magnetoNoise);
+		double[][] magNoise = new double[3][3];
+		IntStream.range(0, 3).forEach(i -> magNoise[i][i] = ImuDataSheets.Pixel4.magnetoNoise);
 		// Magnetometer noise covariance
-		SimpleMatrix Rm = dcm.mult(new SimpleMatrix(3, 1, true, magNoise)).mult(dcm.transpose());
-		SimpleMatrix H = new SimpleMatrix((2 * n) + 3, 17);
-		for (int i = 0; i < n; i++) {
-			for (int j = 0; j < 3; j++) {
-				H.set(i, j, -a[i][j]);
-				H.set(i + n, j + 3, -a[i][j]);
+		SimpleMatrix Rm = dcm.mult(new SimpleMatrix(magNoise)).mult(dcm.transpose());
+		SimpleMatrix H = null;
+		SimpleMatrix Z = null;
+		SimpleMatrix R = null;
+		if (onlyMagneto) {
+			// Delta Magnetic
+			Z = new SimpleMatrix(3, 1, true, zm);
+			H = new SimpleMatrix(3, 17);
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					H.set(i, 6 + j, Mag[i][j]);
+				}
 			}
-			H.set(i, 15, 1);
-			H.set(i + n, 16, 1);
-		}
-		for (int i = 0; i < 3; i++) {
-			for (int j = 0; j < 3; j++) {
-				H.set(i + (2 * n), 6 + j, Mag[i][j]);
-				R.set((2 * n) + i, (2 * n) + j, Rm.get(i, j));
+			R = Rm;
+		} else {
+
+			int n = SV.size();
+			double[] z = new double[(2 * n) + 3];
+			double[][] a = new double[n][3];
+			R = new SimpleMatrix((2 * n) + 3, (2 * n) + 3);
+			for (int i = 0; i < n; i++) {
+				Satellite sat = SV.get(i);
+				double pseudorange = sat.getPseudorange();
+				double rangeRate = sat.getRangeRate();
+				// Its not really a ECI, therefore don't get confused
+				double[] satEcef = sat.getSatEci();
+				// Approx Geometric Range
+				double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - pos_ecef[j])
+						.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+				final int index = i;
+				IntStream.range(0, 3).forEach(j -> a[index][j] = (satEcef[j] - pos_ecef[j]) / approxGR);
+				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+				SimpleMatrix A = new SimpleMatrix(1, 3, true, a[index]);
+				/*
+				 * Observable derived from doppler and satellite velocity, refer Kaplan and
+				 * personal notes
+				 */
+				double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+				// Approx Pseudorange Range
+				double approxPR = approxGR + rxClkOff;
+				// Approx doppler derived observable
+				double approxDopplerDerivedObs = -A.mult(new SimpleMatrix(3, 1, true, vel_ecef)).get(0) + rxClkDrift;
+				// Delta PR
+				z[i] = pseudorange - approxPR;
+				// Delta doppler derived observable
+				z[i + n] = dopplerDerivedObs - approxDopplerDerivedObs;
+
+				R.set(i, i, Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2));
+				R.set(i + n, i + n, Math.pow(sat.getPseudorangeRateUncertaintyMetersPerSecond(), 2));
+			}
+			IntStream.range(0, 3).forEach(i -> z[(2 * n) + i] = zm[i]);
+
+			H = new SimpleMatrix((2 * n) + 3, 17);
+			for (int i = 0; i < n; i++) {
+				for (int j = 0; j < 3; j++) {
+					H.set(i, j, -a[i][j]);
+					H.set(i + n, j + 3, -a[i][j]);
+				}
+				H.set(i, 15, 1);
+				H.set(i + n, 16, 1);
+			}
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					H.set(i + (2 * n), 6 + j, Mag[i][j]);
+					R.set((2 * n) + i, (2 * n) + j, Rm.get(i, j));
+
+				}
 
 			}
 
+			Z = new SimpleMatrix(z.length, 1, true, z);
 		}
+		SimpleMatrix Ht = H.transpose();
+		SimpleMatrix K = null;
+		// Kalman Gain
+		try {
+			K = P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(R)).invert());
+
+		} catch (Exception e) {
+			// TODO: handle exception
+			System.out.println(e);
+		}
+		// Posterior State Estimate
+		// As prior deltaX is zero, there is no 'ze'
+		SimpleMatrix deltaX = K.mult(Z);
+		SimpleMatrix KH = K.mult(H);
+		SimpleMatrix I = SimpleMatrix.identity(KH.numRows());
+		// Posterior Estimate Error Joseph Form to ensure Positive Definiteness P =
+		// (I-KH)P(I-KH)' + KRK'
+		P = ((I.minus(KH)).mult(P).mult((I.minus(KH)).transpose())).plus(K.mult(R).mult(K.transpose()));
+
+		// Update Total State
+		pos_ecef[0] += deltaX.get(0);
+		pos_ecef[1] += deltaX.get(1);
+		pos_ecef[2] += deltaX.get(2);
+		X.setP(Arrays.stream(LatLonUtil.ecef2lla(pos_ecef)).map(i -> Math.toRadians(i)).toArray());
+		vel_ecef[0] += deltaX.get(3);
+		vel_ecef[1] += deltaX.get(4);
+		vel_ecef[2] += deltaX.get(5);
+		X.setV(LatLonUtil.ecef2ned(vel_ecef, pos_ecef));
+		SimpleMatrix updateDcm = new SimpleMatrix(
+				Matrix.getSkewSymMat(new double[] { deltaX.get(6), deltaX.get(7), deltaX.get(8) }));
+		dcm = (SimpleMatrix.identity(3).minus(updateDcm)).mult(dcm);
+		X.setDcm(dcm);
+		X.setAccBias(IntStream.range(0, 3).mapToDouble(i -> X.getAccBias()[i] + deltaX.get(9 + i)).toArray());
+		X.setGyroBias(IntStream.range(0, 3).mapToDouble(i -> X.getGyroBias()[i] + deltaX.get(12 + i)).toArray());
+		X.setRxClk(IntStream.range(0, 2).mapToDouble(i -> X.getRxClk()[i] + deltaX.get(15 + i)).toArray());
 
 	}
 }

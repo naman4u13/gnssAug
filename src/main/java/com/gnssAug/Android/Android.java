@@ -12,6 +12,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.jfree.ui.RefineryUtilities;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -25,6 +26,7 @@ import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
+import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
@@ -118,8 +120,8 @@ public class Android {
 				}
 				SVlist.add(satList);
 				trueLLHlist.add(trueUserLLH);
-				trueECEFlist
-						.add(LatLonUtil.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }));
+				trueECEFlist.add(LatLonUtil
+						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true));
 				timeList.add(tRxMilli);
 			}
 
@@ -135,8 +137,18 @@ public class Android {
 
 				// Body Frame to ENU
 				double[][] dcm = StateInitialization.initialize(imuMap, SVlist);
+				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SVlist, timeList, dcm);
+				GraphPlotter chart = new GraphPlotter(ecefMap);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+				int n = timeList.size();
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estEcef = ecefMap.get(time);
+					estPosMap.computeIfAbsent("GNSS/INS fusion", k -> new ArrayList<double[]>()).add(estEcef);
 
-				System.out.print("");
+				}
 
 			}
 
@@ -147,9 +159,16 @@ public class Android {
 				IntStream.range(0, 6).forEach(i -> errList[i] = new ArrayList<Double>());
 				ArrayList<double[]> estPosList = estPosMap.get(key);
 				int n = estPosList.size();
+				if (n != trueECEFlist.size()) {
+					System.err.println("FATAL ERROR: EST and TRUE ecef list size does not match ");
+					throw new Exception("FATAL ERROR: EST and TRUE ecef list size does not match ");
+				}
 				ArrayList<double[]> enuList = new ArrayList<double[]>();
 				for (int i = 0; i < n; i++) {
 					double[] estEcef = estPosList.get(i);
+					if (estEcef == null) {
+						continue;
+					}
 					double[] enu = LatLonUtil.ecef2enu(estEcef, trueECEFlist.get(i));
 					double[] estLLH = LatLonUtil.ecef2lla(estEcef);
 					// Great Circle Distance
@@ -195,7 +214,9 @@ public class Android {
 				System.out.println(" Haversine distance - " + errList[5].get(q95));
 
 			}
-
+			for (int i = 0; i < timeList.size(); i++) {
+				timeList.set(i, (long) (timeList.get(i) * 1e-3));
+			}
 			// Plot Error Graphs
 			GraphPlotter.graphENU(GraphEnuMap, timeList);
 

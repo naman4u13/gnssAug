@@ -1,15 +1,17 @@
 package com.gnssAug.Android.estimation.KalmanFilter.Models;
 
+import org.ejml.simple.SimpleMatrix;
+
 public class State {
 
-	private double[] p;
-	private double[] v;
-	private double[][] dcm;
-	private double[] accBias;
-	private double[] gyroBias;
-	private double[] rxClk;
+	private double[] p = new double[3];
+	private double[] v = new double[3];
+	private SimpleMatrix dcm;
+	private double[] accBias = new double[3];
+	private double[] gyroBias = new double[3];
+	private double[] rxClk = new double[2];
 
-	public State(double pX, double pY, double pZ, double vX, double vY, double vZ, double[][] dcm, double biasAccX,
+	public State(double pX, double pY, double pZ, double vX, double vY, double vZ, SimpleMatrix dcm, double biasAccX,
 			double biasAccY, double biasAccZ, double biasGyroX, double biasGyroY, double biasGyroZ, double clkOff,
 			double clkDrift) {
 		super();
@@ -46,11 +48,11 @@ public class State {
 		this.v = v;
 	}
 
-	public double[][] getDcm() {
+	public SimpleMatrix getDcm() {
 		return dcm;
 	}
 
-	public void setDcm(double[][] dcm) {
+	public void setDcm(SimpleMatrix dcm) {
 		this.dcm = dcm;
 	}
 

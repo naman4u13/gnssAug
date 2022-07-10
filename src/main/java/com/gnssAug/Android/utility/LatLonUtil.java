@@ -59,11 +59,15 @@ public class LatLonUtil {
 		return lla;
 	}
 
-	public static double[] lla2ecef(double[] lla) {
+	public static double[] lla2ecef(double[] lla, boolean isDegree) {
 
 		double finv = 1 / f;
 		double esq = (2 - 1 / finv) / finv;
-		double dtr = Math.PI / 180;
+		double dtr = 1;
+		if (isDegree) {
+			dtr = Math.PI / 180;
+		}
+
 		double lat = lla[0] * dtr; // rad
 		double lon = lla[1] * dtr; // rad
 		double alt = lla[2]; // m
