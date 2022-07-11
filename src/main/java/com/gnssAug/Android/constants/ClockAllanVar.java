@@ -5,7 +5,7 @@ public class ClockAllanVar {
 	private static final double SpeedofLight = 299792458;
 	private static final double c2 = SpeedofLight * SpeedofLight;
 
-	public class TCXO_low_qaulity {
+	public class TCXO_low_quality {
 		// Typical Allan Variance Coefficients for TCXO (low quality)
 		public static final double h0 = 2E-19;
 		public static final double h_2 = 2E-20;

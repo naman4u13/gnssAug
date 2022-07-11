@@ -169,7 +169,7 @@ public class Android {
 					if (estEcef == null) {
 						continue;
 					}
-					double[] enu = LatLonUtil.ecef2enu(estEcef, trueECEFlist.get(i));
+					double[] enu = LatLonUtil.ecef2enu(estEcef, trueECEFlist.get(i), true);
 					double[] estLLH = LatLonUtil.ecef2lla(estEcef);
 					// Great Circle Distance
 					double gcErr = LatLonUtil.getHaversineDistance(estLLH, trueLLHlist.get(i));

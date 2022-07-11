@@ -25,11 +25,7 @@ public class IMUsensor {
 			this.bias[1] = data[7].isBlank() ? 0 : Double.parseDouble(data[7]);
 			this.bias[2] = data[8].isBlank() ? 0 : Double.parseDouble(data[8]);
 		}
-//		// Change Magnetic field values from microtesla to tesla
-//		if (this.type == AndroidSensor.Magnetometer) {
-//			Arrays.stream(this.val).forEach(i -> i = i * 1e-6);
-//			Arrays.stream(this.bias).forEach(i -> i = i * 1e-6);
-//		}
+
 	}
 
 	// Constructor used for interpolated IMU sensor values, don't require

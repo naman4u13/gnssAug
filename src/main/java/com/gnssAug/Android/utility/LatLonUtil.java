@@ -1,5 +1,7 @@
 package com.gnssAug.Android.utility;
 
+import java.util.stream.IntStream;
+
 import org.ejml.simple.SimpleMatrix;
 
 public class LatLonUtil {
@@ -195,26 +197,32 @@ public class LatLonUtil {
 		return s;
 	}
 
-	public static double[] enu2ecef(double[] enu, double[] ECEFr) {
+	public static double[] enu2ecef(double[] enu, double[] ECEFr, boolean isPos) {
 		double[] LLH = ecef2lla(ECEFr);
 		double lat = LLH[0];
 		double lon = LLH[1];
 		double[] ECEF = new double[3];
+
 		ECEF[0] = (-Math.sin(lon) * enu[0]) + (-Math.sin(lat) * Math.cos(lon) * enu[1])
-				+ (Math.cos(lat) * Math.cos(lon) * enu[2]) + ECEFr[0];
+				+ (Math.cos(lat) * Math.cos(lon) * enu[2]);
 		ECEF[1] = (Math.cos(lon) * enu[0]) + (-Math.sin(lat) * Math.sin(lon) * enu[1])
-				+ (Math.cos(lat) * Math.sin(lon) * enu[2]) + ECEFr[1];
-		ECEF[2] = (0 * enu[0]) + (Math.cos(lat) * enu[1]) + (Math.sin(lat) * enu[2]) + ECEFr[2];
+				+ (Math.cos(lat) * Math.sin(lon) * enu[2]);
+		ECEF[2] = (0 * enu[0]) + (Math.cos(lat) * enu[1]) + (Math.sin(lat) * enu[2]);
+		if (isPos) {
+			ECEF[0] += ECEFr[0];
+			ECEF[1] += ECEFr[1];
+			ECEF[2] += ECEFr[2];
+		}
 		return ECEF;
 	}
 
-	public static double[] ned2ecef(double[] ned, double[] ECEFr) {
-		double[] ECEF = enu2ecef(enu_ned_convert(ned), ECEFr);
+	public static double[] ned2ecef(double[] ned, double[] ECEFr, boolean isPos) {
+		double[] ECEF = enu2ecef(enu_ned_convert(ned), ECEFr, isPos);
 		return ECEF;
 	}
 
-	public static double[] ecef2ned(double[] ecef, double[] refEcef) {
-		double[] ned = enu_ned_convert(ecef2enu(ecef, refEcef));
+	public static double[] ecef2ned(double[] ecef, double[] refEcef, boolean isPos) {
+		double[] ned = enu_ned_convert(ecef2enu(ecef, refEcef, isPos));
 		return ned;
 	}
 
@@ -232,8 +240,11 @@ public class LatLonUtil {
 
 	// Reference -
 	// https://en.wikipedia.org/wiki/Geographic_coordinate_conversion#From_ECEF_to_ENU
-	public static double[] ecef2enu(double[] ecef, double[] refEcef) {
-		double[] _diff = new double[] { ecef[0] - refEcef[0], ecef[1] - refEcef[1], ecef[2] - refEcef[2] };
+	public static double[] ecef2enu(double[] ecef, double[] refEcef, boolean isPos) {
+		double[] _diff = new double[] { ecef[0], ecef[1], ecef[2] };
+		if (isPos) {
+			IntStream.range(0, 3).forEach(i -> _diff[i] = _diff[i] - refEcef[i]);
+		}
 		SimpleMatrix diff = new SimpleMatrix(3, 1, false, _diff);
 		double[] llh = ecef2lla(refEcef);
 		double lat = Math.toRadians(llh[0]);

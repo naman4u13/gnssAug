@@ -55,8 +55,8 @@ public class INSfusion {
 		double gyro_SB = 2 * Math.pow(ImuDataSheets.Pixel4.gyroInRunBias, 2) * Math.log(2)
 				/ (Math.PI * Math.pow(0.4365, 2) * ImuDataSheets.Pixel4.gyroBiasCorrTime);
 		// Receiver Clock phase and frequency PSD
-		double sf = ClockAllanVar.TCXO_low_qaulity.sf;
-		double sg = ClockAllanVar.TCXO_low_qaulity.sg;
+		double sf = ClockAllanVar.TCXO_low_quality.sf;
+		double sg = ClockAllanVar.TCXO_low_quality.sg;
 		double[] q = new double[] { acc_SN, acc_SN, acc_SN, gyro_SN, gyro_SN, gyro_SN, acc_SB, acc_SB, acc_SB, gyro_SB,
 				gyro_SB, gyro_SB, sf, sg };
 		int n = SVlist.size();
@@ -267,13 +267,17 @@ public class INSfusion {
 		double rxClkDrift = X.getRxClk()[1];
 		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
 		double[] pos_ecef = LatLonUtil.lla2ecef(llh, false);
-		double[] vel_ecef = LatLonUtil.ned2ecef(vel, pos_ecef);
+		double[] vel_ecef = LatLonUtil.ned2ecef(vel, pos_ecef, false);
 
-		GeomagneticField gmf = new GeomagneticField((float) llh[0], (float) llh[1], (float) llh[2], utcTimeMilli);
+		GeomagneticField gmf = new GeomagneticField((float) Math.toDegrees(llh[0]), (float) Math.toDegrees(llh[1]),
+				(float) llh[2], utcTimeMilli);
 		// True Magnetic Strength
-		double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
+		final double[] mag = new double[] { gmf.getX(), gmf.getY(), gmf.getZ() };
 		// Convert from nanotesla to microtesla
-		Arrays.stream(mag).forEach(i -> i = i * 1e-3);
+		for (int i = 0; i < 3; i++) {
+			mag[i] *= 1e-3;
+		}
+
 		// Subtract hard bias from magnetometer measurements, estimated magnetic
 		// strength and convert from body frame to local-nav frame
 		final SimpleMatrix mag_hat = dcm.mult(new SimpleMatrix(3, 1, true,
@@ -378,11 +382,13 @@ public class INSfusion {
 		pos_ecef[0] += deltaX.get(0);
 		pos_ecef[1] += deltaX.get(1);
 		pos_ecef[2] += deltaX.get(2);
-		X.setP(Arrays.stream(LatLonUtil.ecef2lla(pos_ecef)).map(i -> Math.toRadians(i)).toArray());
+		double[] _llh = LatLonUtil.ecef2lla(pos_ecef);
+		IntStream.range(0, 2).forEach(i -> _llh[i] = Math.toRadians(_llh[i]));
+		X.setP(_llh);
 		vel_ecef[0] += deltaX.get(3);
 		vel_ecef[1] += deltaX.get(4);
 		vel_ecef[2] += deltaX.get(5);
-		X.setV(LatLonUtil.ecef2ned(vel_ecef, pos_ecef));
+		X.setV(LatLonUtil.ecef2ned(vel_ecef, pos_ecef, false));
 		SimpleMatrix updateDcm = new SimpleMatrix(
 				Matrix.getSkewSymMat(new double[] { deltaX.get(6), deltaX.get(7), deltaX.get(8) }));
 		dcm = (SimpleMatrix.identity(3).minus(updateDcm)).mult(dcm);
