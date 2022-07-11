@@ -12,7 +12,6 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
-import org.jfree.ui.RefineryUtilities;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -55,7 +54,7 @@ public class Android {
 			ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test3";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test4";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -125,7 +124,7 @@ public class Android {
 				timeList.add(tRxMilli);
 			}
 
-			if (estimatorType == 4) {
+			if (estimatorType == 4 || estimatorType == 3) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
 				for (Map.Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry : imuMap.entrySet()) {
@@ -138,10 +137,7 @@ public class Android {
 				// Body Frame to ENU
 				double[][] dcm = StateInitialization.initialize(imuMap, SVlist);
 				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SVlist, timeList, dcm);
-				GraphPlotter chart = new GraphPlotter(ecefMap);
-				chart.pack();
-				RefineryUtilities.positionFrameRandomly(chart);
-				chart.setVisible(true);
+				// GraphPlotter.graphGnssIns(ecefMap, trueECEFlist, timeList);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);

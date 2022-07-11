@@ -24,7 +24,21 @@ public class GraphPlotter extends ApplicationFrame {
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart("GNSS/INS", "GPS-time", "GNSS/INS",
-				createDatasetGnssIns(ecefMap));
+				createDatasetConsecutiveINS(ecefMap));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(String name, TreeMap<Long, double[]> ecefMap) throws IOException {
+		super("GNSS/INS  " + name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name, createDatasetGnssIns(ecefMap));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -110,6 +124,47 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public static void graphGnssIns(TreeMap<Long, double[]> ecefMap, ArrayList<double[]> trueECEFlist,
+			ArrayList<Long> timeList) throws IOException {
+
+		GraphPlotter chart = new GraphPlotter(ecefMap);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+		Iterator<Entry<Long, double[]>> iterator = ecefMap.entrySet().iterator();
+		HashMap<String, TreeMap<Long, double[]>> map = new HashMap<String, TreeMap<Long, double[]>>();
+		map.put("x-axis", new TreeMap<Long, double[]>());
+		map.put("y-axis", new TreeMap<Long, double[]>());
+		map.put("z-axis", new TreeMap<Long, double[]>());
+		while (iterator.hasNext()) {
+			Entry<Long, double[]> entry = iterator.next();
+			long time = entry.getKey();
+			double[] ecef = entry.getValue();
+
+			map.get("x-axis").computeIfAbsent(time, k -> new double[2])[0] = ecef[0];
+			map.get("y-axis").computeIfAbsent(time, k -> new double[2])[0] = ecef[1];
+			map.get("z-axis").computeIfAbsent(time, k -> new double[2])[0] = ecef[2];
+			int index = timeList.indexOf(time);
+			if (index != -1) {
+				map.get("x-axis").get(time)[1] = trueECEFlist.get(index)[0];
+				map.get("y-axis").get(time)[1] = trueECEFlist.get(index)[1];
+				map.get("z-axis").get(time)[1] = trueECEFlist.get(index)[2];
+			}
+		}
+		Iterator<Entry<String, TreeMap<Long, double[]>>> iterator2 = map.entrySet().iterator();
+		while (iterator2.hasNext()) {
+			Entry<String, TreeMap<Long, double[]>> entry = iterator2.next();
+			String name = entry.getKey();
+			TreeMap<Long, double[]> data = entry.getValue();
+			chart = new GraphPlotter(name, data);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
+
+	}
+
 	private XYDataset createDataset3dErr(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		for (String key : dataMap.keySet()) {
@@ -127,7 +182,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createDatasetGnssIns(TreeMap<Long, double[]> ecefMap) {
+	private XYDataset createDatasetConsecutiveINS(TreeMap<Long, double[]> ecefMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries series = new XYSeries("GNSS/INS");
 		Iterator<Entry<Long, double[]>> iterator = ecefMap.entrySet().iterator();
@@ -148,6 +203,28 @@ public class GraphPlotter extends ApplicationFrame {
 
 		return dataset;
 
+	}
+
+	private XYDataset createDatasetGnssIns(TreeMap<Long, double[]> ecefMap) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		final XYSeries est = new XYSeries("Estimated");
+		final XYSeries truth = new XYSeries("True");
+		Iterator<Entry<Long, double[]>> iterator = ecefMap.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Entry<Long, double[]> entry = iterator.next();
+			long time = entry.getKey();
+			double[] ecef = entry.getValue();
+
+			est.add(time, ecef[0]);
+			if (ecef[1] != 0) {
+				truth.add(time, ecef[1]);
+			}
+		}
+		dataset.addSeries(est);
+		dataset.addSeries(truth);
+
+		return dataset;
 	}
 
 	private XYDataset createDatasetENU(HashMap<String, double[]> dataMap, ArrayList<Long> timeList) {

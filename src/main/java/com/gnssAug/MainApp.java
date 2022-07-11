@@ -22,7 +22,7 @@ public class MainApp {
 			String derived_csv_path = basePath + "\\" + MobName + "_derived.csv";
 			String gnss_log_path = basePath + "\\" + MobName + "_GnssLog.txt";
 			String GTcsv = basePath + "\\" + "ground_truth.csv";
-			Android.posEstimate(true, 0, 0, 4, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv);
+			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv);
 			break;
 
 		case 2:

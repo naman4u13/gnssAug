@@ -26,18 +26,18 @@ public class INSfusion {
 	private final static double SpeedofLight = 299792458;
 
 	public static TreeMap<Long, double[]> process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
-			ArrayList<ArrayList<Satellite>> SVlist, ArrayList<Long> timeList, double[][] dcm) throws Exception {
+			ArrayList<ArrayList<Satellite>> SVlist, ArrayList<Long> timeList, double[][] _dcm) throws Exception {
 
 		// Convert DCM from Body Frame to ENU to Body frame to NED
-		dcm = LatLonUtil.enu_ned_convert(dcm);
+		SimpleMatrix dcm = new SimpleMatrix(LatLonUtil.enu_ned_convert(_dcm));
+		dcm = Rotation.reorthonormDcm(dcm);
 		double[] ecef0 = LinearLeastSquare.process(SVlist.get(0), true);
 		double[] llh0 = LatLonUtil.ecef2lla(ecef0);
 		IntStream.range(0, 2).forEach(i -> llh0[i] = Math.toRadians(llh0[i]));
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
 		double rxClkOff = SpeedofLight * ecef0[3];
-		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], new SimpleMatrix(dcm), 0, 0, 0, 0, 0,
-				0, rxClkOff, 0);
+		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians
 		double accBiasCov = Math.pow(ImuDataSheets.Pixel4.accTurnOnBias, 2);
@@ -172,7 +172,8 @@ public class INSfusion {
 	}
 
 	private static void predictErrorState(State X, SimpleMatrix P, SimpleMatrix phi, SimpleMatrix Qk) {
-		P = phi.mult(P).mult(phi.transpose()).plus(Qk);
+		P = (phi.mult(P).mult(phi.transpose())).plus(Qk);
+		System.out.println();
 	}
 
 	private static SimpleMatrix[] getDiscreteParams(State X, double[] estAcc, double[] estGyro, double tau,
@@ -265,7 +266,7 @@ public class INSfusion {
 		double[] vel = X.getV();
 		double rxClkOff = X.getRxClk()[0];
 		double rxClkDrift = X.getRxClk()[1];
-		SimpleMatrix dcm = new SimpleMatrix(X.getDcm());
+		SimpleMatrix dcm = X.getDcm();
 		double[] pos_ecef = LatLonUtil.lla2ecef(llh, false);
 		double[] vel_ecef = LatLonUtil.ned2ecef(vel, pos_ecef, false);
 
@@ -362,13 +363,9 @@ public class INSfusion {
 		SimpleMatrix Ht = H.transpose();
 		SimpleMatrix K = null;
 		// Kalman Gain
-		try {
-			K = P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(R)).invert());
 
-		} catch (Exception e) {
-			// TODO: handle exception
-			System.out.println(e);
-		}
+		K = P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(R)).invert());
+
 		// Posterior State Estimate
 		// As prior deltaX is zero, there is no 'ze'
 		SimpleMatrix deltaX = K.mult(Z);
@@ -392,6 +389,7 @@ public class INSfusion {
 		SimpleMatrix updateDcm = new SimpleMatrix(
 				Matrix.getSkewSymMat(new double[] { deltaX.get(6), deltaX.get(7), deltaX.get(8) }));
 		dcm = (SimpleMatrix.identity(3).minus(updateDcm)).mult(dcm);
+		dcm = Rotation.reorthonormDcm(dcm);
 		X.setDcm(dcm);
 		X.setAccBias(IntStream.range(0, 3).mapToDouble(i -> X.getAccBias()[i] + deltaX.get(9 + i)).toArray());
 		X.setGyroBias(IntStream.range(0, 3).mapToDouble(i -> X.getGyroBias()[i] + deltaX.get(12 + i)).toArray());
