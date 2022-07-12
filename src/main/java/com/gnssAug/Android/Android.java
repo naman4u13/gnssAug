@@ -54,7 +54,7 @@ public class Android {
 			ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test4";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test5";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);

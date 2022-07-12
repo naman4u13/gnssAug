@@ -45,7 +45,10 @@ public class INSfusion {
 		double[] p0 = new double[] { 100, 100, 100, 0.1, 0.1, 0.1, 0.1156, 0.1156, 0.1156, accBiasCov, accBiasCov,
 				accBiasCov, gyroBiasCov, gyroBiasCov, gyroBiasCov, 5, 0.005 };
 		SimpleMatrix P = new SimpleMatrix(17, 17);
-		IntStream.range(0, 17).forEach(i -> P.set(i, i, p0[i]));
+		for (int i = 0; i < 17; i++) {
+			P.set(i, i, p0[i]);
+		}
+
 		// PSD of random walk - N
 		double acc_SN = Math.pow(ImuDataSheets.Pixel4.vrw, 2);
 		double gyro_SN = Math.pow(ImuDataSheets.Pixel4.arw, 2);
@@ -87,7 +90,7 @@ public class INSfusion {
 			 * filtering
 			 */
 			SimpleMatrix[] discParam = getDiscreteParams(X, estInsObs[0], estInsObs[1], tau, q);
-			predictErrorState(X, P, discParam[0], discParam[1]);
+			P = predictErrorState(X, P, discParam[0], discParam[1]);
 			boolean onlyMagneto = true;
 			ArrayList<Satellite> SV = null;
 			if (time == timeList.get(i)) {
@@ -97,7 +100,7 @@ public class INSfusion {
 				i++;
 
 			}
-			update(X, P, utcTimeMilli, imuSensor.get(AndroidSensor.Magnetometer), SV, onlyMagneto);
+			P = update(X, P, utcTimeMilli, imuSensor.get(AndroidSensor.Magnetometer), SV, onlyMagneto);
 			ecefMap.put(time, LatLonUtil.lla2ecef(X.getP(), false));
 		}
 		return ecefMap;
@@ -171,9 +174,9 @@ public class INSfusion {
 		return new double[][] { estAcc, estGyro };
 	}
 
-	private static void predictErrorState(State X, SimpleMatrix P, SimpleMatrix phi, SimpleMatrix Qk) {
+	private static SimpleMatrix predictErrorState(State X, SimpleMatrix P, SimpleMatrix phi, SimpleMatrix Qk) {
 		P = (phi.mult(P).mult(phi.transpose())).plus(Qk);
-		System.out.println();
+		return P;
 	}
 
 	private static SimpleMatrix[] getDiscreteParams(State X, double[] estAcc, double[] estGyro, double tau,
@@ -259,8 +262,8 @@ public class INSfusion {
 
 	}
 
-	public static void update(State X, SimpleMatrix P, long utcTimeMilli, IMUsensor magData, ArrayList<Satellite> SV,
-			boolean onlyMagneto) {
+	public static SimpleMatrix update(State X, SimpleMatrix P, long utcTimeMilli, IMUsensor magData,
+			ArrayList<Satellite> SV, boolean onlyMagneto) {
 
 		double[] llh = X.getP();
 		double[] vel = X.getV();
@@ -394,6 +397,6 @@ public class INSfusion {
 		X.setAccBias(IntStream.range(0, 3).mapToDouble(i -> X.getAccBias()[i] + deltaX.get(9 + i)).toArray());
 		X.setGyroBias(IntStream.range(0, 3).mapToDouble(i -> X.getGyroBias()[i] + deltaX.get(12 + i)).toArray());
 		X.setRxClk(IntStream.range(0, 2).mapToDouble(i -> X.getRxClk()[i] + deltaX.get(15 + i)).toArray());
-
+		return P;
 	}
 }
