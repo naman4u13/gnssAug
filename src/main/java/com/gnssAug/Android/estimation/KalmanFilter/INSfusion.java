@@ -26,8 +26,8 @@ public class INSfusion {
 	private final static double SpeedofLight = 299792458;
 
 	public static TreeMap<Long, double[]> process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
-			ArrayList<ArrayList<Satellite>> SVlist, ArrayList<Long> timeList, double[][] _dcm) throws Exception {
-
+			TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList, double[][] _dcm) throws Exception {
+		ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
 		// Convert DCM from Body Frame to ENU to Body frame to NED
 		SimpleMatrix dcm = new SimpleMatrix(LatLonUtil.enu_ned_convert(_dcm));
 		dcm = Rotation.reorthonormDcm(dcm);

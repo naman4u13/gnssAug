@@ -25,7 +25,9 @@ import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
+import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
@@ -51,10 +53,10 @@ public class Android {
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
 			ArrayList<double[]> trueECEFlist = new ArrayList<double[]>();
-			ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>();
+			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test5";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test6";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -117,14 +119,14 @@ public class Android {
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 
 				}
-				SVlist.add(satList);
+				SatMap.put(tRxMilli, satList);
 				trueLLHlist.add(trueUserLLH);
 				trueECEFlist.add(LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true));
 				timeList.add(tRxMilli);
 			}
 
-			if (estimatorType == 4 || estimatorType == 3) {
+			if (estimatorType == 4) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
 				for (Map.Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry : imuMap.entrySet()) {
@@ -135,14 +137,35 @@ public class Android {
 				}
 
 				// Body Frame to ENU
-				double[][] dcm = StateInitialization.initialize(imuMap, SVlist);
-				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SVlist, timeList, dcm);
+				double[][] dcm = StateInitialization.initialize(imuMap, SatMap);
+				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SatMap, timeList, dcm);
 				// GraphPlotter.graphGnssIns(ecefMap, trueECEFlist, timeList);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
 					double[] estEcef = ecefMap.get(time);
 					estPosMap.computeIfAbsent("GNSS/INS fusion", k -> new ArrayList<double[]>()).add(estEcef);
+
+				}
+
+			}
+			if (estimatorType == 5 || estimatorType == 3) {
+				EKF ekf = new EKF();
+				// Implement EKF based on receiver’s position and clock offset errors as a
+				// random walk process
+				// TreeMap<Long, double[]> estEcefMap_pos = ekf.process(SatMap, timeList,
+				// Flag.POSITION,false);
+				// Implement EKF based on receiver’s velocity and clock drift errors as a random
+				// walk process
+				TreeMap<Long, double[]> estEcefMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
+				int n = timeList.size();
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					// double[] estEcef = estEcefMap_pos.get(time);
+					// estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new
+					// ArrayList<double[]>()).add(estEcef);
+					double[] estEcef = estEcefMap_vel.get(time);
+					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estEcef);
 
 				}
 

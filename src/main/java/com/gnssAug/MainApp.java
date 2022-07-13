@@ -14,7 +14,7 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C" };
+			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\Pixel4";
 			String[] strList = basePath.split("\\\\");
 			String MobName = strList[strList.length - 1];

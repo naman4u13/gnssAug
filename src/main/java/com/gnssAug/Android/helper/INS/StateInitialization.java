@@ -19,8 +19,8 @@ import com.gnssAug.Android.utility.Matrix;
 public class StateInitialization {
 
 	public static double[][] initialize(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
-			ArrayList<ArrayList<Satellite>> SVlist) throws Exception {
-
+			TreeMap<Long, ArrayList<Satellite>> SatMap) throws Exception {
+		ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
 		double[] acc0 = new double[3];
 		double[] mag0 = new double[3];
 		double[] ecef0 = new double[3];
