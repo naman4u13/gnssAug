@@ -25,7 +25,8 @@ public class LinearLeastSquare {
 				double elevAngle = satList.get(i).getElevAzm()[0];
 				double CNo = satList.get(i).getCn0DbHz();
 				double var = Math.pow(10, -(CNo / 10)) / Math.pow(Math.sin(elevAngle), 2);
-				weight[i][i] = 1 / var;
+				weight[i][i] = 1
+						/ Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
 			}
 
 		} else {

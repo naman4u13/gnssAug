@@ -57,7 +57,7 @@ public class GNSS_Log {
 							bootGPStime = log.getBootGPStime();
 						} else {
 							System.err.println("ERROR in Android GNSS LOG elapsedtime computation");
-							throw new Exception("ERROR in Android GNSS LOG elapsedtime computation");
+							// throw new Exception("ERROR in Android GNSS LOG elapsedtime computation");
 						}
 
 					}

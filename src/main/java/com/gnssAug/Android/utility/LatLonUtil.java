@@ -199,8 +199,8 @@ public class LatLonUtil {
 
 	public static double[] enu2ecef(double[] enu, double[] ECEFr, boolean isPos) {
 		double[] LLH = ecef2lla(ECEFr);
-		double lat = LLH[0];
-		double lon = LLH[1];
+		double lat = Math.toRadians(LLH[0]);
+		double lon = Math.toRadians(LLH[1]);
 		double[] ECEF = new double[3];
 
 		ECEF[0] = (-Math.sin(lon) * enu[0]) + (-Math.sin(lat) * Math.cos(lon) * enu[1])

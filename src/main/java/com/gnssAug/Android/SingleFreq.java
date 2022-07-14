@@ -94,7 +94,8 @@ public class SingleFreq {
 				// Corrected for satClk Off
 				double rawPR = (logObs.gettRx() - t) * SpeedofLight;
 				double corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
-				double corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + navData.getSatClkDrift();
+				double corrPRrate = logObs.getPseudorangeRateMetersPerSecond()
+						+ (SpeedofLight * navData.getSatClkDrift());
 				// NOTE: satClkDrift require investigation
 				Satellite sat = new Satellite(logObs, t, corrPR, navData.getSatECEF(), navData.getSatVel(), corrPRrate);
 				SV.add(sat);

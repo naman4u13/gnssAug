@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import com.gnssAug.Android.Android;
-import com.gnssAug.Android.helper.Rotation;
+import com.gnssAug.Android.utility.LatLonUtil;
 
 public class MainApp {
 
@@ -14,8 +14,8 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C", "E1C" };
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\Pixel4";
+			String[] obsvCodeList = new String[] { "G1C" };
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 			String MobName = strList[strList.length - 1];
 			String obs_path = basePath + "\\supplemental\\" + MobName + "_GnssLog.20o";
@@ -26,11 +26,10 @@ public class MainApp {
 			break;
 
 		case 2:
-
-			double[][] test = new double[][] { { 2, 3 }, { -3, 5 }, { -4, -1 }, { 5, -2 } };
-			for (int i = 0; i < 4; i++) {
-				Rotation.check(test[i][0], test[i][1]);
-			}
+			double[] ecefr = LatLonUtil.lla2ecef(new double[] { 45.9132, 36.7484, 1877753.2 }, true);
+			double[] enu = new double[] { 355601.3, -923083.2, 1041016.4 };
+			double[] ecef = LatLonUtil.enu2ecef(enu, ecefr, true);
+			System.out.println(ecef);
 			break;
 
 		}

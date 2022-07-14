@@ -49,10 +49,10 @@ public class EKF {
 		x[3][0] = SpeedofLight * intialECEF[3];
 		IntStream.range(0, 4).forEach(i -> P[i][i] = 100);
 		if (n == 5) {
-			P[4][4] = 1e13;
+			P[4][4] = 1e5;
 		} else {
 			IntStream.range(4, 7).forEach(i -> P[i][i] = 1);
-			P[7][7] = 1e3;
+			P[7][7] = 1e5;
 		}
 
 		kfObj.setState_ProcessCov(x, P);
@@ -105,9 +105,8 @@ public class EKF {
 		SimpleMatrix x = kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double rxClkOff = x.get(3);// in meters
-		double[] estVel = new double[] { x.get(4), x.get(5), x.get(6) };
-		double rxClkDrift = x.get(7);// in meters
-
+		double[] estVel = null;
+		double rxClkDrift = 0;
 		/*
 		 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
 		 * with respect to x
@@ -123,6 +122,8 @@ public class EKF {
 			z = new double[2 * n][1];
 			ze = new double[2 * n][1];
 			R = new double[2 * n][2 * n];
+			estVel = new double[] { x.get(4), x.get(5), x.get(6) };
+			rxClkDrift = x.get(7);// in meters
 		} else {
 			z = new double[n][1];
 			ze = new double[n][1];
@@ -141,6 +142,7 @@ public class EKF {
 				double rangeRate = sat.getRangeRate();
 				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
 				SimpleMatrix A = new SimpleMatrix(1, 3, true, new double[] { -H[i][0], -H[i][1], -H[i][2] });
+
 				/*
 				 * Observable derived from doppler and satellite velocity, refer Kaplan and
 				 * personal notes

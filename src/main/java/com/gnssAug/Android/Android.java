@@ -5,7 +5,6 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
@@ -111,9 +110,9 @@ public class Android {
 
 					break;
 				case 3:
-					// Implement LS method
-					estEcefClk = LinearLeastSquare.process(satList, false);
-					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
+//					// Implement LS method
+//					estEcefClk = LinearLeastSquare.process(satList, false);
+//					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					// Implement WLS method
 					estEcefClk = LinearLeastSquare.process(satList, true);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
@@ -150,22 +149,43 @@ public class Android {
 
 			}
 			if (estimatorType == 5 || estimatorType == 3) {
+
+				ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
+				ArrayList<Satellite> sat1List = SVlist.get(0);
+				ArrayList<Satellite> sat2List = SVlist.get(1);
+				int prn = sat1List.get(0).getSvid();
+				double rate1 = sat1List.get(0).getPseudorangeRateMetersPerSecond();
+				double range1 = sat1List.get(0).getPseudorange();
+
+				for (int i = 0; i < sat2List.size(); i++) {
+					if (sat2List.get(i).getSvid() == prn) {
+						double rate2 = sat2List.get(i).getPseudorangeRateMetersPerSecond();
+						double range2 = sat2List.get(i).getPseudorange();
+						double diff = range2 - range1;
+						System.out.println();
+					}
+				}
+
 				EKF ekf = new EKF();
-				// Implement EKF based on receiver’s position and clock offset errors as a
-				// random walk process
-				// TreeMap<Long, double[]> estEcefMap_pos = ekf.process(SatMap, timeList,
-				// Flag.POSITION,false);
-				// Implement EKF based on receiver’s velocity and clock drift errors as a random
-				// walk process
-				TreeMap<Long, double[]> estEcefMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
+//				 Implement EKF based on receiver’s position and clock offset errors as a
+//				 random walk process
+				TreeMap<Long, double[]> estEcefMap_pos = ekf.process(SatMap, timeList, Flag.POSITION, false);
+//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+//				 walk process
+				TreeMap<Long, double[]> estEcefMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, false);
+//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+//				 walk process along with doppler updates
+				TreeMap<Long, double[]> estEcefMap_vel_doppler = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
-					// double[] estEcef = estEcefMap_pos.get(time);
-					// estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new
-					// ArrayList<double[]>()).add(estEcef);
-					double[] estEcef = estEcefMap_vel.get(time);
+					double[] estEcef = estEcefMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estEcef);
+					estEcef = estEcefMap_vel.get(time);
 					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estEcef);
+					estEcef = estEcefMap_vel_doppler.get(time);
+					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+							.add(estEcef);
 
 				}
 
@@ -220,17 +240,17 @@ public class Android {
 				System.out.println(" Haversine Distance - " + RMS(errList[5]));
 
 				// 95th Percentile
-				IntStream.range(0, 6).forEach(i -> Collections.sort(errList[i]));
-				int q95 = (int) (n * 0.95);
-
-				System.out.println("\n" + key + " 95%");
-				System.out.println("RMS - ");
-				System.out.println(" E - " + errList[0].get(q95));
-				System.out.println(" N - " + errList[1].get(q95));
-				System.out.println(" U - " + errList[2].get(q95));
-				System.out.println(" 3d Error - " + errList[3].get(q95));
-				System.out.println(" 2d Error - " + errList[4].get(q95));
-				System.out.println(" Haversine distance - " + errList[5].get(q95));
+				/*
+				 * IntStream.range(0, 6).forEach(i -> Collections.sort(errList[i])); int q95 =
+				 * (int) (n * 0.95);
+				 * 
+				 * System.out.println("\n" + key + " 95%"); System.out.println("RMS - ");
+				 * System.out.println(" E - " + errList[0].get(q95)); System.out.println(" N - "
+				 * + errList[1].get(q95)); System.out.println(" U - " + errList[2].get(q95));
+				 * System.out.println(" 3d Error - " + errList[3].get(q95));
+				 * System.out.println(" 2d Error - " + errList[4].get(q95));
+				 * System.out.println(" Haversine distance - " + errList[5].get(q95));
+				 */
 
 			}
 			for (int i = 0; i < timeList.size(); i++) {
