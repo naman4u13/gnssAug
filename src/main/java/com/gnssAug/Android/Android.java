@@ -37,13 +37,19 @@ import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.Android.utility.GraphPlotter;
-import com.gnssAug.Android.utility.LatLonUtil;
-import com.gnssAug.Android.utility.Time;
+import com.gnssAug.fileParser.Bias;
+import com.gnssAug.fileParser.Clock;
+import com.gnssAug.fileParser.Orbit;
+import com.gnssAug.utility.Analyzer;
+import com.gnssAug.utility.GraphPlotter;
+import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MathUtil;
+import com.gnssAug.utility.Time;
 
 public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
-			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv) {
+			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
+			String clock_path, String orbit_path, boolean useIGS) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -52,8 +58,12 @@ public class Android {
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
 			ArrayList<double[]> trueECEFlist = new ArrayList<double[]>();
+			HashMap<Long, double[]> err = new HashMap<Long, double[]>();
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
+			Bias bias = null;
+			Orbit orbit = null;
+			Clock clock = null;
 
 			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test6";
 			File output = new File(path + ".txt");
@@ -68,6 +78,14 @@ public class Android {
 			GNSS_Log.process(gnss_log_path);
 			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
 			ArrayList<IMUsensor> imuList = GNSS_Log.getImuList();
+
+			if (useIGS) {
+
+				orbit = new Orbit(orbit_path);
+				bias = new Bias(bias_path);
+				clock = new Clock(clock_path, bias);
+
+			}
 
 			int gtIndex = 0;
 			for (long tRxMilli : gnssLogMaps.keySet()) {
@@ -84,11 +102,12 @@ public class Android {
 				}
 				double[] trueUserLLH = new double[] { rxLLH.get(gtIndex)[2], rxLLH.get(gtIndex)[3],
 						rxLLH.get(gtIndex)[4] };
+				double trueVelRms = rxLLH.get(gtIndex)[5];
 				gtIndex++;
 
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
-						weekNo);
+						weekNo, clock, orbit, useIGS);
 				if (satList.size() < 4) {
 					System.err.println("Less than 4 satellites");
 					continue;
@@ -107,7 +126,13 @@ public class Android {
 					// Implement WLS method
 					estEcefClk = LinearLeastSquare.process(satList, true);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-
+					double[] estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
+					double estVelNorm = Math
+							.sqrt(IntStream.range(0, 3).mapToDouble(i -> estVel[i]).map(i -> i * i).sum());
+					err.put(tRxMilli,
+							new double[] { MathUtil.getEuclidean(estEcefClk, LatLonUtil.lla2ecef(
+									new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true)),
+									Math.abs(trueVelRms - estVelNorm) });
 					break;
 				case 3:
 //					// Implement LS method
@@ -189,6 +214,10 @@ public class Android {
 
 				}
 
+			}
+
+			if (estimatorType == 2) {
+				Analyzer.process(SatMap, err);
 			}
 
 			// Calculate Accuracy Metrics

@@ -23,8 +23,8 @@ public class GroundTruth {
 				double lat = Double.parseDouble(line[3]);
 				double lon = Double.parseDouble(line[4]);
 				double alt = Double.parseDouble(line[5]);
-
-				data.add(new double[] { GPStime, weekNo, lat, lon, alt });
+				double vel = Double.parseDouble(line[9]);
+				data.add(new double[] { GPStime, weekNo, lat, lon, alt, vel });
 
 			}
 			reader.close();

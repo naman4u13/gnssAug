@@ -1,4 +1,4 @@
-package com.gnssAug.Android.utility;
+package com.gnssAug.utility;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,6 +25,21 @@ public class GraphPlotter extends ApplicationFrame {
 
 		final JFreeChart chart = ChartFactory.createXYLineChart("GNSS/INS", "GPS-time", "GNSS/INS",
 				createDatasetConsecutiveINS(ecefMap));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(HashMap<String, TreeMap<Integer, Double>> map) throws IOException {
+		super("Analyse RangeRate and Speed");
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart("RangeRate and Speed", "GPS-time",
+				"RangeRate and Speed", createAnalyseDataset(map));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -203,6 +218,20 @@ public class GraphPlotter extends ApplicationFrame {
 
 		return dataset;
 
+	}
+
+	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		for (String key : map.keySet()) {
+			final XYSeries series = new XYSeries(key);
+			TreeMap<Integer, Double> data = map.get(key);
+			for (int x : data.keySet()) {
+				double y = data.get(x);
+				series.add(x, y);
+			}
+			dataset.addSeries(series);
+		}
+		return dataset;
 	}
 
 	private XYDataset createDatasetGnssIns(TreeMap<Long, double[]> ecefMap) {

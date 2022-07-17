@@ -3,7 +3,7 @@ package com.gnssAug.Android.estimation.KalmanFilter.Models;
 import java.util.stream.IntStream;
 
 import com.gnssAug.Android.constants.ClockAllanVar;
-import com.gnssAug.Android.utility.LatLonUtil;
+import com.gnssAug.utility.LatLonUtil;
 
 public class KFconfig extends KF {
 

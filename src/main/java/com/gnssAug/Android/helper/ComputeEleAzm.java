@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 import org.ejml.simple.SimpleMatrix;
 
-import com.gnssAug.Android.utility.LatLonUtil;
+import com.gnssAug.utility.LatLonUtil;
 
 public class ComputeEleAzm {
 	public static double[] computeEleAzm(double[] _userECEF, double[] _satECEF) {

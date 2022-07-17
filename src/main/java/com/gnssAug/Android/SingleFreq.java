@@ -10,13 +10,17 @@ import java.util.TimeZone;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.fileParser.Clock;
+import com.gnssAug.fileParser.Orbit;
+import com.gnssAug.utility.Vector;
 
 public class SingleFreq {
 	private final static double SpeedofLight = 299792458;
 
 	public static ArrayList<Satellite> process(double tRX,
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,
-			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo) {
+			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo,
+			Clock clock, Orbit orbit, boolean useIGS) {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/YYYY kk:mm:ss.SSS");
 		String errStr = sdf.format(time.getTime());
@@ -75,10 +79,17 @@ public class SingleFreq {
 			char SSI = obsvCode.charAt(0);
 
 			int satCount = gnssLog.size();
+			int polyOrder = 10;
+			if (useIGS) {
 
+				orbit.findPts(tRX, polyOrder);
+				clock.findPts(tRX);
+			}
 			for (int i = 0; i < satCount; i++) {
+
 				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
+				double t = 0;
 				if (!navMap.containsKey(svid)) {
 
 					System.err.println("No data for svid " + svid + " belonging to obsvCode" + obsvCode
@@ -87,17 +98,41 @@ public class SingleFreq {
 				}
 
 				Derived navData = navMap.get(svid);
+				double[] satECEF = null;
+				double[] satVel = null;
+				if (useIGS) {
 
-				double[] satECEF = navData.getSatECEF();
-				// For non-GPS signal there will be additional biases
-				double t = logObs.gettTx() - navData.getSatClkBias();
+					double tSV = logObs.gettTx();
+
+					double satClkOff = clock.getBias(tSV, svid, obsvCode, true);
+					// GPS System transmission time
+					t = tSV - satClkOff;
+					double[][] satPV = orbit.getPV(t, svid, polyOrder, SSI);
+					if (satPV == null) {
+						System.err.println(SSI + "" + svid + " MGEX data absent");
+						continue;
+					}
+					satECEF = satPV[0];
+					satVel = satPV[1];
+					double relativistic_error = -2 * (Vector.dotProd(satECEF, satVel)) / Math.pow(SpeedofLight, 2);
+					// Correct sat clock offset for relativistic error and recompute the Sat coords
+					satClkOff += relativistic_error;
+					t = tSV - satClkOff;
+
+				} else {
+					satECEF = navData.getSatECEF();
+					satVel = navData.getSatVel();
+					// For non-GPS signal there will be additional biases
+					t = logObs.gettTx() - navData.getSatClkBias();
+				}
 				// Corrected for satClk Off
 				double rawPR = (logObs.gettRx() - t) * SpeedofLight;
 				double corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
 				double corrPRrate = logObs.getPseudorangeRateMetersPerSecond()
 						+ (SpeedofLight * navData.getSatClkDrift());
+				// double diff = MathUtil.getEuclidean(satVel, navData.getSatVel());
 				// NOTE: satClkDrift require investigation
-				Satellite sat = new Satellite(logObs, t, corrPR, navData.getSatECEF(), navData.getSatVel(), corrPRrate);
+				Satellite sat = new Satellite(logObs, t, corrPR, satECEF, satVel, corrPRrate);
 				SV.add(sat);
 
 			}

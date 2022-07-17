@@ -1,4 +1,4 @@
-package com.gnssAug.Android.utility;
+package com.gnssAug.utility;
 
 import org.ejml.simple.SimpleMatrix;
 

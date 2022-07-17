@@ -1,4 +1,4 @@
-package com.gnssAug.Android.utility;
+package com.gnssAug.utility;
 
 import java.util.Calendar;
 import java.util.TimeZone;

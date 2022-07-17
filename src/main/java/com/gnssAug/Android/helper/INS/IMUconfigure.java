@@ -6,7 +6,7 @@ import java.util.TreeMap;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.models.IMUsensor;
-import com.gnssAug.Android.utility.Interpolator;
+import com.gnssAug.utility.Interpolator;
 
 public class IMUconfigure {
 

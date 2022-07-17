@@ -13,8 +13,8 @@ import com.gnssAug.Android.helper.GeomagneticField;
 import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.Android.utility.LatLonUtil;
-import com.gnssAug.Android.utility.Matrix;
+import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.Matrix;
 
 public class StateInitialization {
 

@@ -2,9 +2,11 @@ package com.gnssAug;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Calendar;
+import java.util.TimeZone;
 
 import com.gnssAug.Android.Android;
-import com.gnssAug.Android.utility.LatLonUtil;
+import com.gnssAug.utility.LatLonUtil;
 
 public class MainApp {
 
@@ -15,14 +17,27 @@ public class MainApp {
 		switch (1) {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C" };
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel5";
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\SamsungS20Ultra";
 			String[] strList = basePath.split("\\\\");
-			String MobName = strList[strList.length - 1];
-			String obs_path = basePath + "\\supplemental\\" + MobName + "_GnssLog.20o";
-			String derived_csv_path = basePath + "\\" + MobName + "_derived.csv";
-			String gnss_log_path = basePath + "\\" + MobName + "_GnssLog.txt";
+
+			String[] date = strList[strList.length - 2].split("-");
+			int year = Integer.parseInt(date[0]);
+			int month = Integer.parseInt(date[1]);
+			int day = Integer.parseInt(date[2]);
+			Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+			cal.set(year, month - 1, day, 0, 0, 0);
+			int doy = cal.get(Calendar.DAY_OF_YEAR);
+			String base_url = "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
+			String mobName = strList[strList.length - 1];
+			String obs_path = basePath + "\\supplemental\\" + mobName + "_GnssLog.20o";
+			String derived_csv_path = basePath + "\\" + mobName + "_derived.csv";
+			String gnss_log_path = basePath + "\\" + mobName + "_GnssLog.txt";
 			String GTcsv = basePath + "\\" + "ground_truth.csv";
-			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv);
+			String bias_path = base_url + year + "_" + doy + "\\CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
+			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
+			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
+			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, false);
 			break;
 
 		case 2:
