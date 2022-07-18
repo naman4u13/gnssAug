@@ -127,11 +127,12 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String applicationTitle, HashMap<String, ArrayList<double[]>> dataMap) throws IOException {
+	public GraphPlotter(String applicationTitle, HashMap<String, ArrayList<double[]>> dataMap, String unit)
+			throws IOException {
 		super(applicationTitle);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createScatterPlot("2D Error", "East(m)", "North(m)",
+		final JFreeChart chart = ChartFactory.createScatterPlot("2D Error", "East" + unit, "North" + unit,
 				createDataset2dErr(dataMap));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -142,9 +143,18 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList)
+	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
 			throws IOException {
 
+		String name = null;
+		String unit = null;
+		if (isPos) {
+			name = "GNSS Position Error";
+			unit = "(m)";
+		} else {
+			name = "GNSS Velocity Error";
+			unit = "(m/s)";
+		}
 		String[] chartNames = new String[] { "E", "N", "U" };
 		for (int i = 0; i < 3; i++) {
 			final int index = i;
@@ -154,13 +164,12 @@ public class GraphPlotter extends ApplicationFrame {
 				double[] arr = data.stream().mapToDouble(j -> j[index]).toArray();
 				subDataMap.put(key, arr);
 			}
-			GraphPlotter chart = new GraphPlotter("GPS PVT Error - ", chartNames[i] + "(m)", subDataMap, timeList,
-					true);
+			GraphPlotter chart = new GraphPlotter(name, chartNames[i] + unit, subDataMap, timeList, true);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 		}
-		GraphPlotter chart = new GraphPlotter("2D-Error", dataMap);
+		GraphPlotter chart = new GraphPlotter("2D-Error", dataMap, unit);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);

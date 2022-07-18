@@ -18,6 +18,12 @@ public class KF {
 
 	}
 
+	public void configure(double[][] F, SimpleMatrix Q) {
+		this.F = new SimpleMatrix(F);
+		this.Q = new SimpleMatrix(Q);
+
+	}
+
 	public void setState_ProcessCov(double[][] x, double[][] P) {
 		this.x = new SimpleMatrix(x);
 		this.P = new SimpleMatrix(P);

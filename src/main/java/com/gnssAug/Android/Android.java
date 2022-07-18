@@ -57,17 +57,17 @@ public class Android {
 
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
-			ArrayList<double[]> trueECEFlist = new ArrayList<double[]>();
+			ArrayList<double[]> truePosEcef = new ArrayList<double[]>();
 
 			HashMap<Long, double[]> err = new HashMap<Long, double[]>();
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
-			TreeMap<Long, double[]> estVelMap = new TreeMap<Long, double[]>();
+			HashMap<String, ArrayList<double[]>> estVelMap = new HashMap<String, ArrayList<double[]>>();
 			Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test5";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test7";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -129,7 +129,8 @@ public class Android {
 					estEcefClk = LinearLeastSquare.process(satList, true);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					double[] estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
-					estVelMap.put((long) (tRxMilli * 1e-3), estVel);
+					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
+
 					double estVelNorm = Math
 							.sqrt(IntStream.range(0, 3).mapToDouble(i -> estVel[i]).map(i -> i * i).sum());
 					err.put(tRxMilli,
@@ -144,11 +145,13 @@ public class Android {
 					// Implement WLS method
 					estEcefClk = LinearLeastSquare.process(satList, true);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
+					estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
+					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
 
 				}
 				SatMap.put(tRxMilli, satList);
 				trueLLHlist.add(trueUserLLH);
-				trueECEFlist.add(LatLonUtil
+				truePosEcef.add(LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true));
 				timeList.add(tRxMilli);
 			}
@@ -178,42 +181,41 @@ public class Android {
 			}
 			if (estimatorType == 5 || estimatorType == 3) {
 
-//				ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
-//				ArrayList<Satellite> sat1List = SVlist.get(0);
-//				ArrayList<Satellite> sat2List = SVlist.get(1);
-//				int prn = sat1List.get(0).getSvid();
-//				double rate1 = sat1List.get(0).getPseudorangeRateMetersPerSecond();
-//				double range1 = sat1List.get(0).getPseudorange();
-//
-//				for (int i = 0; i < sat2List.size(); i++) {
-//					if (sat2List.get(i).getSvid() == prn) {
-//						double rate2 = sat2List.get(i).getPseudorangeRateMetersPerSecond();
-//						double range2 = sat2List.get(i).getPseudorange();
-//						double diff = range2 - range1;
-//						System.out.println();
-//					}
-//				}
-
 				EKF ekf = new EKF();
 //				 Implement EKF based on receiver’s position and clock offset errors as a
 //				 random walk process
-				TreeMap<Long, double[]> estEcefMap_pos = ekf.process(SatMap, timeList, Flag.POSITION, false);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(SatMap, timeList, Flag.POSITION, false);
 //				 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //				 walk process
-				TreeMap<Long, double[]> estEcefMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, false);
+				TreeMap<Long, double[]> estStateMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, false);
 //				 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //				 walk process along with doppler updates
-				TreeMap<Long, double[]> estEcefMap_vel_doppler = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
+				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
-					double[] estEcef = estEcefMap_pos.get(time);
-					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estEcef);
-					estEcef = estEcefMap_vel.get(time);
-					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estEcef);
-					estEcef = estEcefMap_vel_doppler.get(time);
+					double[] estPos = estStateMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estPos);
+					double[] estState = estStateMap_vel.get(time);
+					estPos = null;
+					double[] estVel = null;
+					if (estState != null) {
+						estPos = new double[] { estState[0], estState[1], estState[2] };
+						estVel = new double[] { estState[3], estState[4], estState[5] };
+					}
+					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estPos);
+					estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estVel);
+					estState = estStateMap_vel_doppler.get(time);
+					estPos = null;
+					estVel = null;
+					if (estState != null) {
+						estPos = new double[] { estState[0], estState[1], estState[2] };
+						estVel = new double[] { estState[3], estState[4], estState[5] };
+					}
 					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
-							.add(estEcef);
+							.add(estPos);
+					estVelMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+							.add(estVel);
 
 				}
 
@@ -222,57 +224,64 @@ public class Android {
 			if (estimatorType == 2) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
-				// Analyzer.process(SatMap, imuMap, err);
-				Analyzer.plotVelAcc(trueECEFlist, timeList, estVelMap);
-			}
+				Analyzer.process(SatMap, imuMap, err);
 
+			}
+			// Get True Velocity
+			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(truePosEcef, timeList);
 			// Calculate Accuracy Metrics
-			HashMap<String, ArrayList<double[]>> GraphEnuMap = new HashMap<String, ArrayList<double[]>>();
+			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
+			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
+
 			for (String key : estPosMap.keySet()) {
-				ArrayList<Double>[] errList = new ArrayList[6];
-				IntStream.range(0, 6).forEach(i -> errList[i] = new ArrayList<Double>());
+				ArrayList<Double>[] posErrList = new ArrayList[6];
+
+				IntStream.range(0, 6).forEach(i -> posErrList[i] = new ArrayList<Double>());
+
 				ArrayList<double[]> estPosList = estPosMap.get(key);
+
 				int n = estPosList.size();
-				if (n != trueECEFlist.size()) {
+				if (n != truePosEcef.size()) {
 					System.err.println("FATAL ERROR: EST and TRUE ecef list size does not match ");
 					throw new Exception("FATAL ERROR: EST and TRUE ecef list size does not match ");
 				}
-				ArrayList<double[]> enuList = new ArrayList<double[]>();
+				ArrayList<double[]> enuPosList = new ArrayList<double[]>();
+
 				for (int i = 0; i < n; i++) {
 					double[] estEcef = estPosList.get(i);
 					if (estEcef == null) {
 						continue;
 					}
-					double[] enu = LatLonUtil.ecef2enu(estEcef, trueECEFlist.get(i), true);
+					double[] enu = LatLonUtil.ecef2enu(estEcef, truePosEcef.get(i), true);
 					double[] estLLH = LatLonUtil.ecef2lla(estEcef);
 					// Great Circle Distance
 					double gcErr = LatLonUtil.getHaversineDistance(estLLH, trueLLHlist.get(i));
-					enuList.add(enu);
+					enuPosList.add(enu);
 					// error in East direction
-					errList[0].add(Math.sqrt(enu[0] * enu[0]));
+					posErrList[0].add(Math.sqrt(enu[0] * enu[0]));
 					// error in North direction
-					errList[1].add(Math.sqrt(enu[1] * enu[1]));
+					posErrList[1].add(Math.sqrt(enu[1] * enu[1]));
 					// error in Up direction
-					errList[2].add(Math.sqrt(enu[2] * enu[2]));
+					posErrList[2].add(Math.sqrt(enu[2] * enu[2]));
 					// 3d error
-					errList[3].add(Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+					posErrList[3].add(Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
 					// 2d error
-					errList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+					posErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 					// Haversine Distance
-					errList[5].add(gcErr);
+					posErrList[5].add(gcErr);
 				}
 
-				GraphEnuMap.put(key, enuList);
+				GraphPosMap.put(key, enuPosList);
 
 				// RMSE
 				System.out.println("\n" + key);
-				System.out.println("RMS - ");
-				System.out.println(" E - " + RMS(errList[0]));
-				System.out.println(" N - " + RMS(errList[1]));
-				System.out.println(" U - " + RMS(errList[2]));
-				System.out.println(" 3d Error - " + RMS(errList[3]));
-				System.out.println(" 2d Error - " + RMS(errList[4]));
-				System.out.println(" Haversine Distance - " + RMS(errList[5]));
+				System.out.println("Position RMS - ");
+				System.out.println(" E - " + RMS(posErrList[0]));
+				System.out.println(" N - " + RMS(posErrList[1]));
+				System.out.println(" U - " + RMS(posErrList[2]));
+				System.out.println(" 3d Error - " + RMS(posErrList[3]));
+				System.out.println(" 2d Error - " + RMS(posErrList[4]));
+				System.out.println(" Haversine Distance - " + RMS(posErrList[5]));
 
 				// 95th Percentile
 
@@ -289,11 +298,56 @@ public class Android {
 //				System.out.println(" Haversine distance - " + errList[5].get(q95));
 
 			}
+			for (String key : estVelMap.keySet()) {
+				ArrayList<Double>[] velErrList = new ArrayList[6];
+				ArrayList<double[]> estVelList = null;
+				ArrayList<double[]> enuVelList = null;
+				IntStream.range(0, 5).forEach(i -> velErrList[i] = new ArrayList<Double>());
+				enuVelList = new ArrayList<double[]>();
+				estVelList = estVelMap.get(key);
+				int n = truePosEcef.size();
+				for (int i = 0; i < n; i++) {
+					double[] estVel = estVelList.get(i);
+					long time = timeList.get(i);
+					if (estVel == null || !trueVelEcef.containsKey(time)) {
+						continue;
+					}
+					double[] trueVel = trueVelEcef.get(time);
+					double[] velErr = IntStream.range(0, 3).mapToDouble(j -> estVel[j] - trueVel[j]).toArray();
+					double[] enu = LatLonUtil.ecef2enu(velErr, truePosEcef.get(i), false);
+
+					enuVelList.add(enu);
+					// error in East direction
+					velErrList[0].add(Math.sqrt(enu[0] * enu[0]));
+					// error in North direction
+					velErrList[1].add(Math.sqrt(enu[1] * enu[1]));
+					// error in Up direction
+					velErrList[2].add(Math.sqrt(enu[2] * enu[2]));
+					// 3d error
+					velErrList[3].add(Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+					// 2d error
+					velErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+
+				}
+				GraphVelMap.put(key, enuVelList);
+
+				// RMSE
+				System.out.println("\n" + key);
+				System.out.println("Velocity RMS - ");
+				System.out.println(" E - " + RMS(velErrList[0]));
+				System.out.println(" N - " + RMS(velErrList[1]));
+				System.out.println(" U - " + RMS(velErrList[2]));
+				System.out.println(" 3d Error - " + RMS(velErrList[3]));
+				System.out.println(" 2d Error - " + RMS(velErrList[4]));
+
+			}
 			for (int i = 0; i < timeList.size(); i++) {
 				timeList.set(i, (long) (timeList.get(i) * 1e-3));
 			}
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphEnuMap, timeList);
+			GraphPlotter.graphENU(GraphPosMap, timeList, true);
+			// Plot Error Graphs
+			GraphPlotter.graphENU(GraphVelMap, timeList, false);
 
 		} catch (Exception e) {
 			// TODO: handle exception

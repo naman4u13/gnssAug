@@ -63,7 +63,8 @@ public class EKF {
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler) throws Exception {
-		TreeMap<Long, double[]> ecefMap = new TreeMap<Long, double[]>();
+		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
+
 		long time = timeList.get(0);
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
@@ -75,9 +76,16 @@ public class EKF {
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
-			double[] estECEF = new double[] { x.get(0), x.get(1), x.get(2) };
+
+			double[] estState = null;
+			if (x.numRows() > 5) {
+				estState = new double[] { x.get(0), x.get(1), x.get(2), x.get(4), x.get(5), x.get(6) };
+			} else {
+				estState = new double[] { x.get(0), x.get(1), x.get(2) };
+			}
 			// Add position estimate to the list
-			ecefMap.put(currentTime, estECEF);
+			estStateMap.put(currentTime, estState);
+
 			/*
 			 * Check whether estimate error covariance matrix is positive semidefinite
 			 * before further proceeding
@@ -90,10 +98,11 @@ public class EKF {
 
 		}
 
-		return ecefMap;
+		return estStateMap;
 	}
 
-	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler) {
+	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler)
+			throws Exception {
 
 		// Satellite count
 		int n = satList.size();
@@ -152,7 +161,7 @@ public class EKF {
 				// Est doppler derived observable
 				double estDopplerDerivedObs = -A.mult(new SimpleMatrix(3, 1, true, estVel)).get(0) + rxClkDrift;
 				ze[i + n][0] = estDopplerDerivedObs;
-				R[i + n][i + n] = Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 2;
+				R[i + n][i + n] = Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 100;
 			}
 
 		}

@@ -71,8 +71,7 @@ public class Analyzer {
 
 	}
 
-	public static Object[] plotVelAcc(ArrayList<double[]> ecefList, ArrayList<Long> time,
-			TreeMap<Long, double[]> estVelMap) throws Exception {
+	public static TreeMap<Long, double[]> getVel(ArrayList<double[]> ecefList, ArrayList<Long> time) throws Exception {
 		int n = ecefList.size();
 		if (n != time.size()) {
 			throw new Exception("FATAL ERROR while analyzing");
@@ -80,7 +79,7 @@ public class Analyzer {
 		ArrayList<double[]> velList = new ArrayList<double[]>();
 		ArrayList<double[]> accList = new ArrayList<double[]>();
 		TreeMap<Long, double[]> velMap = new TreeMap<Long, double[]>();
-		TreeMap<Long, double[]> errVelMap = new TreeMap<Long, double[]>();
+
 		TreeMap<Long, double[]> accMap = new TreeMap<Long, double[]>();
 		for (int i = 1; i < n; i++) {
 			double[] ecef1 = ecefList.get(i - 1);
@@ -98,7 +97,7 @@ public class Analyzer {
 
 		}
 		for (int i = 1; i < n - 1; i++) {
-			long t = (long) (time.get(i) * 1e-3);
+			long t = time.get(i);
 			final int _i = i;
 			double[] vel = IntStream.range(0, 3).mapToDouble(j -> (velList.get(_i)[j] + velList.get(_i - 1)[j]) / 2)
 					.toArray();
@@ -108,33 +107,26 @@ public class Analyzer {
 						.mapToDouble(j -> (accList.get(_i - 1)[j] + accList.get(_i - 2)[j]) / 2).toArray();
 				accMap.put(t, acc);
 			}
-			if (estVelMap.containsKey(t)) {
-				double[] ecef = ecefList.get(i);
-				double[] err = IntStream.range(0, 3).mapToDouble(j -> estVelMap.get(t)[j] - vel[j]).toArray();
-				err = LatLonUtil.ecef2enu(err, ecef, false);
-				errVelMap.put(t, err);
-
-			}
 
 		}
 
-		GraphPlotter chart = new GraphPlotter(velMap, "True Vel (in m/s)");
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
-		chart = new GraphPlotter(estVelMap, "Est Vel (in m/s)");
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
-		chart = new GraphPlotter(errVelMap, "Err Vel ENU frame (in m/s)");
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
-		chart = new GraphPlotter(accMap, "True Acc (in m/s)");
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+//		GraphPlotter chart = new GraphPlotter(velMap, "True Vel (in m/s)");
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
+//		chart = new GraphPlotter(estVelMap, "Est Vel (in m/s)");
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
+//		chart = new GraphPlotter(errVelMap, "Err Vel ENU frame (in m/s)");
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
+//		chart = new GraphPlotter(accMap, "True Acc (in m/s)");
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
 
-		return new Object[] { velMap, accMap };
+		return velMap;
 	}
 }

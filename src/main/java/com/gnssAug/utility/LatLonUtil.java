@@ -216,6 +216,18 @@ public class LatLonUtil {
 		return ECEF;
 	}
 
+	public static SimpleMatrix getEnu2EcefRotMat(double[] ECEFr) {
+		double[] LLH = ecef2lla(ECEFr);
+		double lat = Math.toRadians(LLH[0]);
+		double lon = Math.toRadians(LLH[1]);
+		double[] ECEF = new double[3];
+		double[][] R = new double[][] {
+				{ -Math.sin(lon), -Math.sin(lat) * Math.cos(lon), Math.cos(lat) * Math.cos(lon) },
+				{ Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat) * Math.sin(lon) },
+				{ 0, Math.cos(lat), Math.sin(lat) } };
+		return new SimpleMatrix(R);
+	}
+
 	public static double[] ned2ecef(double[] ned, double[] ECEFr, boolean isPos) {
 		double[] ECEF = enu2ecef(enu_ned_convert(ned), ECEFr, isPos);
 		return ECEF;

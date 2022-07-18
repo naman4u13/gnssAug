@@ -2,6 +2,9 @@ package com.gnssAug.Android.estimation.KalmanFilter.Models;
 
 import java.util.stream.IntStream;
 
+import org.ejml.dense.row.MatrixFeatures_DDRM;
+import org.ejml.simple.SimpleMatrix;
+
 import com.gnssAug.Android.constants.ClockAllanVar;
 import com.gnssAug.utility.LatLonUtil;
 
@@ -15,7 +18,7 @@ public class KFconfig extends KF {
 	private final double sf = ClockAllanVar.TCXO_low_quality.sf;
 	private final double sg = ClockAllanVar.TCXO_low_quality.sg;
 
-	public void config(double deltaT, Flag flag) {
+	public void config(double deltaT, Flag flag) throws Exception {
 
 		/*
 		 * The process noise for position vector will be initialized in ENU frame and
@@ -27,40 +30,68 @@ public class KFconfig extends KF {
 		if (flag == Flag.POSITION) {
 
 			double[][] F = new double[5][5];
-			double[][] Q = new double[5][5];
+			double[][] _Q = new double[5][5];
 			IntStream.range(0, 5).forEach(i -> F[i][i] = 1);
 			F[3][4] = deltaT;
 
-			double[] qENU_std = new double[] { 10, 10, 4 };
+			double[] qENU = new double[] { 12, 12, 0.2 };
 			// qECEF_std can have negative element
-			double[] qECEF_std = LatLonUtil.enu2ecef(qENU_std, ecef, false);
-			double[] q = IntStream.range(0, 3).mapToDouble(i -> Math.pow(qECEF_std[i], 2)).toArray();
-			IntStream.range(0, 3).forEach(i -> Q[i][i] = q[i]);
-			Q[3][3] = ((sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3));
-			Q[3][4] = (sg * Math.pow(deltaT, 2)) / 2;
-			Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
-			Q[4][4] = sg * deltaT;
+			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i]);
+			_Q[3][3] = ((sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3));
+			_Q[3][4] = (sg * Math.pow(deltaT, 2)) / 2;
+			_Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
+			_Q[4][4] = sg * deltaT;
+			SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
+			SimpleMatrix R = new SimpleMatrix(5, 5);
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					R.set(i, j, _R.get(i, j));
+				}
+			}
+			R.set(3, 3, 1);
+			R.set(4, 4, 1);
+			SimpleMatrix Q = new SimpleMatrix(_Q);
+			Q = R.mult(Q).mult(R.transpose());
+			if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
+
+				throw new Exception("PositiveDefinite test Failed");
+			}
 			super.configure(F, Q);
 
 		} else if (flag == Flag.VELOCITY) {
 			double[][] F = new double[8][8];
-			double[][] Q = new double[8][8];
+			double[][] _Q = new double[8][8];
 			IntStream.range(0, 8).forEach(i -> F[i][i] = 1);
 			IntStream.range(0, 4).forEach(i -> F[i][i + 4] = deltaT);
 			// double[] qENU_std = new double[] { 8, 12, 2 };
-			double[] qENU_std = new double[] { 8, 12, 2 };
-			// qECEF_std can have negative element
-			double[] qECEF_std = LatLonUtil.enu2ecef(qENU_std, ecef, false);
-			double[] qECEF = IntStream.range(0, 3).mapToDouble(i -> Math.pow(qECEF_std[i], 2)).toArray();
-			double[] q = new double[] { qECEF[0], qECEF[1], qECEF[2], sg };
+			// double[] qENU = new double[] { 0.25, 0.25, 0.1 };
+			double[] qENU = new double[] { 0.25, 0.25, 0.1 };
+			double[] q = new double[] { qENU[0], qENU[1], qENU[2], sg };
 			for (int i = 0; i < 4; i++) {
-				Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
-				Q[i][i + 4] = q[i] * Math.pow(deltaT, 2) / 2;
-				Q[i + 4][i] = q[i] * Math.pow(deltaT, 2) / 2;
-				Q[i + 4][i + 4] = q[i] * deltaT;
+				_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
+				_Q[i][i + 4] = q[i] * Math.pow(deltaT, 2) / 2;
+				_Q[i + 4][i] = q[i] * Math.pow(deltaT, 2) / 2;
+				_Q[i + 4][i + 4] = q[i] * deltaT;
 			}
-			Q[3][3] += (sf * deltaT);
+			_Q[3][3] += (sf * deltaT);
+			SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
+			SimpleMatrix R = new SimpleMatrix(8, 8);
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					R.set(i, j, _R.get(i, j));
+					R.set(i + 4, j + 4, _R.get(i, j));
+				}
+			}
+			R.set(3, 3, 1);
+			R.set(7, 7, 1);
+			SimpleMatrix Q = new SimpleMatrix(_Q);
+			Q = R.mult(Q).mult(R.transpose());
+			if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
+
+				throw new Exception("PositiveDefinite test Failed");
+			}
 			super.configure(F, Q);
+
 		}
 	}
 
