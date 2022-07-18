@@ -17,6 +17,9 @@ import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.jfree.ui.RefineryUtilities;
 
+import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.models.IMUsensor;
+
 public class GraphPlotter extends ApplicationFrame {
 
 	public GraphPlotter(TreeMap<Long, double[]> ecefMap) throws IOException {
@@ -34,12 +37,41 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(HashMap<String, TreeMap<Integer, Double>> map) throws IOException {
-		super("Analyse RangeRate and Speed");
+	public GraphPlotter(TreeMap<Long, double[]> map, String name) throws IOException {
+		super(name);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart("RangeRate and Speed", "GPS-time",
-				"RangeRate and Speed", createAnalyseDataset(map));
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name, createDatasetTrueObsv(map));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(String name, IMUsensor[] imu, long[] time) throws IOException {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name, createImuDataset(time, imu));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(String name, HashMap<String, Double> firstVal, HashMap<String, TreeMap<Integer, Double>> map)
+			throws IOException {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
+				createAnalyseDataset(map, firstVal));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -180,6 +212,37 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public static void graphIMU(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap) throws IOException {
+		int n = imuMap.size();
+		IMUsensor[] acc = new IMUsensor[n];
+		IMUsensor[] gyro = new IMUsensor[n];
+		IMUsensor[] mag = new IMUsensor[n];
+		long[] time = new long[n];
+		int i = 0;
+		for (long t : imuMap.keySet()) {
+			time[i] = t;
+			HashMap<AndroidSensor, IMUsensor> imu = imuMap.get(t);
+			acc[i] = imu.get(AndroidSensor.Accelerometer);
+			gyro[i] = imu.get(AndroidSensor.Gyroscope);
+			mag[i] = imu.get(AndroidSensor.Magnetometer);
+			i++;
+		}
+
+		GraphPlotter chart = new GraphPlotter("Accelerometer (in m/s2)", acc, time);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter("Gyroscope (in rad/s)", gyro, time);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter("Magnetometer (in microtesla)", mag, time);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+	}
+
 	private XYDataset createDataset3dErr(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		for (String key : dataMap.keySet()) {
@@ -220,10 +283,72 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map) {
+	private XYDataset createDatasetTrueObsv(TreeMap<Long, double[]> map) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries x = new XYSeries("X");
+		final XYSeries y = new XYSeries("Y");
+		final XYSeries z = new XYSeries("Z");
+		Iterator<Entry<Long, double[]>> iterator = map.entrySet().iterator();
+
+		while (iterator.hasNext()) {
+			Entry<Long, double[]> entry = iterator.next();
+			long time = entry.getKey();
+			double[] data = entry.getValue();
+
+			x.add(time, data[0]);
+			y.add(time, data[1]);
+			z.add(time, data[2]);
+
+		}
+		dataset.addSeries(x);
+		dataset.addSeries(y);
+		dataset.addSeries(z);
+
+		return dataset;
+
+	}
+
+	private XYDataset createImuDataset(long[] time, IMUsensor[] imu) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		final XYSeries valX = new XYSeries("Uncal Val X");
+		final XYSeries valY = new XYSeries("Uncal Val Y");
+		final XYSeries valZ = new XYSeries("Uncal Val Z");
+		final XYSeries biasX = new XYSeries("Bias value X");
+		final XYSeries biasY = new XYSeries("Bias value Y");
+		final XYSeries biasZ = new XYSeries("Bias value Z");
+		int n = imu.length;
+		for (int i = 0; i < n; i++) {
+			long t = (long) (time[i] * 1e-3);
+			valX.add(t, imu[i].getVal()[0]);
+			valY.add(t, imu[i].getVal()[1]);
+			valZ.add(t, imu[i].getVal()[2]);
+			biasX.add(t, imu[i].getBias()[0]);
+			biasY.add(t, imu[i].getBias()[1]);
+			biasZ.add(t, imu[i].getBias()[2]);
+
+		}
+		dataset.addSeries(valX);
+		dataset.addSeries(valY);
+		dataset.addSeries(valZ);
+		dataset.addSeries(biasX);
+		dataset.addSeries(biasY);
+		dataset.addSeries(biasZ);
+
+		return dataset;
+
+	}
+
+	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map,
+			HashMap<String, Double> firstVal) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		for (String key : map.keySet()) {
-			final XYSeries series = new XYSeries(key);
+			String name = key;
+			if (firstVal.containsKey(key)) {
+				name += "(" + firstVal.get(key) + ")";
+			}
+
+			final XYSeries series = new XYSeries(name);
 			TreeMap<Integer, Double> data = map.get(key);
 			for (int x : data.keySet()) {
 				double y = data.get(x);

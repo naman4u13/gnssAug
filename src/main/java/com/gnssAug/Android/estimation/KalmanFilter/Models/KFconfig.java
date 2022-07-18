@@ -47,7 +47,8 @@ public class KFconfig extends KF {
 			double[][] Q = new double[8][8];
 			IntStream.range(0, 8).forEach(i -> F[i][i] = 1);
 			IntStream.range(0, 4).forEach(i -> F[i][i + 4] = deltaT);
-			double[] qENU_std = new double[] { 10, 10, 0.01 };
+			// double[] qENU_std = new double[] { 8, 12, 2 };
+			double[] qENU_std = new double[] { 8, 12, 2 };
 			// qECEF_std can have negative element
 			double[] qECEF_std = LatLonUtil.enu2ecef(qENU_std, ecef, false);
 			double[] qECEF = IntStream.range(0, 3).mapToDouble(i -> Math.pow(qECEF_std[i], 2)).toArray();

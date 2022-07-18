@@ -16,8 +16,8 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C" };
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\SamsungS20Ultra";
+			String[] obsvCodeList = new String[] { "G1C", "E1C" };
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
 			String[] date = strList[strList.length - 2].split("-");

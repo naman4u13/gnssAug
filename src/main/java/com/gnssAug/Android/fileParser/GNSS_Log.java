@@ -52,12 +52,12 @@ public class GNSS_Log {
 					gnssLogMaps.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
 							.computeIfAbsent(obsvCode, k -> new ArrayList<GNSSLog>()).add(log);
 					logs.add(log.toString().split(","));
-					if ((log.getBootGPStime() - bootGPStime) / 1e6 > 1) {
+					if ((log.getBootGPStime() - bootGPStime) / 1e6 > 2) {
 						if (bootGPStime == 0) {
 							bootGPStime = log.getBootGPStime();
 						} else {
 							System.err.println("ERROR in Android GNSS LOG elapsedtime computation");
-							// throw new Exception("ERROR in Android GNSS LOG elapsedtime computation");
+//							throw new Exception("ERROR in Android GNSS LOG elapsedtime computation");
 						}
 
 					}
