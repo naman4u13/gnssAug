@@ -12,6 +12,7 @@ import com.gnssAug.Android.models.Satellite;
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
 	public static double count = 0;
+	private static double postUnitW = 0;
 
 	public static double[] process(ArrayList<Satellite> satList, boolean isWLS) throws Exception {
 		return process(satList, isWLS, false);
@@ -140,7 +141,27 @@ public class LinearLeastSquare {
 
 	}
 
-	public static int qualityTest(double[][] weight, double[] res, double[][] h) {
+	public static int qualityTest2(double[][] weight, double[] res, double[][] h) throws Exception {
+		int n = weight.length;
+		double min = Double.MAX_VALUE;
+		for (int i = 0; i < n; i++) {
+			min = Math.min(weight[i][i], min);
+		}
+
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / min;
+		}
+
+		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, res);
+		SimpleMatrix W = new SimpleMatrix(weight);
+		double postUnitW = e_hat.transpose().mult(W).mult(e_hat).get(0) / (n - 4);
+		double alpha = 0.05;
+
+		int index = -1;
+		return index;
+	}
+
+	public static int qualityTest(double[][] weight, double[] res, double[][] h) throws Exception {
 		int n = weight.length;
 		double min = Double.MAX_VALUE;
 		for (int i = 0; i < n; i++) {
@@ -152,15 +173,16 @@ public class LinearLeastSquare {
 		}
 		double[][] cov = new double[n][n];
 		for (int i = 0; i < n; i++) {
-			cov[i][i] = 100 / weight[i][i];
+			cov[i][i] = 625 / weight[i][i];
 		}
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, res);
 		SimpleMatrix Qyy = new SimpleMatrix(cov);
 		SimpleMatrix Qyy_inv = Qyy.invert();
 		double detectT = e_hat.transpose().mult(Qyy_inv).mult(e_hat).get(0);
 		ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-		double alpha = 0.05;
-		double postUnitW = detectT * 100 / (n - 4);
+		double alpha = 0.1;
+		postUnitW = detectT * 625 / (n - 4);
+
 		int index = -1;
 		if ((1 - csd.cumulativeProbability(detectT)) < alpha) {
 			SimpleMatrix H = new SimpleMatrix(h);
@@ -168,9 +190,14 @@ public class LinearLeastSquare {
 			SimpleMatrix Qxx_hat = (Ht.mult(Qyy_inv).mult(H)).invert();
 			SimpleMatrix Qyy_hat = H.mult(Qxx_hat).mult(Ht);
 			SimpleMatrix Qee_hat = Qyy.minus(Qyy_hat);
-
+//			if (!MatrixFeatures_DDRM.isPositiveSemidefinite(Qxx_hat.getMatrix())) {
+//				count++;
+//				System.out.print("");
+//				// throw new Exception("PositiveDefinite test Failed");
+//			}
+			double maxW = Double.MIN_VALUE;
 			for (int i = 0; i < n; i++) {
-				double maxW = Double.MIN_VALUE;
+
 				SimpleMatrix c = new SimpleMatrix(n, 1);
 				c.set(i, 1);
 				SimpleMatrix ct = c.transpose();
@@ -184,7 +211,7 @@ public class LinearLeastSquare {
 					}
 				}
 			}
-			count++;
+
 		}
 		return index;
 
@@ -248,6 +275,10 @@ public class LinearLeastSquare {
 		}
 
 		return estVel;
+	}
+
+	public static double getPostUnitW() {
+		return postUnitW;
 	}
 
 }

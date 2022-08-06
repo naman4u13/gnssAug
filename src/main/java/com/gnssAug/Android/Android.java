@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
@@ -62,11 +63,12 @@ public class Android {
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> estVelMap = new HashMap<String, ArrayList<double[]>>();
+			ArrayList<Double> postUnitWeightList = new ArrayList<Double>();
 			Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test7";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test8";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -133,7 +135,8 @@ public class Android {
 					// Implement WLS method
 					estEcefClk = LinearLeastSquare.process(satList, true, true);
 					estPosMap.computeIfAbsent("WLS_QualityControl", k -> new ArrayList<double[]>()).add(estEcefClk);
-
+					double postUnitW = LinearLeastSquare.getPostUnitW();
+					postUnitWeightList.add(Math.sqrt(postUnitW));
 					break;
 				case 3:
 //					// Implement LS method
@@ -282,17 +285,17 @@ public class Android {
 
 				// 95th Percentile
 
-//				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
-//				int q95 = (int) (n * 0.95);
-//
-//				System.out.println("\n" + key + " 95%");
-//				System.out.println("RMS - ");
-//				System.out.println(" E - " + posErrList[0].get(q95));
-//				System.out.println(" N - " + posErrList[1].get(q95));
-//				System.out.println(" U - " + posErrList[2].get(q95));
-//				System.out.println(" 3d Error - " + posErrList[3].get(q95));
-//				System.out.println(" 2d Error - " + posErrList[4].get(q95));
-//				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
+				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
+				int q95 = (int) (n * 0.95);
+
+				System.out.println("\n" + key + " 95%");
+				System.out.println("RMS - ");
+				System.out.println(" E - " + posErrList[0].get(q95));
+				System.out.println(" N - " + posErrList[1].get(q95));
+				System.out.println(" U - " + posErrList[2].get(q95));
+				System.out.println(" 3d Error - " + posErrList[3].get(q95));
+				System.out.println(" 2d Error - " + posErrList[4].get(q95));
+				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
 			for (String key : estVelMap.keySet()) {
@@ -357,7 +360,9 @@ public class Android {
 			// Plot Error Graphs
 			GraphPlotter.graphENU(GraphPosMap, timeList, true);
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			// GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			// Plot Posteriori Variance of Unit Weight
+			GraphPlotter.graphPostUnitW(postUnitWeightList, timeList);
 
 		} catch (Exception e) {
 			// TODO: handle exception

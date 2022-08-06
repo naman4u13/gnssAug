@@ -65,6 +65,21 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public GraphPlotter(String name, ArrayList<Double> data, ArrayList<Long> timeList) throws IOException {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
+				createDatasetPostUnitW(data, timeList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
 	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map) throws IOException {
 		super(name);
 		// TODO Auto-generated constructor stub
@@ -139,6 +154,13 @@ public class GraphPlotter extends ApplicationFrame {
 		// 1000, 600);
 		setContentPane(chartPanel);
 
+	}
+
+	public static void graphPostUnitW(ArrayList<Double> data, ArrayList<Long> timeList) throws IOException {
+		GraphPlotter chart = new GraphPlotter("Posteriori Variance of Unit Weight", data, timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
 	}
 
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
@@ -395,6 +417,32 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(series);
 		}
 
+		return dataset;
+
+	}
+
+	private XYDataset createDatasetPostUnitW(ArrayList<Double> data, ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		final XYSeries series = new XYSeries("Posteriori Variance of Unit Weight");
+		double sum = 0;
+		int count = 0;
+		for (int i = 0; i < data.size(); i++) {
+			if (data.get(i) == 0) {
+				continue;
+			}
+			sum += data.get(i);
+			count++;
+			series.add(timeList.get(i) - timeList.get(0), data.get(i));
+		}
+		double avg = sum / count;
+		final XYSeries mean = new XYSeries("Mean Posteriori Variance of Unit Weight: " + avg);
+
+		for (int i = 0; i < data.size(); i++) {
+			mean.add(timeList.get(i) - timeList.get(0), avg);
+		}
+		dataset.addSeries(series);
+		dataset.addSeries(mean);
 		return dataset;
 
 	}
