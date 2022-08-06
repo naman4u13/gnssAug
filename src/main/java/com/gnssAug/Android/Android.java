@@ -43,7 +43,6 @@ import com.gnssAug.fileParser.Orbit;
 import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
-import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
 
 public class Android {
@@ -131,12 +130,10 @@ public class Android {
 					double[] estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
 
-					double estVelNorm = Math
-							.sqrt(IntStream.range(0, 3).mapToDouble(i -> estVel[i]).map(i -> i * i).sum());
-					err.put(tRxMilli,
-							new double[] { MathUtil.getEuclidean(estEcefClk, LatLonUtil.lla2ecef(
-									new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true)),
-									Math.abs(trueVelRms - estVelNorm) });
+					// Implement WLS method
+					estEcefClk = LinearLeastSquare.process(satList, true, true);
+					estPosMap.computeIfAbsent("WLS_QualityControl", k -> new ArrayList<double[]>()).add(estEcefClk);
+
 					break;
 				case 3:
 //					// Implement LS method
@@ -155,7 +152,8 @@ public class Android {
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true));
 				timeList.add(tRxMilli);
 			}
-
+			// Get True Velocity
+			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(truePosEcef, timeList);
 			if (estimatorType == 4) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
@@ -221,14 +219,13 @@ public class Android {
 
 			}
 
-			if (estimatorType == 2) {
-				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
-						imuList);
-				Analyzer.process(SatMap, imuMap, err);
+//			if (estimatorType == 2) {
+//				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
+//						imuList);
+//				Analyzer.process(SatMap, imuMap, truePosEcef, trueVelEcef);
+//
+//			}
 
-			}
-			// Get True Velocity
-			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(truePosEcef, timeList);
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
@@ -285,17 +282,17 @@ public class Android {
 
 				// 95th Percentile
 
-//				IntStream.range(0, 6).forEach(i -> Collections.sort(errList[i]));
+//				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
 //				int q95 = (int) (n * 0.95);
 //
 //				System.out.println("\n" + key + " 95%");
 //				System.out.println("RMS - ");
-//				System.out.println(" E - " + errList[0].get(q95));
-//				System.out.println(" N - " + errList[1].get(q95));
-//				System.out.println(" U - " + errList[2].get(q95));
-//				System.out.println(" 3d Error - " + errList[3].get(q95));
-//				System.out.println(" 2d Error - " + errList[4].get(q95));
-//				System.out.println(" Haversine distance - " + errList[5].get(q95));
+//				System.out.println(" E - " + posErrList[0].get(q95));
+//				System.out.println(" N - " + posErrList[1].get(q95));
+//				System.out.println(" U - " + posErrList[2].get(q95));
+//				System.out.println(" 3d Error - " + posErrList[3].get(q95));
+//				System.out.println(" 2d Error - " + posErrList[4].get(q95));
+//				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
 			for (String key : estVelMap.keySet()) {
@@ -339,6 +336,19 @@ public class Android {
 				System.out.println(" U - " + RMS(velErrList[2]));
 				System.out.println(" 3d Error - " + RMS(velErrList[3]));
 				System.out.println(" 2d Error - " + RMS(velErrList[4]));
+
+				// 95th Percentile
+
+//				IntStream.range(0, 5).forEach(i -> Collections.sort(velErrList[i]));
+//				int q95 = (int) (n * 0.95);
+//
+//				System.out.println("\n" + key + " 95%");
+//				System.out.println("RMS - ");
+//				System.out.println(" E - " + velErrList[0].get(q95));
+//				System.out.println(" N - " + velErrList[1].get(q95));
+//				System.out.println(" U - " + velErrList[2].get(q95));
+//				System.out.println(" 3d Error - " + velErrList[3].get(q95));
+//				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
 			for (int i = 0; i < timeList.size(); i++) {

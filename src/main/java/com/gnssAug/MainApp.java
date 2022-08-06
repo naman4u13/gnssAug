@@ -36,7 +36,7 @@ public class MainApp {
 			String bias_path = base_url + year + "_" + doy + "\\CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
-			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+			Android.posEstimate(true, 0, 0, 2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
 					clock_path, orbit_path, false);
 			break;
 

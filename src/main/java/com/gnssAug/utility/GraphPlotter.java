@@ -65,13 +65,11 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, HashMap<String, Double> firstVal, HashMap<String, TreeMap<Integer, Double>> map)
-			throws IOException {
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map) throws IOException {
 		super(name);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
-				createAnalyseDataset(map, firstVal));
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name, createAnalyseDataset(map));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -100,7 +98,7 @@ public class GraphPlotter extends ApplicationFrame {
 		super(applicationTitle);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(chartTitle, "GPS-time", chartTitle,
+		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle, "GPS-time", chartTitle,
 				createDataset3dErr(dataMap, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -113,10 +111,10 @@ public class GraphPlotter extends ApplicationFrame {
 
 	public GraphPlotter(String applicationTitle, String chartTitle, HashMap<String, double[]> dataMap,
 			ArrayList<Long> timeList, boolean flag) throws IOException {
-		super(applicationTitle);
+		super(applicationTitle + " Error");
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(chartTitle, "GPS-time", chartTitle,
+		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle + " Error", "GPS-time", chartTitle,
 				createDatasetENU(dataMap, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -132,7 +130,7 @@ public class GraphPlotter extends ApplicationFrame {
 		super(applicationTitle);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createScatterPlot("2D Error", "East" + unit, "North" + unit,
+		final JFreeChart chart = ChartFactory.createScatterPlot(applicationTitle, "East" + unit, "North" + unit,
 				createDataset2dErr(dataMap));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -149,10 +147,10 @@ public class GraphPlotter extends ApplicationFrame {
 		String name = null;
 		String unit = null;
 		if (isPos) {
-			name = "GNSS Position Error";
+			name = "GNSS Position";
 			unit = "(m)";
 		} else {
-			name = "GNSS Velocity Error";
+			name = "GNSS Velocity";
 			unit = "(m/s)";
 		}
 		String[] chartNames = new String[] { "E", "N", "U" };
@@ -164,16 +162,17 @@ public class GraphPlotter extends ApplicationFrame {
 				double[] arr = data.stream().mapToDouble(j -> j[index]).toArray();
 				subDataMap.put(key, arr);
 			}
-			GraphPlotter chart = new GraphPlotter(name, chartNames[i] + unit, subDataMap, timeList, true);
+			GraphPlotter chart = new GraphPlotter(name + "(" + chartNames[i] + ")", chartNames[i] + unit, subDataMap,
+					timeList, true);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 		}
-		GraphPlotter chart = new GraphPlotter("2D-Error", dataMap, unit);
+		GraphPlotter chart = new GraphPlotter(name + " 2D-Error", dataMap, unit);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter("3d-Error", "3d-Error", dataMap, timeList);
+		chart = new GraphPlotter(name + " 3d-Error", "3d-Error" + unit, dataMap, timeList);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -260,7 +259,7 @@ public class GraphPlotter extends ApplicationFrame {
 			for (int i = 0; i < list.size(); i++) {
 				double[] data = list.get(i);
 				double err = Math.sqrt(Arrays.stream(data).map(j -> j * j).sum());
-				series.add(timeList.get(i), Double.valueOf(err));
+				series.add(timeList.get(i) - timeList.get(0), Double.valueOf(err));
 			}
 			dataset.addSeries(series);
 		}
@@ -328,7 +327,7 @@ public class GraphPlotter extends ApplicationFrame {
 		final XYSeries biasZ = new XYSeries("Bias value Z");
 		int n = imu.length;
 		for (int i = 0; i < n; i++) {
-			long t = (long) (time[i] * 1e-3);
+			long t = (long) ((time[i] - time[0]) * 1e-3);
 			valX.add(t, imu[i].getVal()[0]);
 			valY.add(t, imu[i].getVal()[1]);
 			valZ.add(t, imu[i].getVal()[2]);
@@ -348,15 +347,10 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map,
-			HashMap<String, Double> firstVal) {
+	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		for (String key : map.keySet()) {
 			String name = key;
-			if (firstVal.containsKey(key)) {
-				name += "(" + firstVal.get(key) + ")";
-			}
-
 			final XYSeries series = new XYSeries(name);
 			TreeMap<Integer, Double> data = map.get(key);
 			for (int x : data.keySet()) {
@@ -396,7 +390,7 @@ public class GraphPlotter extends ApplicationFrame {
 			final XYSeries series = new XYSeries(key);
 			double[] data = dataMap.get(key);
 			for (int i = 0; i < data.length; i++) {
-				series.add(timeList.get(i), Double.valueOf(data[i]));
+				series.add(timeList.get(i) - timeList.get(0), Double.valueOf(data[i]));
 			}
 			dataset.addSeries(series);
 		}

@@ -3,15 +3,21 @@ package com.gnssAug.Android.estimation;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.distribution.ChiSquaredDistribution;
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.models.Satellite;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
+	public static double count = 0;
 
 	public static double[] process(ArrayList<Satellite> satList, boolean isWLS) throws Exception {
+		return process(satList, isWLS, false);
+	}
 
+	public static double[] process(ArrayList<Satellite> satList, boolean isWLS, boolean doTest) throws Exception {
 		// Satellite count
 		int n = satList.size();
 		// Weight matrix
@@ -25,14 +31,52 @@ public class LinearLeastSquare {
 				double elevAngle = satList.get(i).getElevAzm()[0];
 				double CNo = satList.get(i).getCn0DbHz();
 				double var = Math.pow(10, -(CNo / 10)) / Math.pow(Math.sin(elevAngle), 2);
-				weight[i][i] = 1
-						/ Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
+				weight[i][i] = var;
+				// 1/ Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight
+				// * 1e-9, 2);
 			}
 
 		} else {
 			IntStream.range(0, n).forEach(i -> weight[i][i] = 1);
 		}
+		double[] estEcefClk = regress(satList, weight);
 
+		if (n > 4 && doTest && isWLS) {
+			double[] res = new double[n];
+			double[][] h = new double[n][4];
+			for (int i = 0; i < n; i++) {
+				Satellite sat = satList.get(i);
+				// Its not really a ECI, therefore don't get confused
+				double[] satEcef = sat.getSatEci();
+				double PR = sat.getPseudorange();
+				final double[] _estEcefClk = estEcefClk;
+				// Approx Geometric Range
+				double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - _estEcefClk[j])
+						.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+				// Approx Pseudorange Range
+				double approxPR = approxGR + (SpeedofLight * estEcefClk[3]);
+				res[i] = approxPR - PR;
+				int index = i;
+				IntStream.range(0, 3).forEach(j -> h[index][j] = -(satEcef[j] - _estEcefClk[j]) / approxGR);
+				h[i][3] = 1;
+			}
+			int index = qualityTest(weight, res, h);
+			if (index > -1) {
+
+				satList.remove(index);
+				double[][] _weight = new double[n - 1][n - 1];
+				IntStream.range(0, index).forEach(i -> _weight[i][i] = weight[i][i]);
+				IntStream.range(index + 1, n).forEach(i -> _weight[i - 1][i - 1] = weight[i][i]);
+				estEcefClk = regress(satList, _weight);
+			}
+
+		}
+		return estEcefClk;
+	}
+
+	public static double[] regress(ArrayList<Satellite> satList, double[][] weight) throws Exception {
+
+		int n = satList.size();
 		// variable to store estimated Rx position and clk offset
 		double[] estEcefClk = new double[4];
 		/*
@@ -83,6 +127,7 @@ public class LinearLeastSquare {
 						(i, j) -> i + j));
 
 			}
+
 			/*
 			 * Regression is completed, error is below threshold, successfully estimated Rx
 			 * Position and Clk Offset
@@ -95,6 +140,56 @@ public class LinearLeastSquare {
 
 	}
 
+	public static int qualityTest(double[][] weight, double[] res, double[][] h) {
+		int n = weight.length;
+		double min = Double.MAX_VALUE;
+		for (int i = 0; i < n; i++) {
+			min = Math.min(weight[i][i], min);
+		}
+
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / min;
+		}
+		double[][] cov = new double[n][n];
+		for (int i = 0; i < n; i++) {
+			cov[i][i] = 100 / weight[i][i];
+		}
+		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, res);
+		SimpleMatrix Qyy = new SimpleMatrix(cov);
+		SimpleMatrix Qyy_inv = Qyy.invert();
+		double detectT = e_hat.transpose().mult(Qyy_inv).mult(e_hat).get(0);
+		ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
+		double alpha = 0.05;
+		double postUnitW = detectT * 100 / (n - 4);
+		int index = -1;
+		if ((1 - csd.cumulativeProbability(detectT)) < alpha) {
+			SimpleMatrix H = new SimpleMatrix(h);
+			SimpleMatrix Ht = H.transpose();
+			SimpleMatrix Qxx_hat = (Ht.mult(Qyy_inv).mult(H)).invert();
+			SimpleMatrix Qyy_hat = H.mult(Qxx_hat).mult(Ht);
+			SimpleMatrix Qee_hat = Qyy.minus(Qyy_hat);
+
+			for (int i = 0; i < n; i++) {
+				double maxW = Double.MIN_VALUE;
+				SimpleMatrix c = new SimpleMatrix(n, 1);
+				c.set(i, 1);
+				SimpleMatrix ct = c.transpose();
+				double w = (ct.mult(Qyy_inv).mult(e_hat).get(0))
+						/ (Math.sqrt(ct.mult(Qyy_inv).mult(Qee_hat).mult(Qyy_inv).mult(c).get(0)));
+				NormalDistribution norm = new NormalDistribution();
+				if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha / 2)) {
+					if (w > maxW) {
+						maxW = w;
+						index = i;
+					}
+				}
+			}
+			count++;
+		}
+		return index;
+
+	}
+
 	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk) {
 		// Satellite count
 		int n = satList.size();
@@ -104,7 +199,7 @@ public class LinearLeastSquare {
 			double elevAngle = satList.get(i).getElevAzm()[0];
 			double CNo = satList.get(i).getCn0DbHz();
 			double var = Math.pow(10, -(CNo / 10)) / Math.pow(Math.sin(elevAngle), 2);
-			weight[i][i] = 1 / var;
+			weight[i][i] = 1 / Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
 		}
 		double[] estVel = new double[4];
 		double[] z = new double[n];

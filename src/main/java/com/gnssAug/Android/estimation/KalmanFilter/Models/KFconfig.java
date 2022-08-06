@@ -34,7 +34,8 @@ public class KFconfig extends KF {
 			IntStream.range(0, 5).forEach(i -> F[i][i] = 1);
 			F[3][4] = deltaT;
 
-			double[] qENU = new double[] { 12, 12, 0.2 };
+//			double[] qENU = new double[] { 12, 12, 0.2 };
+			double[] qENU = new double[] { 16, 16, 4 };
 			// qECEF_std can have negative element
 			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i]);
 			_Q[3][3] = ((sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3));
@@ -64,7 +65,7 @@ public class KFconfig extends KF {
 			IntStream.range(0, 8).forEach(i -> F[i][i] = 1);
 			IntStream.range(0, 4).forEach(i -> F[i][i + 4] = deltaT);
 			// double[] qENU_std = new double[] { 8, 12, 2 };
-			// double[] qENU = new double[] { 0.25, 0.25, 0.1 };
+
 			double[] qENU = new double[] { 0.25, 0.25, 0.1 };
 			double[] q = new double[] { qENU[0], qENU[1], qENU[2], sg };
 			for (int i = 0; i < 4; i++) {
