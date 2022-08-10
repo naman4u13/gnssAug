@@ -19,7 +19,9 @@ public class IMUsensor {
 		this.elapsedRealtimeNanos = Long.parseLong(data[2]);
 		this.val[0] = Double.parseDouble(data[3]);
 		this.val[1] = Double.parseDouble(data[4]);
+
 		this.val[2] = Double.parseDouble(data[5]);
+
 		if (data.length > 6) {
 			this.bias[0] = data[6].isBlank() ? 0 : Double.parseDouble(data[6]);
 			this.bias[1] = data[7].isBlank() ? 0 : Double.parseDouble(data[7]);

@@ -7,11 +7,13 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -44,12 +46,13 @@ import com.gnssAug.fileParser.Orbit;
 import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
 
 public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
-			String clock_path, String orbit_path, boolean useIGS) {
+			String clock_path, String orbit_path, boolean useIGS, boolean checkOutlier) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -57,7 +60,7 @@ public class Android {
 
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
-			ArrayList<double[]> truePosEcef = new ArrayList<double[]>();
+			ArrayList<double[]> trueEcefList = new ArrayList<double[]>();
 
 			HashMap<Long, double[]> err = new HashMap<Long, double[]>();
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
@@ -68,7 +71,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test8";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -118,6 +121,15 @@ public class Android {
 				double[] userEcef = LinearLeastSquare.process(satList, false);
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(userEcef, i.getSatEci())));
 				filterSat(satList, cutOffAng, snrMask);
+				double[] truePosEcef = LatLonUtil
+						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
+				if (checkOutlier) {
+					checkOutlier(satList, truePosEcef);
+				}
+				if (satList.size() < 4) {
+					System.err.println("Less than 4 satellites");
+					continue;
+				}
 				double[] estEcefClk = null;
 				switch (estimatorType) {
 				case 1:
@@ -133,10 +145,10 @@ public class Android {
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
 
 					// Implement WLS method
-					estEcefClk = LinearLeastSquare.process(satList, true, true);
-					estPosMap.computeIfAbsent("WLS_QualityControl", k -> new ArrayList<double[]>()).add(estEcefClk);
-					double postUnitW = LinearLeastSquare.getPostUnitW();
-					postUnitWeightList.add(Math.sqrt(postUnitW));
+//					estEcefClk = LinearLeastSquare.process(satList, true, true);
+//					estPosMap.computeIfAbsent("WLS_QualityControl", k -> new ArrayList<double[]>()).add(estEcefClk);
+//					double postUnitW = LinearLeastSquare.getPostUnitW();
+//					postUnitWeightList.add(Math.sqrt(postUnitW));
 					break;
 				case 3:
 //					// Implement LS method
@@ -151,12 +163,11 @@ public class Android {
 				}
 				SatMap.put(tRxMilli, satList);
 				trueLLHlist.add(trueUserLLH);
-				truePosEcef.add(LatLonUtil
-						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true));
+				trueEcefList.add(truePosEcef);
 				timeList.add(tRxMilli);
 			}
 			// Get True Velocity
-			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(truePosEcef, timeList);
+			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(trueEcefList, timeList);
 			if (estimatorType == 4) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
@@ -222,12 +233,13 @@ public class Android {
 
 			}
 
-//			if (estimatorType == 2) {
+			if (estimatorType == 6) {
+				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);
-//				Analyzer.process(SatMap, imuMap, truePosEcef, trueVelEcef);
-//
-//			}
+				Analyzer.process(SatMap, imuMap, trueEcefList, trueVelEcef);
+
+			}
 
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
@@ -241,7 +253,7 @@ public class Android {
 				ArrayList<double[]> estPosList = estPosMap.get(key);
 
 				int n = estPosList.size();
-				if (n != truePosEcef.size()) {
+				if (n != trueEcefList.size()) {
 					System.err.println("FATAL ERROR: EST and TRUE ecef list size does not match ");
 					throw new Exception("FATAL ERROR: EST and TRUE ecef list size does not match ");
 				}
@@ -252,7 +264,7 @@ public class Android {
 					if (estEcef == null) {
 						continue;
 					}
-					double[] enu = LatLonUtil.ecef2enu(estEcef, truePosEcef.get(i), true);
+					double[] enu = LatLonUtil.ecef2enu(estEcef, trueEcefList.get(i), true);
 					double[] estLLH = LatLonUtil.ecef2lla(estEcef);
 					// Great Circle Distance
 					double gcErr = LatLonUtil.getHaversineDistance(estLLH, trueLLHlist.get(i));
@@ -305,7 +317,7 @@ public class Android {
 				IntStream.range(0, 5).forEach(i -> velErrList[i] = new ArrayList<Double>());
 				enuVelList = new ArrayList<double[]>();
 				estVelList = estVelMap.get(key);
-				int n = truePosEcef.size();
+				int n = trueEcefList.size();
 				for (int i = 0; i < n; i++) {
 					double[] estVel = estVelList.get(i);
 					long time = timeList.get(i);
@@ -314,7 +326,7 @@ public class Android {
 					}
 					double[] trueVel = trueVelEcef.get(time);
 					double[] velErr = IntStream.range(0, 3).mapToDouble(j -> estVel[j] - trueVel[j]).toArray();
-					double[] enu = LatLonUtil.ecef2enu(velErr, truePosEcef.get(i), false);
+					double[] enu = LatLonUtil.ecef2enu(velErr, trueEcefList.get(i), false);
 
 					enuVelList.add(enu);
 					// error in East direction
@@ -377,6 +389,41 @@ public class Android {
 		}
 		if (snrMask >= 0) {
 			satList.removeIf(i -> i.getCn0DbHz() < snrMask);
+		}
+	}
+
+	public static void checkOutlier(ArrayList<Satellite> satList, double[] truePos) {
+		final double SpeedofLight = 299792458;
+		int n = satList.size();
+		double max = Double.MIN_VALUE;
+		int index = -1;
+		HashSet<Satellite> indexSet = new HashSet<Satellite>();
+		NormalDistribution norm = new NormalDistribution();
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			double[] satPos = sat.getSatEci();
+			double trueRange = MathUtil.getEuclidean(truePos, satPos);
+			double pseudoRange = sat.getPseudorange();
+			double err = Math.abs(pseudoRange - trueRange);
+			double sigma = satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9;
+			double test = err / sigma;
+			if (1 - norm.cumulativeProbability(Math.abs(test)) < 0.001) {
+				indexSet.add(sat);
+				if (test > max) {
+					max = test;
+					index = i;
+					sat.setFailsTest(true);
+				}
+			}
+			sat.setTestStat(test);
+
+		}
+		if (index != -1) {
+			satList.get(index).setOutlier(true);
+			// satList.remove(index);
+		}
+		if (!indexSet.isEmpty()) {
+			satList.removeAll(indexSet);
 		}
 	}
 

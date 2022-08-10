@@ -12,6 +12,9 @@ public class Satellite extends GNSSLog {
 	private double[] elevAzm;
 	// Corrected range rate
 	private double rangeRate;
+	private boolean isOutlier = false;
+	private double testStat;
+	private boolean failsTest = false;
 
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate) {
 		super(log);
@@ -66,6 +69,30 @@ public class Satellite extends GNSSLog {
 
 	public double getRangeRate() {
 		return rangeRate;
+	}
+
+	public boolean isOutlier() {
+		return isOutlier;
+	}
+
+	public void setOutlier(boolean isOutlier) {
+		this.isOutlier = isOutlier;
+	}
+
+	public double getTestStat() {
+		return testStat;
+	}
+
+	public void setTestStat(double test) {
+		this.testStat = test;
+	}
+
+	public boolean isFailsTest() {
+		return failsTest;
+	}
+
+	public void setFailsTest(boolean failsTest) {
+		this.failsTest = failsTest;
 	}
 
 }

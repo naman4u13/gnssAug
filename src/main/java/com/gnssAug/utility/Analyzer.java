@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.jfree.ui.RefineryUtilities;
+
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
@@ -14,7 +16,7 @@ public class Analyzer {
 	public static void process(TreeMap<Long, ArrayList<Satellite>> SatMap,
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap, ArrayList<double[]> truePosEcef,
 			TreeMap<Long, double[]> trueVelEcef) throws Exception {
-		ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
+
 		HashMap<String, TreeMap<Integer, Double>> doppplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 
@@ -71,17 +73,17 @@ public class Analyzer {
 			dopplerFirst.put(key, firstVal.get(key)[1]);
 		}
 
-//		GraphPlotter chart = new GraphPlotter("Error in Range-Rate(in m/s)", doppplerMap);
-//		chart.pack();
-//		RefineryUtilities.positionFrameRandomly(chart);
-//		chart.setVisible(true);
-//
-//		chart = new GraphPlotter("Error in Range(in m)", rangeMap);
-//		chart.pack();
-//		RefineryUtilities.positionFrameRandomly(chart);
-//		chart.setVisible(true);
+		GraphPlotter chart = new GraphPlotter("Error in Range-Rate(in m/s)", doppplerMap);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
 
-		GraphPlotter.graphIMU(imuMap);
+		chart = new GraphPlotter("Error in Range(in m)", rangeMap);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+		// GraphPlotter.graphIMU(imuMap);
 
 	}
 

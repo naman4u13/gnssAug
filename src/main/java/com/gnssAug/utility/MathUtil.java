@@ -12,4 +12,18 @@ public class MathUtil {
 		return dist;
 
 	}
+
+	public static long getFact(long x) {
+		long fact = 1;
+		while (x != 0) {
+			fact *= x;
+			x--;
+		}
+		return fact;
+	}
+
+	public static long getCombCount(int n, int m) {
+		long count = getFact(n) / (getFact(m) * getFact(n - m));
+		return count;
+	}
 }

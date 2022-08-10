@@ -7,14 +7,14 @@ import com.gnssAug.Android.models.Satellite;
 
 public class Weight {
 
-	public static double[][] computeCovMat(ArrayList<Satellite> SV) {
+	public static double[][] computeCovMat(ArrayList<Satellite> satList) {
 
-		int SVcount = SV.size();
+		int SVcount = satList.size();
 		double[][] covMat = new double[SVcount][SVcount];
 		IntStream.range(0, SVcount).forEach(
-				i -> covMat[i][i] = Weight.computeCoVariance(SV.get(i).getCn0DbHz(), SV.get(i).getElevAzm()[0]));
-		double[][] normWeight = Weight.normalize(covMat);
-		return normWeight;
+				i -> covMat[i][i] = Weight.computeCoVariance(satList.get(i).getCn0DbHz(), satList.get(i).getElevAzm()[0]));
+		// double[][] normWeight = Weight.normalize(covMat);
+		return covMat;
 	}
 
 	public static double[][] normalize(double[][] W) {
