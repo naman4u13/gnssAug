@@ -1,4 +1,4 @@
-package com.gnssAug.Android.helper.INS;
+package com.gnssAug.helper.INS;
 
 import java.util.ArrayList;
 import java.util.HashMap;

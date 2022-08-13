@@ -1,4 +1,4 @@
-package com.gnssAug.fileParser;
+package com.gnssAug.Rinex.fileParser;
 
 import java.io.File;
 import java.util.HashMap;

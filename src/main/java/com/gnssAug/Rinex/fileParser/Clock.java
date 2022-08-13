@@ -1,4 +1,4 @@
-package com.gnssAug.fileParser;
+package com.gnssAug.Rinex.fileParser;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.Scanner;
 
 import com.gnssAug.Android.constants.Constellation;
-import com.gnssAug.models.IGS.IGSClock;
+import com.gnssAug.IGS.models.IGSClock;
 import com.gnssAug.utility.Interpolator;
 import com.gnssAug.utility.StringUtil;
 import com.gnssAug.utility.Time;

@@ -33,16 +33,16 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
-import com.gnssAug.Android.helper.ComputeEleAzm;
-import com.gnssAug.Android.helper.INS.IMUconfigure;
-import com.gnssAug.Android.helper.INS.StateInitialization;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.fileParser.Bias;
-import com.gnssAug.fileParser.Clock;
-import com.gnssAug.fileParser.Orbit;
+import com.gnssAug.Rinex.fileParser.Bias;
+import com.gnssAug.Rinex.fileParser.Clock;
+import com.gnssAug.Rinex.fileParser.Orbit;
+import com.gnssAug.helper.ComputeEleAzm;
+import com.gnssAug.helper.INS.IMUconfigure;
+import com.gnssAug.helper.INS.StateInitialization;
 import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
@@ -288,12 +288,12 @@ public class Android {
 				// RMSE
 				System.out.println("\n" + key);
 				System.out.println("Position RMS - ");
-				System.out.println(" E - " + RMS(posErrList[0]));
-				System.out.println(" N - " + RMS(posErrList[1]));
-				System.out.println(" U - " + RMS(posErrList[2]));
-				System.out.println(" 3d Error - " + RMS(posErrList[3]));
-				System.out.println(" 2d Error - " + RMS(posErrList[4]));
-				System.out.println(" Haversine Distance - " + RMS(posErrList[5]));
+				System.out.println(" E - " + MathUtil.RMS(posErrList[0]));
+				System.out.println(" N - " + MathUtil.RMS(posErrList[1]));
+				System.out.println(" U - " + MathUtil.RMS(posErrList[2]));
+				System.out.println(" 3d Error - " + MathUtil.RMS(posErrList[3]));
+				System.out.println(" 2d Error - " + MathUtil.RMS(posErrList[4]));
+				System.out.println(" Haversine Distance - " + MathUtil.RMS(posErrList[5]));
 
 				// 95th Percentile
 
@@ -346,11 +346,11 @@ public class Android {
 				// RMSE
 				System.out.println("\n" + key);
 				System.out.println("Velocity RMS - ");
-				System.out.println(" E - " + RMS(velErrList[0]));
-				System.out.println(" N - " + RMS(velErrList[1]));
-				System.out.println(" U - " + RMS(velErrList[2]));
-				System.out.println(" 3d Error - " + RMS(velErrList[3]));
-				System.out.println(" 2d Error - " + RMS(velErrList[4]));
+				System.out.println(" E - " + MathUtil.RMS(velErrList[0]));
+				System.out.println(" N - " + MathUtil.RMS(velErrList[1]));
+				System.out.println(" U - " + MathUtil.RMS(velErrList[2]));
+				System.out.println(" 3d Error - " + MathUtil.RMS(velErrList[3]));
+				System.out.println(" 2d Error - " + MathUtil.RMS(velErrList[4]));
 
 				// 95th Percentile
 
@@ -425,14 +425,6 @@ public class Android {
 		if (!indexSet.isEmpty()) {
 			satList.removeAll(indexSet);
 		}
-	}
-
-	public static double RMS(ArrayList<Double> list) {
-		return Math.sqrt(list.stream().mapToDouble(x -> x * x).average().orElse(Double.NaN));
-	}
-
-	public static double MAE(ArrayList<Double> list) {
-		return list.stream().mapToDouble(x -> x).average().orElse(Double.NaN);
 	}
 
 	public static Geoid buildGeoid() {

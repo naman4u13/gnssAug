@@ -1,4 +1,4 @@
-package com.gnssAug.Android.helper;
+package com.gnssAug.helper;
 
 import java.util.stream.IntStream;
 

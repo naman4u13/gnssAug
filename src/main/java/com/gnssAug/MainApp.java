@@ -6,7 +6,7 @@ import java.util.Calendar;
 import java.util.TimeZone;
 
 import com.gnssAug.Android.Android;
-import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.IGS.IGS;
 
 public class MainApp {
 
@@ -14,7 +14,7 @@ public class MainApp {
 
 		Instant start = Instant.now();
 
-		switch (1) {
+		switch (2) {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C" };
 			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
@@ -41,10 +41,7 @@ public class MainApp {
 			break;
 
 		case 2:
-			double[] ecefr = LatLonUtil.lla2ecef(new double[] { 45.9132, 36.7484, 1877753.2 }, true);
-			double[] enu = new double[] { 355601.3, -923083.2, 1041016.4 };
-			double[] ecef = LatLonUtil.enu2ecef(enu, ecefr, true);
-			System.out.println(ecef);
+			IGS.posEstimate(false, false, false, true, new String[] { "G1C" }, 4, 0, 0, true, false, 3);
 			break;
 
 		}

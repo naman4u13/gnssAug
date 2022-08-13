@@ -323,4 +323,14 @@ public class LatLonUtil {
 				* (1 - ((2 * alt / a) * (1 + f + (Math.pow(omega_ie * a, 2) * b / mu))) + (3 * Math.pow(alt / a, 2)));
 		return g;
 	}
+
+	public static double lonAddDD(double lon, double diff) {
+		lon = lon + diff;
+		if (lon >= 180) {
+			lon -= 360;
+		} else if (lon < -180) {
+			lon += 360;
+		}
+		return lon;
+	}
 }

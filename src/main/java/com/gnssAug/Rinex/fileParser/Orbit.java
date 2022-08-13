@@ -1,4 +1,4 @@
-package com.gnssAug.fileParser;
+package com.gnssAug.Rinex.fileParser;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.stream.IntStream;
 
-import com.gnssAug.models.IGS.IGSOrbit;
+import com.gnssAug.IGS.models.IGSOrbit;
 import com.gnssAug.utility.Interpolator;
 import com.gnssAug.utility.StringUtil;
 import com.gnssAug.utility.Time;

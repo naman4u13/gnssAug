@@ -1,5 +1,7 @@
 package com.gnssAug.utility;
 
+import java.util.ArrayList;
+
 public class MathUtil {
 
 	public static double getEuclidean(double[] x, double[] y) {
@@ -25,5 +27,13 @@ public class MathUtil {
 	public static long getCombCount(int n, int m) {
 		long count = getFact(n) / (getFact(m) * getFact(n - m));
 		return count;
+	}
+
+	public static double RMS(ArrayList<Double> list) {
+		return Math.sqrt(list.stream().mapToDouble(x -> x * x).average().orElse(Double.NaN));
+	}
+
+	public static double MAE(ArrayList<Double> list) {
+		return list.stream().mapToDouble(x -> x).average().orElse(Double.NaN);
 	}
 }

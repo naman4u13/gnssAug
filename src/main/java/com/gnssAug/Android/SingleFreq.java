@@ -10,8 +10,8 @@ import java.util.TimeZone;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.fileParser.Clock;
-import com.gnssAug.fileParser.Orbit;
+import com.gnssAug.Rinex.fileParser.Clock;
+import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.utility.Vector;
 
 public class SingleFreq {

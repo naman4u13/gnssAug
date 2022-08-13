@@ -15,10 +15,10 @@ import com.gnssAug.Android.constants.ClockAllanVar;
 import com.gnssAug.Android.constants.ImuDataSheets;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.State;
-import com.gnssAug.Android.helper.GeomagneticField;
-import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.helper.GeomagneticField;
+import com.gnssAug.helper.Rotation;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 

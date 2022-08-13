@@ -1,4 +1,4 @@
-package com.gnssAug.models.IGS;
+package com.gnssAug.IGS.models;
 
 import com.gnssAug.utility.StringUtil;
 

@@ -1,4 +1,4 @@
-package com.gnssAug.Android.helper.INS;
+package com.gnssAug.helper.INS;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,10 +9,10 @@ import java.util.TreeMap;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
-import com.gnssAug.Android.helper.GeomagneticField;
-import com.gnssAug.Android.helper.Rotation;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.helper.GeomagneticField;
+import com.gnssAug.helper.Rotation;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 

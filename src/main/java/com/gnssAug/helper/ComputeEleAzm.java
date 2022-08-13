@@ -1,4 +1,4 @@
-package com.gnssAug.Android.helper;
+package com.gnssAug.helper;
 
 import static java.lang.Math.cos;
 import static java.lang.Math.sin;
