@@ -41,7 +41,7 @@ public class MainApp {
 			break;
 
 		case 2:
-			IGS.posEstimate(false, false, false, true, new String[] { "G1C" }, 4, 0, 0, true, false, 3);
+			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 0, 0, true, true, 4, true);
 			break;
 
 		}

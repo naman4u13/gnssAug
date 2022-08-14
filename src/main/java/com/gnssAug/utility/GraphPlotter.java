@@ -19,8 +19,28 @@ import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.models.IMUsensor;
+import com.gnssAug.Rinex.models.SatResidual;
 
 public class GraphPlotter extends ApplicationFrame {
+
+	public GraphPlotter(HashMap<Integer, ArrayList<SatResidual>> satResMap, String name, boolean flag) {
+		super(name + ": Satellite-Residual");
+		JFreeChart chart;
+		if (flag) {
+			chart = ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time", "Satellite-Residual(in m)",
+					createDatasetSatRes(satResMap, flag));
+		} else {
+			chart = ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
+					"Elevation-Angle(in degrees)", "Satellite-Residual(in m)", createDatasetSatRes(satResMap, flag));
+		}
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
 
 	public GraphPlotter(TreeMap<Long, double[]> ecefMap) throws IOException {
 		super("GNSS/INS");
@@ -235,6 +255,21 @@ public class GraphPlotter extends ApplicationFrame {
 			String name = entry.getKey();
 			TreeMap<Long, double[]> data = entry.getValue();
 			chart = new GraphPlotter(name, data);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
+
+	}
+
+	public static void graphSatRes(HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap) {
+		for (String key : satResMap.keySet()) {
+			GraphPlotter chart = new GraphPlotter(satResMap.get(key), key, true);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+
+			chart = new GraphPlotter(satResMap.get(key), key, false);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
@@ -462,4 +497,40 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 
 	}
+
+	private XYDataset createDatasetSatRes(HashMap<Integer, ArrayList<SatResidual>> dataMap, boolean flag) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		for (int key : dataMap.keySet()) {
+			final XYSeries series = new XYSeries(key);
+			ArrayList<SatResidual> dataList = dataMap.get(key);
+			if (flag) {
+				double t0 = 0;
+				for (int i = 0; i < dataList.size(); i++) {
+					SatResidual data = dataList.get(i);
+					double t = data.getT();
+					double satRes = data.getResidual();
+					if (t - t0 > 1) {
+						series.add(t0, null);
+					}
+					series.add(t, satRes);
+					t0 = t;
+				}
+			} else {
+				for (int i = 0; i < dataList.size(); i++) {
+					SatResidual data = dataList.get(i);
+					double elevAngle = Math.toDegrees(data.getElevAngle());
+					double satRes = data.getResidual();
+
+					series.add(elevAngle, satRes);
+
+				}
+			}
+
+			dataset.addSeries(series);
+		}
+
+		return dataset;
+	}
+
 }

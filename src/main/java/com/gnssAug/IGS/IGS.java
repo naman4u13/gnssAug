@@ -25,6 +25,7 @@ import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
+import com.gnssAug.Rinex.estimation.EKF;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Bias;
@@ -36,6 +37,7 @@ import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.Rinex.models.IonoCoeff;
 import com.gnssAug.Rinex.models.NavigationMsg;
 import com.gnssAug.Rinex.models.ObservationMsg;
+import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.Rinex.models.TimeCorrection;
 import com.gnssAug.helper.ComputeEleAzm;
@@ -52,13 +54,13 @@ public class IGS {
 
 	public static void posEstimate(boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
 			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType) {
+			int estimatorType, boolean plotResidual) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
-
+			HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<Integer, ArrayList<SatResidual>>>();
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			Bias bias = null;
 			Orbit orbit = null;
@@ -70,7 +72,7 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\ALBH00CAN_R_20201000000_01D_30S_MO.crx\\ALBH00CAN_R_20201000000_01D_30S_MO.rnx";
+					+ "\\AJAC00FRA_R_20201000000_01D_30S_MO.crx\\AJAC00FRA_R_20201000000_01D_30S_MO.rnx";
 
 			String bias_path = base_path
 					+ "\\complementary\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX";
@@ -87,7 +89,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\kf_test4";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -132,6 +134,7 @@ public class IGS {
 				ionex = new IONEX(ionex_path);
 
 			}
+			double tRX0 = ObsvMsgs.get(0).getTRX();
 			for (ObservationMsg obsvMsg : ObsvMsgs) {
 
 				double tRX = obsvMsg.getTRX();
@@ -152,37 +155,59 @@ public class IGS {
 					continue;
 				}
 				double[] refEcef = LinearLeastSquare.process(satList, rxPCO, false);
-				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refEcef, i.getECI())));
+				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refEcef, i.getSatEci())));
 				filterSat(satList, refEcef, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
-				double[] estEcefClk = null;
-				switch (estimatorType) {
-				case 1:
+				int n = satList.size();
+				// Estimate
+				if (estimatorType == 1 || estimatorType == 4) {
 					// Implement LS method
-					estEcefClk = LinearLeastSquare.process(satList, rxPCO, false);
+					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false);
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					break;
-				case 2:
-					// Implement WLS method
-					estEcefClk = LinearLeastSquare.process(satList, rxPCO, true);
-					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-				case 3:
-					// Implement LS method
-					estEcefClk = LinearLeastSquare.process(satList, rxPCO, false);
-					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					// Implement WLS method
-					estEcefClk = LinearLeastSquare.process(satList, rxPCO, true);
-					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
+					if (plotResidual) {
+						double[] residual = LinearLeastSquare.getResidual();
+						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						for (int i = 0; i < n; i++) {
+							Satellite sat = satList.get(i);
+							satResMap.get("LS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+						}
+					}
 
+				}
+				if (estimatorType == 2 || estimatorType == 4) {
+					// Implement WLS method
+					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, true);
+					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
+					if (plotResidual) {
+						double[] residual = LinearLeastSquare.getResidual();
+						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						for (int i = 0; i < n; i++) {
+							Satellite sat = satList.get(i);
+							satResMap.get("WLS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+						}
+					}
 				}
 				long tRxMilli = (long) (tRX * 1000);
 				SatMap.put(tRxMilli, satList);
 
 				timeList.add(tRxMilli);
 			}
+			if (estimatorType == 3 || estimatorType == 5) {
+				EKF ekf = new EKF();
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(SatMap, rxPCO, timeList);
+				int n = timeList.size();
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF", k -> new ArrayList<double[]>()).add(estPos);
+				}
+			}
+
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			for (String key : estPosMap.keySet()) {
@@ -247,7 +272,12 @@ public class IGS {
 			}
 			// Plot Error Graphs
 			GraphPlotter.graphENU(GraphPosMap, timeList, true);
-		} catch (Exception e) {
+			if (plotResidual) {
+				GraphPlotter.graphSatRes(satResMap);
+			}
+		} catch (
+
+		Exception e) {
 			// TODO: handle exception
 			System.out.println(e.getMessage());
 			e.printStackTrace();

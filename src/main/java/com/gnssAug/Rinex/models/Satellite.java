@@ -5,14 +5,14 @@ import java.util.Calendar;
 
 public class Satellite extends Observable {
 
-	private double[] ECEF;
+	private double[] satEcef;
 	private double satClkOff;
 	// Note this is GPS System time at time of Transmission
 	private double t;
 	private double[] satVel;
 	// Note this Clock Drift is derived, its not what we get from Ephemeris
 	private double satClkDrift;
-	private double[] ECI;
+	private double[] satEci;
 	// Note this is GPS System time at time of Reception + Receiver clock offset
 	private double tRX;
 	// time
@@ -23,20 +23,20 @@ public class Satellite extends Observable {
 	private double ionoErr;
 	private double tropoErr;
 
-	public double[] getECEF() {
-		return ECEF;
+	public double[] getSatEcef() {
+		return satEcef;
 	}
 
-	public void setECEF(double[] eCEF) {
-		ECEF = eCEF;
+	public void setSatEcef(double[] eCEF) {
+		satEcef = eCEF;
 	}
 
-	public double[] getECI() {
-		return ECI;
+	public double[] getSatEci() {
+		return satEci;
 	}
 
-	public void setECI(double[] eCI) {
-		ECI = eCI;
+	public void setSatEci(double[] eCI) {
+		satEci = eCI;
 	}
 
 	public void updateECI(double rcvrClkOff) {
@@ -49,27 +49,27 @@ public class Satellite extends Observable {
 	}
 
 	public void compECI(double time) {
-		ECI = new double[3];
+		satEci = new double[3];
 		final double OMEGA_E_DOT = 7.2921151467E-5;// WGS-84 value of the Earth's rotation rate
 
 		// eciArg = Earth_Rotation_Rate *(Propgation_Time)
 		double eciArg = OMEGA_E_DOT * (tRX - time - t);
-		ECI[0] = (ECEF[0] * Math.cos(eciArg)) + (ECEF[1] * Math.sin(eciArg));
-		ECI[1] = -(ECEF[0] * Math.sin(eciArg)) + (ECEF[1] * Math.cos(eciArg));
-		ECI[2] = ECEF[2];
+		satEci[0] = (satEcef[0] * Math.cos(eciArg)) + (satEcef[1] * Math.sin(eciArg));
+		satEci[1] = -(satEcef[0] * Math.sin(eciArg)) + (satEcef[1] * Math.cos(eciArg));
+		satEci[2] = satEcef[2];
 
 	}
 
 	public Satellite(Observable satModel, double[] eCEF, double satClkOff, double t, double tRX, double[] satVel,
 			double satClkDrift, double[] ECI, Calendar time) {
 		super(satModel);
-		ECEF = eCEF;
+		satEcef = eCEF;
 		this.satClkOff = satClkOff;
 		this.t = t;
 		this.tRX = tRX;
 		this.satVel = satVel;
 		this.satClkDrift = satClkDrift;
-		this.ECI = ECI;
+		this.satEci = ECI;
 		this.time = time;
 
 	}
@@ -92,9 +92,9 @@ public class Satellite extends Observable {
 
 	@Override
 	public String toString() {
-		return super.toString() + "Satellite [ECEF=" + Arrays.toString(ECEF) + ", satClkOff=" + satClkOff + ", t=" + t
-				+ ", tRX=" + tRX + ", satVel=" + Arrays.toString(satVel) + ", satClkDrift=" + satClkDrift + ", ECI="
-				+ Arrays.toString(ECI) + "]";
+		return super.toString() + "Satellite [satEcef=" + Arrays.toString(satEcef) + ", satClkOff=" + satClkOff + ", t=" + t
+				+ ", tRX=" + tRX + ", satVel=" + Arrays.toString(satVel) + ", satClkDrift=" + satClkDrift + ", satEci="
+				+ Arrays.toString(satEci) + "]";
 	}
 
 	public double[] getSatVel() {

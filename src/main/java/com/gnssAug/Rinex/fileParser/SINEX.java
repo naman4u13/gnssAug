@@ -132,7 +132,7 @@ public class SINEX {
 			String obsvCode = obsvCodeList[i];
 			char SSI = obsvCode.charAt(0);
 			int freq = Integer.parseInt(obsvCode.charAt(1) + "");
-			double[] pco = PCO.get(SSI).get(freq);
+			double[] pco = PCO.containsKey(SSI) ? PCO.get(SSI).getOrDefault(freq, null) : null;
 			double[] pco_ecef = new double[3];
 			if (pco == null) {
 				System.err.println("Rx PCO info unavailable for frequency - " + freq + " !");

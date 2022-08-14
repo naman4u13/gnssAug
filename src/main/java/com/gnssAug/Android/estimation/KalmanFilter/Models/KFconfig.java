@@ -95,5 +95,18 @@ public class KFconfig extends KF {
 
 		}
 	}
+	
+	public void configIGS(double deltaT) throws Exception {
+		double[][] F = new double[5][5];
+		double[][] Q = new double[5][5];
+		Q[3][3] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
+		Q[3][4] = (sg * Math.pow(deltaT, 2))/ 2;
+		Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
+		Q[4][4] = sg * deltaT ;
+
+		IntStream.range(0, 5).forEach(x -> F[x][x] = 1);
+		F[3][4] = deltaT;
+		super.configure(F, Q);
+	}
 
 }

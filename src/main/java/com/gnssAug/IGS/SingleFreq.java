@@ -8,9 +8,6 @@ import java.util.HashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.orekit.time.AbsoluteDate;
-import org.orekit.time.TimeScalesFactory;
-
 import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Bias;
 import com.gnssAug.Rinex.fileParser.Clock;
@@ -72,7 +69,7 @@ public class SingleFreq {
 					// fractional Wind up in cycles, will require further processing to correct for
 					// full cycles and then multiply by wavelength
 					/* double windup = satPC_windup[3]; */
-
+					sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * satClkOff));
 					Satellite _sat = new Satellite(sat, satECEF, satClkOff, t, tRX, satVel, 0.0, null, time);
 					_sat.compECI();
 					/* _sat.setPhaseWindUp(windup); */
@@ -107,7 +104,7 @@ public class SingleFreq {
 					ISC = bias.getISC(obsvCodeList[0], SVID);
 
 				}
-				sat.setPseudorange(sat.getPseudorange());
+
 				double tSV = tRX - (sat.getPseudorange() / SpeedofLight);
 
 				Object[] SatParams = ComputeSatPos.computeSatPos(NavMsg, tSV, tRX, ISC);
@@ -119,10 +116,11 @@ public class SingleFreq {
 				double t = (double) SatParams[3];
 				// ECI coordinates
 				double[] ECI = (double[]) SatParams[4];
-				AbsoluteDate date = new AbsoluteDate(time.getTime(), TimeScalesFactory.getGPS());
+				// AbsoluteDate date = new AbsoluteDate(time.getTime(),
+				// TimeScalesFactory.getGPS());
 //				double ele = tpf.getElevation(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
 //				double az = tpf.getAzimuth(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
-
+				sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * ECEF_SatClkOff[3]));
 				SV.add(new Satellite(sat, Arrays.copyOfRange(ECEF_SatClkOff, 0, 3), ECEF_SatClkOff[3], t, tRX, SatVel,
 						SatClkDrift, ECI, time));
 

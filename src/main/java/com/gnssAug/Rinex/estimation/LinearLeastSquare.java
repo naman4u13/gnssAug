@@ -11,9 +11,15 @@ import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
+	private static double[] residual = null;
 
 	public static double[] process(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS)
 			throws Exception {
+		return process(satList, PCO, isWLS, false);
+	}
+
+	public static double[] process(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS,
+			boolean doTest) throws Exception {
 		// Satellite count
 		int n = satList.size();
 		// Weight matrix
@@ -64,7 +70,7 @@ public class LinearLeastSquare {
 					double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
 
 					// Its not really a ECI, therefore don't get confused
-					double[] satEcef = sat.getECI();
+					double[] satEcef = sat.getSatEci();
 					double PR = sat.getPseudorange();
 					// Approx Geometric Range
 					double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - rxAPC[j])
@@ -94,6 +100,17 @@ public class LinearLeastSquare {
 						(i, j) -> i + j));
 
 			}
+			double[][] res = new double[n][1];
+			residual = new double[n];
+			for (int i = 0; i < n; i++) {
+				Satellite sat = satList.get(i);
+				double pr = sat.getPseudorange();
+				double pr_hat = Math
+						.sqrt(IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - estEcefClk[j])
+								.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble())
+						+ (SpeedofLight * estEcefClk[3]);
+				residual[i] = pr_hat - pr;
+			}
 
 			/*
 			 * Regression is completed, error is below threshold, successfully estimated Rx
@@ -105,6 +122,10 @@ public class LinearLeastSquare {
 
 		throw new Exception("Satellite count is less than 4, can't compute user position");
 
+	}
+
+	public static double[] getResidual() {
+		return residual;
 	}
 
 }
