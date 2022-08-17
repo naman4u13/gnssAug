@@ -14,6 +14,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import org.apache.commons.math3.distribution.NormalDistribution;
+import org.ejml.simple.SimpleMatrix;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -40,6 +41,7 @@ import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.fileParser.Bias;
 import com.gnssAug.Rinex.fileParser.Clock;
 import com.gnssAug.Rinex.fileParser.Orbit;
+import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.ComputeEleAzm;
 import com.gnssAug.helper.INS.IMUconfigure;
 import com.gnssAug.helper.INS.StateInitialization;
@@ -52,7 +54,8 @@ import com.gnssAug.utility.Time;
 public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
-			String clock_path, String orbit_path, boolean useIGS, boolean checkOutlier) {
+			String clock_path, String orbit_path, boolean useIGS, boolean checkOutlier, boolean doAnalyze,
+			boolean doTest) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -62,16 +65,19 @@ public class Android {
 			ArrayList<double[]> trueLLHlist = new ArrayList<double[]>();
 			ArrayList<double[]> trueEcefList = new ArrayList<double[]>();
 
-			HashMap<Long, double[]> err = new HashMap<Long, double[]>();
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> estVelMap = new HashMap<String, ArrayList<double[]>>();
-			ArrayList<Double> postUnitWeightList = new ArrayList<Double>();
+			HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<Integer, ArrayList<SatResidual>>>();
+			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
+			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
+			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
+			ArrayList<Long> satCountList = new ArrayList<Long>();
 			Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test2";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test4";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -94,6 +100,8 @@ public class Android {
 			}
 
 			int gtIndex = 0;
+			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
+					.gettRx();
 			for (long tRxMilli : gnssLogMaps.keySet()) {
 				if (gtIndex >= rxLLH.size()) {
 					break;
@@ -118,50 +126,69 @@ public class Android {
 					System.err.println("Less than 4 satellites");
 					continue;
 				}
-				double[] userEcef = LinearLeastSquare.process(satList, false);
-				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(userEcef, i.getSatEci())));
+				double[] refUserEcef = LinearLeastSquare.process(satList, false);
+				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refUserEcef, i.getSatEci())));
 				filterSat(satList, cutOffAng, snrMask);
 				double[] truePosEcef = LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
 				if (checkOutlier) {
 					checkOutlier(satList, truePosEcef);
 				}
-				if (satList.size() < 4) {
+				int n = satList.size();
+				if (n < 4) {
 					System.err.println("Less than 4 satellites");
 					continue;
 				}
 				double[] estEcefClk = null;
-				switch (estimatorType) {
-				case 1:
+
+				if (estimatorType == 1 || estimatorType == 3) {
 					// Implement LS method
-					estEcefClk = LinearLeastSquare.process(satList, false);
+					estEcefClk = LinearLeastSquare.process(satList, false, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					break;
-				case 2:
+					if (doAnalyze) {
+						double[] residual = LinearLeastSquare.getResidual();
+						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						for (int i = 0; i < n; i++) {
+							Satellite sat = satList.get(i);
+							satResMap.get("LS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
+
+						}
+						postVarOfUnitWeightMap.computeIfAbsent("LS", k -> new ArrayList<Double>())
+								.add(LinearLeastSquare.getPostVarOfUnitW());
+						Cxx_hat_map.computeIfAbsent("LS", k -> new ArrayList<SimpleMatrix>())
+								.add(LinearLeastSquare.getCxx_hat());
+						// dopMap.computeIfAbsent("LS", k -> new
+						// ArrayList<double[]>()).add(LinearLeastSquare.getDop());
+					}
+
+				}
+				if (estimatorType == 2 || estimatorType == 3) {
 					// Implement WLS method
-					estEcefClk = LinearLeastSquare.process(satList, true);
+					estEcefClk = LinearLeastSquare.process(satList, true, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					double[] estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
+					if (doAnalyze) {
+						double[] residual = LinearLeastSquare.getResidual();
+						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						for (int i = 0; i < n; i++) {
+							Satellite sat = satList.get(i);
+							satResMap.get("WLS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
-					// Implement WLS method
-//					estEcefClk = LinearLeastSquare.process(satList, true, true);
-//					estPosMap.computeIfAbsent("WLS_QualityControl", k -> new ArrayList<double[]>()).add(estEcefClk);
-//					double postUnitW = LinearLeastSquare.getPostUnitW();
-//					postUnitWeightList.add(Math.sqrt(postUnitW));
-					break;
-				case 3:
-//					// Implement LS method
-//					estEcefClk = LinearLeastSquare.process(satList, false);
-//					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					// Implement WLS method
-					estEcefClk = LinearLeastSquare.process(satList, true);
-					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					estVel = LinearLeastSquare.getEstVel(satList, estEcefClk);
-					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
+						}
+						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())
+								.add(LinearLeastSquare.getPostVarOfUnitW());
+						Cxx_hat_map.computeIfAbsent("WLS", k -> new ArrayList<SimpleMatrix>())
+								.add(LinearLeastSquare.getCxx_hat());
+						dopMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(LinearLeastSquare.getDop());
 
+					}
 				}
+
 				SatMap.put(tRxMilli, satList);
+				satCountList.add((long) n);
 				trueLLHlist.add(trueUserLLH);
 				trueEcefList.add(truePosEcef);
 				timeList.add(tRxMilli);
@@ -191,7 +218,7 @@ public class Android {
 				}
 
 			}
-			if (estimatorType == 5 || estimatorType == 3) {
+			if (estimatorType == 5 || estimatorType == 100) {
 
 				EKF ekf = new EKF();
 //				 Implement EKF based on receiver’s position and clock offset errors as a
@@ -366,17 +393,23 @@ public class Android {
 //				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
+			long t0 = timeList.get(0);
 			for (int i = 0; i < timeList.size(); i++) {
-				timeList.set(i, (long) (timeList.get(i) * 1e-3));
+				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphPosMap, timeList, true);
+			GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
 			// Plot Error Graphs
 			// GraphPlotter.graphENU(GraphVelMap, timeList, false);
-			// Plot Posteriori Variance of Unit Weight
-			GraphPlotter.graphPostUnitW(postUnitWeightList, timeList);
+			if (doAnalyze) {
+				GraphPlotter.graphSatRes(satResMap);
+				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+				GraphPlotter.graphDOP(dopMap, satCountList, timeList);
+			}
 
-		} catch (Exception e) {
+		} catch (
+
+		Exception e) {
 			// TODO: handle exception
 			System.out.println(e.getMessage());
 			e.printStackTrace();

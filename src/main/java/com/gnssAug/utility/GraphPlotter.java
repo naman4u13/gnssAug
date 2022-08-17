@@ -3,11 +3,13 @@ package com.gnssAug.utility;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
+import org.ejml.simple.SimpleMatrix;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -32,6 +34,40 @@ public class GraphPlotter extends ApplicationFrame {
 		} else {
 			chart = ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
 					"Elevation-Angle(in degrees)", "Satellite-Residual(in m)", createDatasetSatRes(satResMap, flag));
+		}
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(ArrayList<Long> dataList, ArrayList<Long> timeList) throws IOException {
+		super("Satellite Count");
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart("Satellite Count", "GPS-time", "Satellite Count",
+				createDatasetSatCount(dataList, timeList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(HashMap<String, HashMap<String, ArrayList<Double>>> dataMap, ArrayList<Long> xList,
+			boolean flag) throws IOException {
+		super("DOP");
+		// TODO Auto-generated constructor stub
+		JFreeChart chart = null;
+		if (flag) {
+			chart = ChartFactory.createXYLineChart("DOP", "GPS-time", "DOP", createDatasetDOP(dataMap, xList));
+		} else {
+			chart = ChartFactory.createScatterPlot("DOP", "Satellite-Count", "DOP", createDatasetDOP(dataMap, xList));
 		}
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -85,7 +121,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, ArrayList<Double> data, ArrayList<Long> timeList) throws IOException {
+	public GraphPlotter(String name, HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
+			throws IOException {
 		super(name);
 		// TODO Auto-generated constructor stub
 
@@ -160,6 +197,22 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public GraphPlotter(String applicationTitle, String chartTitle, ArrayList<Long> timeList,
+			HashMap<String, double[][]> dataMap) throws IOException {
+		super(applicationTitle + " Error");
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle + " Error", "GPS-time", chartTitle,
+				createDatasetENU2(dataMap, timeList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
 	public GraphPlotter(String applicationTitle, HashMap<String, ArrayList<double[]>> dataMap, String unit)
 			throws IOException {
 		super(applicationTitle);
@@ -176,7 +229,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphPostUnitW(ArrayList<Double> data, ArrayList<Long> timeList) throws IOException {
+	public static void graphPostUnitW(HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
+			throws IOException {
 		GraphPlotter chart = new GraphPlotter("Posteriori Variance of Unit Weight", data, timeList);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
@@ -206,6 +260,56 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			GraphPlotter chart = new GraphPlotter(name + "(" + chartNames[i] + ")", chartNames[i] + unit, subDataMap,
 					timeList, true);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
+		GraphPlotter chart = new GraphPlotter(name + " 2D-Error", dataMap, unit);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(name + " 3d-Error", "3d-Error" + unit, dataMap, timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+	}
+
+	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos,
+			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map) throws Exception {
+
+		String name = null;
+		String unit = null;
+		if (isPos) {
+			name = "GNSS Position";
+			unit = "(m)";
+		} else {
+			name = "GNSS Velocity";
+			unit = "(m/s)";
+		}
+		String[] chartNames = new String[] { "E", "N", "U" };
+		for (int i = 0; i < 3; i++) {
+			final int index = i;
+			HashMap<String, double[][]> subDataMap = new HashMap<String, double[][]>();
+			for (String key : dataMap.keySet()) {
+				ArrayList<double[]> data = dataMap.get(key);
+				ArrayList<SimpleMatrix> Cxx_hat_list = Cxx_hat_map.get(key);
+				if (Cxx_hat_list.size() != data.size()) {
+					throw new Exception("Size of position estimates and covariance does not match");
+				}
+				int n = data.size();
+				double[][] arr = new double[n][3];
+				for (int j = 0; j < n; j++) {
+					double stdDev = Math.sqrt(Cxx_hat_list.get(j).get(i, i));
+					arr[j][0] = -stdDev;
+					arr[j][1] = data.get(j)[i];
+					arr[j][2] = stdDev;
+				}
+
+				subDataMap.put(key, arr);
+			}
+			GraphPlotter chart = new GraphPlotter(name + "(" + chartNames[i] + ")", chartNames[i] + unit, timeList,
+					subDataMap);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
@@ -308,6 +412,52 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
+			ArrayList<Long> timeList) throws Exception {
+
+		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
+		for (String key : dataMap.keySet()) {
+			ArrayList<double[]> dopList = dataMap.get(key);
+			ArrayList<Double> gdopList = new ArrayList<Double>();
+			ArrayList<Double> pdopList = new ArrayList<Double>();
+			ArrayList<Double> hdopList = new ArrayList<Double>();
+			ArrayList<Double> vdopList = new ArrayList<Double>();
+			ArrayList<Double> tdopList = new ArrayList<Double>();
+			int n = dopList.size();
+			if (n != timeList.size()) {
+				throw new Exception("DOP list size does not match timeList size");
+			}
+			for (int i = 0; i < n; i++) {
+				double[] dopDiag = dopList.get(i);
+				gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
+				pdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2]));
+				hdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1]));
+				vdopList.add(Math.sqrt(dopDiag[2]));
+				tdopList.add(Math.sqrt(dopDiag[3]));
+			}
+			dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
+			dopMap.computeIfAbsent("PDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, pdopList);
+			dopMap.computeIfAbsent("HDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, hdopList);
+			dopMap.computeIfAbsent("VDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, vdopList);
+			dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
+
+		}
+
+		GraphPlotter chart = new GraphPlotter(dopMap, timeList, true);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(dopMap, satCountList, false);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(satCountList, timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+	}
+
 	private XYDataset createDataset3dErr(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		for (String key : dataMap.keySet()) {
@@ -316,7 +466,7 @@ public class GraphPlotter extends ApplicationFrame {
 			for (int i = 0; i < list.size(); i++) {
 				double[] data = list.get(i);
 				double err = Math.sqrt(Arrays.stream(data).map(j -> j * j).sum());
-				series.add(timeList.get(i) - timeList.get(0), Double.valueOf(err));
+				series.add(timeList.get(i), Double.valueOf(err));
 			}
 			dataset.addSeries(series);
 		}
@@ -447,7 +597,7 @@ public class GraphPlotter extends ApplicationFrame {
 			final XYSeries series = new XYSeries(key);
 			double[] data = dataMap.get(key);
 			for (int i = 0; i < data.length; i++) {
-				series.add(timeList.get(i) - timeList.get(0), Double.valueOf(data[i]));
+				series.add(timeList.get(i), Double.valueOf(data[i]));
 			}
 			dataset.addSeries(series);
 		}
@@ -456,28 +606,63 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createDatasetPostUnitW(ArrayList<Double> data, ArrayList<Long> timeList) {
+	private XYDataset createDatasetENU2(HashMap<String, double[][]> dataMap, ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		for (String key : dataMap.keySet()) {
+			final XYSeries series = new XYSeries(key);
+			final XYSeries std_minus = new XYSeries(key + ": Std-Dev(-)");
+			final XYSeries std_plus = new XYSeries(key + ": Std-Dev(+)");
+			double[][] data = dataMap.get(key);
+			for (int i = 0; i < data.length; i++) {
+				long t = timeList.get(i);
+				std_minus.add(t, Double.valueOf(data[i][0]));
+				series.add(t, Double.valueOf(data[i][1]));
+				std_plus.add(t, Double.valueOf(data[i][2]));
+			}
+			dataset.addSeries(std_minus);
+			dataset.addSeries(std_plus);
+			dataset.addSeries(series);
+		}
+
+		return dataset;
+
+	}
+
+	private XYDataset createDatasetPostUnitW(HashMap<String, ArrayList<Double>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		final XYSeries series = new XYSeries("Posteriori Variance of Unit Weight");
-		double sum = 0;
-		int count = 0;
-		for (int i = 0; i < data.size(); i++) {
-			if (data.get(i) == 0) {
-				continue;
-			}
-			sum += data.get(i);
-			count++;
-			series.add(timeList.get(i) - timeList.get(0), data.get(i));
-		}
-		double avg = sum / count;
-		final XYSeries mean = new XYSeries("Mean Posteriori Variance of Unit Weight: " + avg);
+		for (String key : dataMap.keySet()) {
+			ArrayList<Double> data = dataMap.get(key);
+			final XYSeries series = new XYSeries(key + " Posteriori Variance of Unit Weight");
+			double sum = 0;
+			int count = 0;
 
-		for (int i = 0; i < data.size(); i++) {
-			mean.add(timeList.get(i) - timeList.get(0), avg);
+			for (int i = 0; i < data.size(); i++) {
+				if (data.get(i) == 0 || data.get(i) > 1000000) {
+					if (data.get(i) > 1000000) {
+						System.err.println("PostUnit W is more than 1000");
+					}
+					continue;
+				}
+				sum = ((sum / (i + 1)) * i) + (data.get(i) / (i + 1));
+				count++;
+				series.add(timeList.get(i), data.get(i));
+			}
+			Collections.sort(data);
+			int q95 = (int) (data.size() * 0.95);
+			double avg = sum / count;
+			// avg = Math.round(avg * 1000) / 1000;
+			final XYSeries mean = new XYSeries(key + " Mean Posteriori Variance of Unit Weight: " + avg);
+			final XYSeries per95 = new XYSeries(key + " 95% Posteriori Variance of Unit Weight: " + data.get(q95));
+			for (int i = 0; i < data.size(); i++) {
+				long time = timeList.get(i);
+				mean.add(time, avg);
+				per95.add(time, data.get(q95));
+			}
+			dataset.addSeries(series);
+			dataset.addSeries(mean);
+			dataset.addSeries(per95);
 		}
-		dataset.addSeries(series);
-		dataset.addSeries(mean);
 		return dataset;
 
 	}
@@ -493,6 +678,36 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			dataset.addSeries(series);
 		}
+
+		return dataset;
+
+	}
+
+	private XYDataset createDatasetDOP(HashMap<String, HashMap<String, ArrayList<Double>>> dataMap,
+			ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		for (String key : dataMap.keySet()) {
+			for (String subKey : dataMap.get(key).keySet()) {
+				final XYSeries series = new XYSeries(key + " " + subKey);
+				ArrayList<Double> data = dataMap.get(key).get(subKey);
+				for (int i = 0; i < data.size(); i++) {
+					series.add(timeList.get(i), data.get(i));
+				}
+				dataset.addSeries(series);
+			}
+		}
+
+		return dataset;
+
+	}
+
+	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries series = new XYSeries("SatCount");
+		for (int i = 0; i < data.size(); i++) {
+			series.add(timeList.get(i), data.get(i));
+		}
+		dataset.addSeries(series);
 
 		return dataset;
 

@@ -220,7 +220,7 @@ public class LatLonUtil {
 		double[] LLH = ecef2lla(ECEFr);
 		double lat = Math.toRadians(LLH[0]);
 		double lon = Math.toRadians(LLH[1]);
-		double[] ECEF = new double[3];
+
 		double[][] R = new double[][] {
 				{ -Math.sin(lon), -Math.sin(lat) * Math.cos(lon), Math.cos(lat) * Math.cos(lon) },
 				{ Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat) * Math.sin(lon) },
@@ -258,16 +258,20 @@ public class LatLonUtil {
 			IntStream.range(0, 3).forEach(i -> _diff[i] = _diff[i] - refEcef[i]);
 		}
 		SimpleMatrix diff = new SimpleMatrix(3, 1, false, _diff);
-		double[] llh = ecef2lla(refEcef);
-		double lat = Math.toRadians(llh[0]);
-		double lon = Math.toRadians(llh[1]);
-		double[][] _R = new double[][] { { -Math.sin(lon), Math.cos(lon), 0 },
-				{ -Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat) },
-				{ Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat) } };
-		SimpleMatrix R = new SimpleMatrix(_R);
+		SimpleMatrix R = new SimpleMatrix(getEcef2EnuRotMat(refEcef));
 		SimpleMatrix _enu = R.mult(diff);
 		double[] enu = new double[] { _enu.get(0), _enu.get(1), _enu.get(2) };
 		return enu;
+	}
+
+	public static double[][] getEcef2EnuRotMat(double[] refEcef) {
+		double[] llh = ecef2lla(refEcef);
+		double lat = Math.toRadians(llh[0]);
+		double lon = Math.toRadians(llh[1]);
+		double[][] R = new double[][] { { -Math.sin(lon), Math.cos(lon), 0 },
+				{ -Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat) },
+				{ Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat) } };
+		return R;
 	}
 
 	public static double[] enu_ned_convert(double[] x) {

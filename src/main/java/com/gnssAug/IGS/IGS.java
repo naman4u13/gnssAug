@@ -14,6 +14,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.ejml.simple.SimpleMatrix;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -54,13 +55,17 @@ public class IGS {
 
 	public static void posEstimate(boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
 			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType, boolean plotResidual) {
+			int estimatorType, boolean doAnalyze, boolean doTest) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
-			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
+			TreeMap<Long, ArrayList<Satellite>> satMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<Integer, ArrayList<SatResidual>>>();
+			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
+			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
+			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
+			ArrayList<Long> satCountList = new ArrayList<Long>();
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			Bias bias = null;
 			Orbit orbit = null;
@@ -72,7 +77,7 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\AJAC00FRA_R_20201000000_01D_30S_MO.crx\\AJAC00FRA_R_20201000000_01D_30S_MO.rnx";
+					+ "\\BELE00BRA_R_20201000000_01D_30S_MO.crx\\BELE00BRA_R_20201000000_01D_30S_MO.rnx";
 
 			String bias_path = base_path
 					+ "\\complementary\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX";
@@ -89,7 +94,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\kf_test4";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\quality5";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -165,41 +170,55 @@ public class IGS {
 				// Estimate
 				if (estimatorType == 1 || estimatorType == 4) {
 					// Implement LS method
-					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false);
+					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					if (plotResidual) {
+					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
 						for (int i = 0; i < n; i++) {
 							Satellite sat = satList.get(i);
 							satResMap.get("LS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+
 						}
+						postVarOfUnitWeightMap.computeIfAbsent("LS", k -> new ArrayList<Double>())
+								.add(LinearLeastSquare.getPostVarOfUnitW());
+						Cxx_hat_map.computeIfAbsent("LS", k -> new ArrayList<SimpleMatrix>())
+								.add(LinearLeastSquare.getCxx_hat());
+						// dopMap.computeIfAbsent("LS", k -> new
+						// ArrayList<double[]>()).add(LinearLeastSquare.getDop());
 					}
 
 				}
 				if (estimatorType == 2 || estimatorType == 4) {
 					// Implement WLS method
-					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, true);
+					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, true, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					if (plotResidual) {
+					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
 						for (int i = 0; i < n; i++) {
 							Satellite sat = satList.get(i);
 							satResMap.get("WLS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+
 						}
+						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())
+								.add(LinearLeastSquare.getPostVarOfUnitW());
+						Cxx_hat_map.computeIfAbsent("WLS", k -> new ArrayList<SimpleMatrix>())
+								.add(LinearLeastSquare.getCxx_hat());
+						dopMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(LinearLeastSquare.getDop());
+
 					}
 				}
 				long tRxMilli = (long) (tRX * 1000);
-				SatMap.put(tRxMilli, satList);
-
+				satMap.put(tRxMilli, satList);
+				satCountList.add((long) satList.size());
 				timeList.add(tRxMilli);
 			}
 			if (estimatorType == 3 || estimatorType == 5) {
 				EKF ekf = new EKF();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(SatMap, rxPCO, timeList);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
@@ -267,13 +286,16 @@ public class IGS {
 				System.out.println(" 2d Error - " + posErrList[4].get(q95));
 
 			}
+			long t0 = timeList.get(0);
 			for (int i = 0; i < timeList.size(); i++) {
-				timeList.set(i, (long) (timeList.get(i) * 1e-3));
+				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphPosMap, timeList, true);
-			if (plotResidual) {
+			GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
+			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
+				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+				GraphPlotter.graphDOP(dopMap, satCountList, timeList);
 			}
 		} catch (
 

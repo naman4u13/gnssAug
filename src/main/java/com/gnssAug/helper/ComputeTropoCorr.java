@@ -143,17 +143,17 @@ public class ComputeTropoCorr {
 		double SD = (ZD[0] * map[0]) + (ZD[1] * map[1]);
 		// Orekit API derived mapping function, used to validate estimated mapping func
 		double[] _map = nmf.mappingFactors(E, H, null, date);
-		if (Math.abs(_map[0] - map[0]) > 0.1) {
-			System.err.println("Tropo Dry Coeff is different");
-		}
-		if (Math.abs(_map[1] - map[1]) > 0.1) {
-			System.err.println("Tropo Wet Coeff is different");
-		}
+//		if (Math.abs(_map[0] - map[0]) > 0.1) {
+//			System.err.println("Tropo Dry Coeff is different");
+//		}
+//		if (Math.abs(_map[1] - map[1]) > 0.1) {
+//			System.err.println("Tropo Wet Coeff is different");
+//		}
 
 		double _SD = (ZD[0] * _map[0]) + (ZD[1] * _map[1]);
-		if (Math.abs(_SD - SD) > 0.1) {
-			System.err.println("TROPO est is wrong ->  " + (_SD - SD) + " Elevation - " + Math.toDegrees(E));
-		}
+//		if (Math.abs(_SD - SD) > 0.1) {
+//			System.err.println("TROPO est is wrong ->  " + (_SD - SD) + " Elevation - " + Math.toDegrees(E));
+//		}
 
 		return SD;
 	}
