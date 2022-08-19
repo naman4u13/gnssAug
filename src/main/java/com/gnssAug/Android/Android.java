@@ -72,12 +72,12 @@ public class Android {
 			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
 			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
-			ArrayList<Long> satCountList = new ArrayList<Long>();
+			TreeMap<String, ArrayList<Long>> satCountMap = new TreeMap<String, ArrayList<Long>>();
 			Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test4";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test_gal4";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -134,8 +134,8 @@ public class Android {
 				if (checkOutlier) {
 					checkOutlier(satList, truePosEcef);
 				}
-				int n = satList.size();
-				if (n < 4) {
+
+				if (satList.size() < 4) {
 					System.err.println("Less than 4 satellites");
 					continue;
 				}
@@ -148,8 +148,10 @@ public class Android {
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
+						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
-							Satellite sat = satList.get(i);
+							Satellite sat = testedSatList.get(i);
 							satResMap.get("LS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
@@ -172,12 +174,15 @@ public class Android {
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
+						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
-							Satellite sat = satList.get(i);
+							Satellite sat = testedSatList.get(i);
 							satResMap.get("WLS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
 						}
+						satCountMap.computeIfAbsent("WLS", k -> new ArrayList<Long>()).add((long) n);
 						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())
 								.add(LinearLeastSquare.getPostVarOfUnitW());
 						Cxx_hat_map.computeIfAbsent("WLS", k -> new ArrayList<SimpleMatrix>())
@@ -188,7 +193,7 @@ public class Android {
 				}
 
 				SatMap.put(tRxMilli, satList);
-				satCountList.add((long) n);
+
 				trueLLHlist.add(trueUserLLH);
 				trueEcefList.add(truePosEcef);
 				timeList.add(tRxMilli);
@@ -404,7 +409,7 @@ public class Android {
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				GraphPlotter.graphDOP(dopMap, satCountList, timeList);
+				GraphPlotter.graphDOP(dopMap, satCountMap.get("WLS"), timeList);
 			}
 
 		} catch (

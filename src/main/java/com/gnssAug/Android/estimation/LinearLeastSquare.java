@@ -8,6 +8,7 @@ import java.util.stream.IntStream;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
+import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.models.Satellite;
@@ -20,6 +21,7 @@ public class LinearLeastSquare {
 	private static double postVarOfUnitW;
 	private static SimpleMatrix Cxx_hat;
 	private static double[] dop;
+	private static ArrayList<Satellite> testedSatList;
 
 	public static double[] process(ArrayList<Satellite> satList, boolean isWLS) throws Exception {
 		return process(satList, isWLS, false, false);
@@ -31,7 +33,8 @@ public class LinearLeastSquare {
 		int n = satList.size();
 		// Weight matrix
 		double[][] weight = new double[n][n];
-		boolean useAndroidW = true;
+		boolean useAndroidW = false;
+		testedSatList = satList;
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
 		 * be based on elevation angle otherwise identity matrix will assigned for LS
@@ -57,7 +60,7 @@ public class LinearLeastSquare {
 		if (doAnalyze) {
 			HashSet<Integer> indexSet = qualityControl(weight, estEcefClk, satList, useAndroidW, doTest);
 			if (!indexSet.isEmpty()) {
-				ArrayList<Satellite> _satList = new ArrayList<Satellite>();
+				testedSatList = new ArrayList<Satellite>();
 				int j = 0;
 				int _n = n - indexSet.size();
 				double[][] _weight = new double[_n][_n];
@@ -66,14 +69,14 @@ public class LinearLeastSquare {
 					Satellite sat = satList.get(i);
 					if (!indexSet.contains(i)) {
 
-						_satList.add(sat);
+						testedSatList.add(sat);
 						_weight[j][j] = weight[i][i];
 						j++;
 
 					}
 				}
-				estEcefClk = regress(_satList, _weight);
-				qualityControl(_weight, estEcefClk, _satList, useAndroidW, false);
+				estEcefClk = regress(testedSatList, _weight);
+				qualityControl(_weight, estEcefClk, testedSatList, useAndroidW, false);
 			}
 		}
 		return estEcefClk;
@@ -175,7 +178,7 @@ public class LinearLeastSquare {
 		if (useAndroidW) {
 			Cyy = new SimpleMatrix(weight).invert();
 		} else {
-			priorVarOfUnitW = 25;
+			priorVarOfUnitW = 4;
 			double[][] cov = new double[n][n];
 			double max = Double.MIN_VALUE;
 			for (int i = 0; i < n; i++) {
@@ -198,32 +201,34 @@ public class LinearLeastSquare {
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
-		// Convert to ENU frame
-		SimpleMatrix R = new SimpleMatrix(4, 4);
-		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
-		R.set(3, 3, 1);
-		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
-		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
-		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
-		boolean isSingleOut = false;
+
+		boolean isSingleOut = true;
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 0.05;
+			double alpha = 1;
 			if (detectT == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
 			if ((1 - csd.cumulativeProbability(detectT)) < alpha) {
-				SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+
 				SimpleMatrix Cyy_hat = H.mult(Cxx_hat).mult(Ht);
 				SimpleMatrix Cee_hat = Cyy.minus(Cyy_hat);
-//				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cee_hat.getMatrix())) {
-//
-//					throw new Exception("PositiveDiagonal test Failed");
-//				}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cyy test Failed");
+				}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy_hat.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cyy_hat test Failed");
+				}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cee_hat.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cee_hat test Failed");
+				}
 
 				ArrayList<Integer> indexList = new ArrayList<Integer>();
 				ArrayList<Double> wList = new ArrayList<Double>();
-
+				double alpha2 = 0.05;
 				for (int i = 0; i < n; i++) {
 					SimpleMatrix c = new SimpleMatrix(n, 1);
 					c.set(i, 1);
@@ -231,7 +236,7 @@ public class LinearLeastSquare {
 					double w = (ct.mult(Cyy_inv).mult(e_hat).get(0))
 							/ (Math.sqrt(ct.mult(Cyy_inv).mult(Cee_hat).mult(Cyy_inv).mult(c).get(0)));
 					NormalDistribution norm = new NormalDistribution();
-					if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha / 2)) {
+					if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha2 / 2)) {
 						indexList.add(i);
 						if (isSingleOut) {
 							wList.add(Math.abs(w));
@@ -271,16 +276,16 @@ public class LinearLeastSquare {
 							ArrayList<Satellite> _satList = new ArrayList<Satellite>();
 							int k = 0;
 							int _n = n - _indexSet.size();
-							double[][] _Qyy_inv = new double[_n][_n];
+							double[][] _Cyy_inv = new double[_n][_n];
 							for (int j = 0; j < n; j++) {
 								if (!_indexSet.contains(j)) {
 									_satList.add(satList.get(j));
-									_Qyy_inv[k][k] = Cyy_inv.get(j, j);
+									_Cyy_inv[k][k] = Cyy_inv.get(j, j);
 									k++;
 								}
 							}
 							double t = 0;
-							t = getNormT(_satList, _Qyy_inv);
+							t = getNormT(_satList, _Cyy_inv);
 							if (t < normT && t < minT) {
 								if (t == 0) {
 									throw new Exception("Error: T stat is zero");
@@ -298,6 +303,13 @@ public class LinearLeastSquare {
 				}
 			}
 		}
+		// Convert to ENU frame
+		SimpleMatrix R = new SimpleMatrix(4, 4);
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.set(3, 3, 1);
+		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
+		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
+		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 		return indexSet;
 	}
 
@@ -401,6 +413,10 @@ public class LinearLeastSquare {
 
 	public static double[] getDop() {
 		return dop;
+	}
+
+	public static ArrayList<Satellite> getTestedSatList() {
+		return testedSatList;
 	}
 
 }

@@ -638,13 +638,10 @@ public class GraphPlotter extends ApplicationFrame {
 			int count = 0;
 
 			for (int i = 0; i < data.size(); i++) {
-				if (data.get(i) == 0 || data.get(i) > 1000000) {
-					if (data.get(i) > 1000000) {
-						System.err.println("PostUnit W is more than 1000");
-					}
+				if (data.get(i) == 0) {
 					continue;
 				}
-				sum = ((sum / (i + 1)) * i) + (data.get(i) / (i + 1));
+				sum += data.get(i);
 				count++;
 				series.add(timeList.get(i), data.get(i));
 			}

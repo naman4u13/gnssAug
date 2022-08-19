@@ -10,21 +10,23 @@ public class Weight {
 	public static double[][] computeCovInvMat2(ArrayList<Satellite> satList) {
 
 		int SVcount = satList.size();
-		double[][] covMat = new double[SVcount][SVcount];
-		IntStream.range(0, SVcount).forEach(i -> covMat[i][i] = 1
+		double[][] covInvMat = new double[SVcount][SVcount];
+		IntStream.range(0, SVcount).forEach(i -> covInvMat[i][i] = 1
 				/ Weight.computeCoVariance(satList.get(i).getCn0DbHz(), satList.get(i).getElevAzm()[0]));
 		// double[][] normWeight = Weight.normalize(covMat);
-		return covMat;
+		return covInvMat;
 	}
 
 	public static double[][] computeCovInvMat(ArrayList<com.gnssAug.Rinex.models.Satellite> satList) {
 
 		int SVcount = satList.size();
-		double[][] covMat = new double[SVcount][SVcount];
-		IntStream.range(0, SVcount).forEach(i -> covMat[i][i] = 1
+		double[][] covInvMat = new double[SVcount][SVcount];
+		IntStream.range(0, SVcount).forEach(i -> covInvMat[i][i] = 1
 				/ Weight.computeCoVariance(satList.get(i).getCNo(), satList.get(i).getElevAzm()[0]));
+//		IntStream.range(0, SVcount)
+//				.forEach(i -> covInvMat[i][i] = 1 / Math.pow(Math.sin(satList.get(i).getElevAzm()[0]), 2));
 		// double[][] normWeight = Weight.normalize(covMat);
-		return covMat;
+		return covInvMat;
 	}
 
 	public static double[][] normalize(double[][] W) {

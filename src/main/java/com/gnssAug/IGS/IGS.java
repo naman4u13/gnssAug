@@ -65,7 +65,7 @@ public class IGS {
 			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
 			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
-			ArrayList<Long> satCountList = new ArrayList<Long>();
+			TreeMap<String, ArrayList<Long>> satCountMap = new TreeMap<String, ArrayList<Long>>();
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			Bias bias = null;
 			Orbit orbit = null;
@@ -94,7 +94,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\quality5";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\quality_test_3";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -166,7 +166,7 @@ public class IGS {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
-				int n = satList.size();
+				long tRxMilli = (long) (tRX * 1000);
 				// Estimate
 				if (estimatorType == 1 || estimatorType == 4) {
 					// Implement LS method
@@ -175,12 +175,15 @@ public class IGS {
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
+						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
-							Satellite sat = satList.get(i);
+							Satellite sat = testedSatList.get(i);
 							satResMap.get("LS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
 
 						}
+
 						postVarOfUnitWeightMap.computeIfAbsent("LS", k -> new ArrayList<Double>())
 								.add(LinearLeastSquare.getPostVarOfUnitW());
 						Cxx_hat_map.computeIfAbsent("LS", k -> new ArrayList<SimpleMatrix>())
@@ -197,12 +200,15 @@ public class IGS {
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
 						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
+						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
-							Satellite sat = satList.get(i);
+							Satellite sat = testedSatList.get(i);
 							satResMap.get("WLS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
 
 						}
+						satCountMap.computeIfAbsent("WLS", k -> new ArrayList<Long>()).add((long) n);
 						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())
 								.add(LinearLeastSquare.getPostVarOfUnitW());
 						Cxx_hat_map.computeIfAbsent("WLS", k -> new ArrayList<SimpleMatrix>())
@@ -211,9 +217,9 @@ public class IGS {
 
 					}
 				}
-				long tRxMilli = (long) (tRX * 1000);
+
 				satMap.put(tRxMilli, satList);
-				satCountList.add((long) satList.size());
+
 				timeList.add(tRxMilli);
 			}
 			if (estimatorType == 3 || estimatorType == 5) {
@@ -295,7 +301,7 @@ public class IGS {
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				GraphPlotter.graphDOP(dopMap, satCountList, timeList);
+				GraphPlotter.graphDOP(dopMap, satCountMap.get("WLS"), timeList);
 			}
 		} catch (
 

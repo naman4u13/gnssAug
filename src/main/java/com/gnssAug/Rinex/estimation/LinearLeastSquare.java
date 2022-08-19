@@ -9,6 +9,7 @@ import java.util.stream.IntStream;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
+import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Rinex.models.Satellite;
@@ -21,6 +22,7 @@ public class LinearLeastSquare {
 	private static double postVarOfUnitW;
 	private static SimpleMatrix Cxx_hat;
 	private static double[] dop;
+	private static ArrayList<Satellite> testedSatList;
 
 	public static double[] process(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS)
 			throws Exception {
@@ -33,7 +35,7 @@ public class LinearLeastSquare {
 		int n = satList.size();
 		// Weight matrix
 		double[][] weight = new double[n][n];
-
+		testedSatList = satList;
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
 		 * be based on elevation angle otherwise identity matrix will assigned for LS
@@ -48,8 +50,9 @@ public class LinearLeastSquare {
 		double[] estEcefClk = regress(satList, PCO, weight);
 		if (doAnalyze) {
 			HashSet<Integer> indexSet = qualityControl(weight, satList, estEcefClk, PCO, doTest);
+
 			if (!indexSet.isEmpty()) {
-				ArrayList<Satellite> _satList = new ArrayList<Satellite>();
+				testedSatList = new ArrayList<Satellite>();
 				int j = 0;
 				int _n = n - indexSet.size();
 				double[][] _weight = new double[_n][_n];
@@ -58,14 +61,14 @@ public class LinearLeastSquare {
 					Satellite sat = satList.get(i);
 					if (!indexSet.contains(i)) {
 
-						_satList.add(sat);
+						testedSatList.add(sat);
 						_weight[j][j] = weight[i][i];
 						j++;
 
 					}
 				}
-				estEcefClk = regress(_satList, PCO, _weight);
-				qualityControl(weight, satList, estEcefClk, PCO, false);
+				estEcefClk = regress(testedSatList, PCO, _weight);
+				qualityControl(_weight, testedSatList, estEcefClk, PCO, false);
 			}
 		}
 		return estEcefClk;
@@ -95,7 +98,7 @@ public class LinearLeastSquare {
 		}
 
 		SimpleMatrix Cyy = null;
-		double priorVarOfUnitW = 0.04;
+		double priorVarOfUnitW = 0.09;
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;
 		for (int i = 0; i < n; i++) {
@@ -117,17 +120,10 @@ public class LinearLeastSquare {
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
-		// Convert to ENU frame
-		SimpleMatrix R = new SimpleMatrix(4, 4);
-		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
-		R.set(3, 3, 1);
-		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
-		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
-		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 		boolean isSingleOut = false;
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 0.01;
+			double alpha = 0.1;
 			if (detectT == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
@@ -136,22 +132,36 @@ public class LinearLeastSquare {
 
 				SimpleMatrix Cyy_hat = H.mult(Cxx_hat).mult(Ht);
 				SimpleMatrix Cee_hat = Cyy.minus(Cyy_hat);
-//			if (!MatrixFeatures_DDRM.isDiagonalPositive(Cee_hat.getMatrix())) {
-//
-//				throw new Exception("PositiveDiagonal test Failed");
-//			}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cyy test Failed");
+				}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy_hat.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cyy_hat test Failed");
+				}
+				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cee_hat.getMatrix())) {
+
+					throw new Exception("PositiveDiagonal Cee_hat test Failed");
+				}
 
 				ArrayList<Integer> indexList = new ArrayList<Integer>();
 				ArrayList<Double> wList = new ArrayList<Double>();
+
+				double alpha2 = 0.05;
 				// Identification
 				for (int i = 0; i < n; i++) {
 					SimpleMatrix c = new SimpleMatrix(n, 1);
 					c.set(i, 1);
 					SimpleMatrix ct = c.transpose();
-					double w = (ct.mult(Cyy_inv).mult(e_hat).get(0))
-							/ (Math.sqrt(ct.mult(Cyy_inv).mult(Cee_hat).mult(Cyy_inv).mult(c).get(0)));
+					double lam = ct.mult(Cyy_inv).mult(Cee_hat).mult(Cyy_inv).mult(c).get(0);
+					if (lam < 0) {
+						throw new Exception("PositiveDiagonal lam < 0");
+					}
+					double w = (ct.mult(Cyy_inv).mult(e_hat).get(0)) / (Math.sqrt(lam));
+
 					NormalDistribution norm = new NormalDistribution();
-					if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha / 2)) {
+					if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha2 / 2)) {
 						indexList.add(i);
 						wList.add(Math.abs(w));
 					}
@@ -219,6 +229,13 @@ public class LinearLeastSquare {
 			}
 
 		}
+		// Convert to ENU frame
+		SimpleMatrix R = new SimpleMatrix(4, 4);
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.set(3, 3, 1);
+		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
+		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
+		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 		return indexSet;
 	}
 
@@ -339,6 +356,10 @@ public class LinearLeastSquare {
 
 	public static double[] getDop() {
 		return dop;
+	}
+
+	public static ArrayList<Satellite> getTestedSatList() {
+		return testedSatList;
 	}
 
 }
