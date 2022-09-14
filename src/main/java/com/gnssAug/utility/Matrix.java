@@ -44,4 +44,23 @@ public class Matrix {
 		}
 		return array;
 	}
+
+	public static SimpleMatrix getProjection(SimpleMatrix A, SimpleMatrix W) {
+		SimpleMatrix At = A.transpose();
+		SimpleMatrix P_A = A.mult((At.mult(W).mult(A)).invert()).mult(At).mult(W);
+		return P_A;
+	}
+
+	public static SimpleMatrix getPerpendicularProjection(SimpleMatrix A, SimpleMatrix W) {
+
+		SimpleMatrix P_A = getProjection(A, W);
+		int n = P_A.numRows();
+		SimpleMatrix P_A_perpendicular = SimpleMatrix.identity(n).minus(P_A);
+		return P_A_perpendicular;
+	}
+
+	public static double getNorm(SimpleMatrix A, SimpleMatrix B) {
+		double c = A.transpose().mult(B.invert()).mult(A).get(0);
+		return c;
+	}
 }

@@ -25,7 +25,7 @@ public class Weight {
 				/ Weight.computeCoVariance(satList.get(i).getCNo(), satList.get(i).getElevAzm()[0]));
 //		IntStream.range(0, SVcount)
 //				.forEach(i -> covInvMat[i][i] = 1 / Math.pow(Math.sin(satList.get(i).getElevAzm()[0]), 2));
-		// double[][] normWeight = Weight.normalize(covMat);
+
 		return covInvMat;
 	}
 

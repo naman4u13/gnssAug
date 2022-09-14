@@ -25,7 +25,7 @@ import com.gnssAug.Rinex.models.SatResidual;
 
 public class GraphPlotter extends ApplicationFrame {
 
-	public GraphPlotter(HashMap<Integer, ArrayList<SatResidual>> satResMap, String name, boolean flag) {
+	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean flag) {
 		super(name + ": Satellite-Residual");
 		JFreeChart chart;
 		if (flag) {
@@ -366,7 +366,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphSatRes(HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap) {
+	public static void graphSatRes(HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap) {
 		for (String key : satResMap.keySet()) {
 			GraphPlotter chart = new GraphPlotter(satResMap.get(key), key, true);
 			chart.pack();
@@ -638,27 +638,26 @@ public class GraphPlotter extends ApplicationFrame {
 			int count = 0;
 
 			for (int i = 0; i < data.size(); i++) {
-				if (data.get(i) == 0) {
+				double val = data.get(i);
+				if (val == 0 || val == -1) {
 					continue;
 				}
-				sum += data.get(i);
+				sum += val;
 				count++;
-				series.add(timeList.get(i), data.get(i));
+				series.add(timeList.get(i), (Double) val);
 			}
 			Collections.sort(data);
-			int q95 = (int) (data.size() * 0.95);
+
 			double avg = sum / count;
 			// avg = Math.round(avg * 1000) / 1000;
 			final XYSeries mean = new XYSeries(key + " Mean Posteriori Variance of Unit Weight: " + avg);
-			final XYSeries per95 = new XYSeries(key + " 95% Posteriori Variance of Unit Weight: " + data.get(q95));
 			for (int i = 0; i < data.size(); i++) {
 				long time = timeList.get(i);
 				mean.add(time, avg);
-				per95.add(time, data.get(q95));
 			}
 			dataset.addSeries(series);
 			dataset.addSeries(mean);
-			dataset.addSeries(per95);
+
 		}
 		return dataset;
 
@@ -710,10 +709,10 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createDatasetSatRes(HashMap<Integer, ArrayList<SatResidual>> dataMap, boolean flag) {
+	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean flag) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		for (int key : dataMap.keySet()) {
+		for (String key : dataMap.keySet()) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<SatResidual> dataList = dataMap.get(key);
 			if (flag) {

@@ -68,7 +68,7 @@ public class Android {
 			TreeMap<Long, ArrayList<Satellite>> SatMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> estVelMap = new HashMap<String, ArrayList<double[]>>();
-			HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<Integer, ArrayList<SatResidual>>>();
+			HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<String, ArrayList<SatResidual>>>();
 			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
 			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
@@ -77,7 +77,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\test_gal4";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\pixel4_test_gps_android_quality";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -126,8 +126,17 @@ public class Android {
 					System.err.println("Less than 4 satellites");
 					continue;
 				}
-				double[] refUserEcef = LinearLeastSquare.process(satList, false);
-				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refUserEcef, i.getSatEci())));
+				double[] refUserEcef = new double[3];
+				try {
+					refUserEcef = LinearLeastSquare.process(satList, false);
+				} catch (org.ejml.data.SingularMatrixException e) {
+					// TODO: handle exception
+					e.printStackTrace();
+					continue;
+				}
+				for (Satellite sat : satList) {
+					sat.setElevAzm(ComputeEleAzm.computeEleAzm(refUserEcef, sat.getSatEci()));
+				}
 				filterSat(satList, cutOffAng, snrMask);
 				double[] truePosEcef = LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
@@ -147,12 +156,15 @@ public class Android {
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						satResMap.computeIfAbsent("LS", k -> new HashMap<String, ArrayList<SatResidual>>());
 						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
 						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
 							Satellite sat = testedSatList.get(i);
-							satResMap.get("LS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
+
+							satResMap.get("LS")
+									.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
+											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
 						}
@@ -173,12 +185,14 @@ public class Android {
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						satResMap.computeIfAbsent("WLS", k -> new HashMap<String, ArrayList<SatResidual>>());
 						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
 						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
 							Satellite sat = testedSatList.get(i);
-							satResMap.get("WLS").computeIfAbsent(sat.getSvid(), k -> new ArrayList<SatResidual>())
+							satResMap.get("WLS")
+									.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
+											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
 						}

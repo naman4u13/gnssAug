@@ -61,7 +61,7 @@ public class IGS {
 
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			TreeMap<Long, ArrayList<Satellite>> satMap = new TreeMap<Long, ArrayList<Satellite>>();
-			HashMap<String, HashMap<Integer, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<Integer, ArrayList<SatResidual>>>();
+			HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<String, ArrayList<SatResidual>>>();
 			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
 			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
@@ -77,7 +77,7 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\BELE00BRA_R_20201000000_01D_30S_MO.crx\\BELE00BRA_R_20201000000_01D_30S_MO.rnx";
+					+ "\\AJAC00FRA_R_20201000000_01D_30S_MO.crx\\AJAC00FRA_R_20201000000_01D_30S_MO.rnx";
 
 			String bias_path = base_path
 					+ "\\complementary\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX";
@@ -94,7 +94,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\quality_test_3";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\AJAC2_test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -146,7 +146,9 @@ public class IGS {
 
 				double dayTime = tRX % 86400;
 				long weekNo = obsvMsg.getWeekNo();
-
+				if (dayTime == 68580) {
+					System.out.println();
+				}
 				Calendar time = Time.getDate(tRX, weekNo, 0);
 				if (Time.getGPSTime(time)[0] != tRX) {
 					System.err.println("FATAL ERROR TIME calendar");
@@ -174,12 +176,15 @@ public class IGS {
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("LS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						satResMap.computeIfAbsent("LS", k -> new HashMap<String, ArrayList<SatResidual>>());
 						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
 						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
 							Satellite sat = testedSatList.get(i);
-							satResMap.get("LS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
+
+							satResMap.get("LS")
+									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
 
 						}
@@ -199,12 +204,14 @@ public class IGS {
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					if (doAnalyze) {
 						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("WLS", k -> new HashMap<Integer, ArrayList<SatResidual>>());
+						satResMap.computeIfAbsent("WLS", k -> new HashMap<String, ArrayList<SatResidual>>());
 						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
 						int n = testedSatList.size();
 						for (int i = 0; i < n; i++) {
 							Satellite sat = testedSatList.get(i);
-							satResMap.get("WLS").computeIfAbsent(sat.getSVID(), k -> new ArrayList<SatResidual>())
+							satResMap.get("WLS")
+									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
 
 						}

@@ -33,7 +33,7 @@ public class LinearLeastSquare {
 		int n = satList.size();
 		// Weight matrix
 		double[][] weight = new double[n][n];
-		boolean useAndroidW = false;
+		boolean useAndroidW = true;
 		testedSatList = satList;
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
@@ -173,10 +173,11 @@ public class LinearLeastSquare {
 			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(satEcef[j] - estEcefClk[j]) / gr_hat);
 			h[i][3] = 1;
 		}
-		double priorVarOfUnitW = 1;
+		double priorVarOfUnitW = 4;
 		SimpleMatrix Cyy = null;
 		if (useAndroidW) {
 			Cyy = new SimpleMatrix(weight).invert();
+			Cyy = Cyy.scale(priorVarOfUnitW);
 		} else {
 			priorVarOfUnitW = 4;
 			double[][] cov = new double[n][n];
@@ -198,14 +199,17 @@ public class LinearLeastSquare {
 		SimpleMatrix Cyy_inv = Cyy.invert();
 		double detectT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
 		postVarOfUnitW = detectT * priorVarOfUnitW / (n - 4);
+		if (n == 4) {
+			postVarOfUnitW = -1;
+		}
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
 
-		boolean isSingleOut = true;
+		boolean isSingleOut = false;
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 1;
+			double alpha = 0.05;
 			if (detectT == 0) {
 				throw new Exception("Error: T stat is zero");
 			}

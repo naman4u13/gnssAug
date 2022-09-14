@@ -14,6 +14,7 @@ import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
@@ -49,7 +50,7 @@ public class LinearLeastSquare {
 		}
 		double[] estEcefClk = regress(satList, PCO, weight);
 		if (doAnalyze) {
-			HashSet<Integer> indexSet = qualityControl(weight, satList, estEcefClk, PCO, doTest);
+			HashSet<Integer> indexSet = qualityControl2(weight, satList, estEcefClk, PCO, doTest);
 
 			if (!indexSet.isEmpty()) {
 				testedSatList = new ArrayList<Satellite>();
@@ -68,10 +69,117 @@ public class LinearLeastSquare {
 					}
 				}
 				estEcefClk = regress(testedSatList, PCO, _weight);
-				qualityControl(_weight, testedSatList, estEcefClk, PCO, false);
+				qualityControl2(_weight, testedSatList, estEcefClk, PCO, false);
 			}
 		}
 		return estEcefClk;
+
+	}
+
+	public static HashSet<Integer> qualityControl2(double[][] weight, ArrayList<Satellite> satList, double[] estEcefClk,
+			HashMap<String, double[]> PCO, boolean doTest) throws Exception {
+		int n = satList.size();
+		HashSet<Integer> indexSet = new HashSet<Integer>();
+		residual = new double[n];
+		double[][] h = new double[n][4];
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+			double[] pco = PCO.get(obsvCode);
+			double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
+
+			double pr = sat.getPseudorange();
+			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - rxAPC[j])
+					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
+			final int _i = i;
+			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(sat.getSatEci()[j] - rxAPC[j]) / gr_hat);
+			h[i][3] = 1;
+			residual[i] = pr_hat - pr;
+		}
+
+		SimpleMatrix Cyy = null;
+		double priorVarOfUnitW = 0.011;
+		double[][] cov = new double[n][n];
+		double max = Double.MIN_VALUE;
+		for (int i = 0; i < n; i++) {
+			max = Math.max(weight[i][i], max);
+		}
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / max;
+		}
+
+		for (int i = 0; i < n; i++) {
+			cov[i][i] = priorVarOfUnitW / weight[i][i];
+		}
+		Cyy = new SimpleMatrix(cov);
+
+		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
+		SimpleMatrix Cyy_inv = Cyy.invert();
+		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
+		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - 4);
+		if (n == 4) {
+			postVarOfUnitW = -1;
+		}
+		SimpleMatrix H = new SimpleMatrix(h);
+		SimpleMatrix Ht = H.transpose();
+		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		if (doTest && n > 5) {
+			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
+			double alpha = 0.01;
+			if (globalTq == 0) {
+				throw new Exception("Error: T stat is zero");
+			}
+			// Detection
+			double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+			if (globalPVal < alpha) {
+				double pVal_min = Double.MAX_VALUE;
+				double fd_test_max = Double.MIN_VALUE;
+				int len = n - 5;
+				for (int i = 1; i <= len; i++) {
+					Iterator<int[]> iterator = CombinatoricsUtils.combinationsIterator(n, i);
+					csd = new ChiSquaredDistribution(i);
+					while (iterator.hasNext()) {
+						HashSet<Integer> _indexSet = new HashSet<Integer>();
+						int[] combination = iterator.next();
+						SimpleMatrix C = new SimpleMatrix(n, i);
+						for (int j = 0; j < i; j++) {
+							C.set(combination[j], j, 1);
+							_indexSet.add(combination[j]);
+						}
+						SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+						SimpleMatrix C_ = P_H_perpendicular.mult(C);
+						SimpleMatrix P_C_ = Matrix.getProjection(C_, Cyy_inv);
+						double Tq = Matrix.getNorm(P_C_.mult(e_hat), Cyy);
+						double pVal = 1 - csd.cumulativeProbability(Tq);
+						if (pVal < pVal_min) {
+							pVal_min = pVal;
+							fd_test_max = Tq / i;
+							indexSet = new HashSet<Integer>(_indexSet);
+						} else if (pVal == 0 && pVal_min == 0) {
+							double fd_test = Tq / i;
+							if (fd_test > fd_test_max) {
+								fd_test_max = fd_test;
+								indexSet = new HashSet<Integer>(_indexSet);
+							}
+						}
+
+					}
+				}
+				if (indexSet.isEmpty()) {
+					throw new Exception("IndexSet cannot be empty: Impossible to have detection but no identification");
+				}
+			}
+		}
+
+		// Convert to ENU frame
+		SimpleMatrix R = new SimpleMatrix(4, 4);
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.set(3, 3, 1);
+		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
+		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
+		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
+		return indexSet;
 
 	}
 
@@ -115,20 +223,24 @@ public class LinearLeastSquare {
 
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
 		SimpleMatrix Cyy_inv = Cyy.invert();
-		double detectT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-		postVarOfUnitW = detectT * priorVarOfUnitW / (n - 4);
+		double globalT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
+		postVarOfUnitW = globalT * priorVarOfUnitW / (n - 4);
+		if (n == 4) {
+			postVarOfUnitW = -1;
+		}
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
 		boolean isSingleOut = false;
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 0.1;
-			if (detectT == 0) {
+			double alpha = 1;
+			if (globalT == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
 			// Detection
-			if ((1 - csd.cumulativeProbability(detectT)) < alpha) {
+			double pVal = 1 - csd.cumulativeProbability(globalT);
+			if (pVal < alpha) {
 
 				SimpleMatrix Cyy_hat = H.mult(Cxx_hat).mult(Ht);
 				SimpleMatrix Cee_hat = Cyy.minus(Cyy_hat);
@@ -180,13 +292,13 @@ public class LinearLeastSquare {
 					}
 				} else {
 
-					double minT = Double.MAX_VALUE;
+					double maxPVal = Double.MIN_VALUE;
 					int m = indexList.size();
 
 					int len = Math.min(m, n - 4 - 1);
 					// Normalized t stat with number of sat, this is a personal theorized stat,
 					// unsure about its validity
-					double normT = detectT / (n - 4);
+
 					for (int i = 1; i <= len; i++) {
 						Iterator<int[]> iterator = CombinatoricsUtils.combinationsIterator(m, i);
 						while (iterator.hasNext()) {
@@ -208,14 +320,14 @@ public class LinearLeastSquare {
 								}
 							}
 
-							double t = 0;
-
-							t = getNormT(_satList, _Cyy_inv, PCO);
-							if (t < normT && t < minT) {
-								if (t == 0) {
-									throw new Exception("Error: T stat is zero");
+							double localT = getLocalTestStat(_satList, _Cyy_inv, PCO);
+							csd = new ChiSquaredDistribution(_n - 4);
+							double localPVal = 1 - csd.cumulativeProbability(localT);
+							if (localPVal > pVal && localPVal > maxPVal) {
+								if (localT == 0) {
+									throw new Exception("Error: localT is zero");
 								}
-								minT = t;
+								maxPVal = localPVal;
 								indexSet = new HashSet<Integer>(_indexSet);
 							}
 						}
@@ -240,8 +352,8 @@ public class LinearLeastSquare {
 	}
 
 	// Get sum of weighted squared residuals based test statistic
-	public static double getNormT(ArrayList<Satellite> satList, double[][] _Cyy_inv, HashMap<String, double[]> PCO)
-			throws Exception {
+	public static double getLocalTestStat(ArrayList<Satellite> satList, double[][] _Cyy_inv,
+			HashMap<String, double[]> PCO) throws Exception {
 		int n = satList.size();
 		double[] res = new double[n];
 		double[] estEcefClk = regress(satList, PCO, _Cyy_inv);
@@ -266,7 +378,7 @@ public class LinearLeastSquare {
 		SimpleMatrix Cyy_inv = new SimpleMatrix(_Cyy_inv);
 		double detectT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
 
-		return (detectT / (n - 4));
+		return detectT;
 	}
 
 	public static double[] regress(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, double[][] weight)
