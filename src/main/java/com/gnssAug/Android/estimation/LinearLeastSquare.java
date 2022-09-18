@@ -13,6 +13,7 @@ import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
@@ -33,7 +34,7 @@ public class LinearLeastSquare {
 		int n = satList.size();
 		// Weight matrix
 		double[][] weight = new double[n][n];
-		boolean useAndroidW = true;
+		boolean useAndroidW = false;
 		testedSatList = satList;
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
@@ -58,7 +59,7 @@ public class LinearLeastSquare {
 		}
 		double[] estEcefClk = regress(satList, weight);
 		if (doAnalyze) {
-			HashSet<Integer> indexSet = qualityControl(weight, estEcefClk, satList, useAndroidW, doTest);
+			HashSet<Integer> indexSet = qualityControl2(weight, estEcefClk, satList, useAndroidW, doTest);
 			if (!indexSet.isEmpty()) {
 				testedSatList = new ArrayList<Satellite>();
 				int j = 0;
@@ -76,7 +77,7 @@ public class LinearLeastSquare {
 					}
 				}
 				estEcefClk = regress(testedSatList, _weight);
-				qualityControl(_weight, estEcefClk, testedSatList, useAndroidW, false);
+				qualityControl2(_weight, estEcefClk, testedSatList, useAndroidW, false);
 			}
 		}
 		return estEcefClk;
@@ -151,6 +152,123 @@ public class LinearLeastSquare {
 
 	}
 
+	public static HashSet<Integer> qualityControl2(double[][] weight, double[] estEcefClk, ArrayList<Satellite> satList,
+			boolean useAndroidW, boolean doTest) throws Exception {
+		HashSet<Integer> indexSet = new HashSet<Integer>();
+		int n = satList.size();
+		residual = new double[n];
+		double[][] h = new double[n][4];
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			// Its not really a ECI, therefore don't get confused
+			double[] satEcef = sat.getSatEci();
+			double pr = sat.getPseudorange();
+
+			// Approx Geometric Range
+			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - estEcefClk[j])
+					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+			// Approx Pseudorange Range
+			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
+			residual[i] = pr_hat - pr;
+			int _i = i;
+			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(satEcef[j] - estEcefClk[j]) / gr_hat);
+			h[i][3] = 1;
+
+		}
+		double priorVarOfUnitW = 18;
+		SimpleMatrix Cyy = null;
+		if (useAndroidW) {
+			Cyy = new SimpleMatrix(weight).invert();
+
+		} else {
+			double[][] cov = new double[n][n];
+			double max = Double.MIN_VALUE;
+			for (int i = 0; i < n; i++) {
+				max = Math.max(weight[i][i], max);
+			}
+			for (int i = 0; i < n; i++) {
+				weight[i][i] = weight[i][i] / max;
+			}
+
+			for (int i = 0; i < n; i++) {
+				cov[i][i] = priorVarOfUnitW / weight[i][i];
+			}
+			Cyy = new SimpleMatrix(cov);
+		}
+
+		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
+		SimpleMatrix Cyy_inv = Cyy.invert();
+		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
+		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - 4);
+		if (n == 4) {
+			postVarOfUnitW = -1;
+		}
+		SimpleMatrix H = new SimpleMatrix(h);
+		SimpleMatrix Ht = H.transpose();
+		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		if (doTest && n > 5) {
+			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
+			double alpha = 0.05;
+			if (globalTq == 0) {
+				throw new Exception("Error: T stat is zero");
+			}
+			// Detection
+			double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+			if (globalPVal < alpha) {
+				double pVal_min = Double.MAX_VALUE;
+				double fd_test_max = Double.MIN_VALUE;
+				int len = n - 5;
+				for (int i = 1; i <= len; i++) {
+					Iterator<int[]> iterator = CombinatoricsUtils.combinationsIterator(n, i);
+					csd = new ChiSquaredDistribution(i);
+					while (iterator.hasNext()) {
+						HashSet<Integer> _indexSet = new HashSet<Integer>();
+						int[] combination = iterator.next();
+						SimpleMatrix C = new SimpleMatrix(n, i);
+						for (int j = 0; j < i; j++) {
+							C.set(combination[j], j, 1);
+							_indexSet.add(combination[j]);
+						}
+						SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+						SimpleMatrix C_ = P_H_perpendicular.mult(C);
+						SimpleMatrix P_C_ = Matrix.getProjection(C_, Cyy_inv);
+						double Tq = Matrix.getNorm(P_C_.mult(e_hat), Cyy);
+						double pVal = 1 - csd.cumulativeProbability(Tq);
+						if (pVal < pVal_min) {
+//							if (_indexSet.size() > indexSet.size()) {
+//								System.out.print("");
+//							}
+							pVal_min = pVal;
+							fd_test_max = Tq / i;
+							indexSet = new HashSet<Integer>(_indexSet);
+						} else if (pVal == 0 && pVal_min == 0) {
+							double fd_test = Tq / i;
+							if (fd_test > fd_test_max) {
+//								if (_indexSet.size() > indexSet.size()) {
+//									System.out.print("");
+//								}
+								fd_test_max = fd_test;
+								indexSet = new HashSet<Integer>(_indexSet);
+							}
+						}
+
+					}
+				}
+				if (indexSet.isEmpty()) {
+					throw new Exception("IndexSet cannot be empty: Impossible to have detection but no identification");
+				}
+			}
+		}
+		// Convert to ENU frame
+		SimpleMatrix R = new SimpleMatrix(4, 4);
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.set(3, 3, 1);
+		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
+		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
+		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
+		return indexSet;
+	}
+
 	public static HashSet<Integer> qualityControl(double[][] weight, double[] estEcefClk, ArrayList<Satellite> satList,
 			boolean useAndroidW, boolean doTest) throws Exception {
 		HashSet<Integer> indexSet = new HashSet<Integer>();
@@ -177,9 +295,8 @@ public class LinearLeastSquare {
 		SimpleMatrix Cyy = null;
 		if (useAndroidW) {
 			Cyy = new SimpleMatrix(weight).invert();
-			Cyy = Cyy.scale(priorVarOfUnitW);
+
 		} else {
-			priorVarOfUnitW = 4;
 			double[][] cov = new double[n][n];
 			double max = Double.MIN_VALUE;
 			for (int i = 0; i < n; i++) {

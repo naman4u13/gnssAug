@@ -700,10 +700,15 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries series = new XYSeries("SatCount");
+		double avg = data.stream().mapToDouble(i -> i).average().orElseThrow();
+		avg = Math.round(avg * 100) / 100.0;
 		for (int i = 0; i < data.size(); i++) {
 			series.add(timeList.get(i), data.get(i));
+
 		}
+		final XYSeries avgSeries = new XYSeries("Avg:" + avg);
 		dataset.addSeries(series);
+		dataset.addSeries(avgSeries);
 
 		return dataset;
 

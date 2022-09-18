@@ -77,7 +77,7 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\AJAC00FRA_R_20201000000_01D_30S_MO.crx\\AJAC00FRA_R_20201000000_01D_30S_MO.rnx";
+					+ "\\GOLD00USA_R_20201000000_01D_30S_MO.crx\\GOLD00USA_R_20201000000_01D_30S_MO.rnx";
 
 			String bias_path = base_path
 					+ "\\complementary\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX";
@@ -94,7 +94,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\AJAC2_test2";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\GOLD2_test0.0001per2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -214,6 +214,9 @@ public class IGS {
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
 
+						}
+						if (doTest) {
+							n = satList.size() - n;
 						}
 						satCountMap.computeIfAbsent("WLS", k -> new ArrayList<Long>()).add((long) n);
 						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())

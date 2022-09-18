@@ -77,7 +77,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\pixel4_test_gps_android_quality";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel4_GPS_GAL_BEI_test5per";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -195,6 +195,9 @@ public class Android {
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[i]));
 
+						}
+						if (doTest) {
+							n = satList.size() - n;
 						}
 						satCountMap.computeIfAbsent("WLS", k -> new ArrayList<Long>()).add((long) n);
 						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())

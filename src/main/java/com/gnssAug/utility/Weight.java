@@ -11,8 +11,10 @@ public class Weight {
 
 		int SVcount = satList.size();
 		double[][] covInvMat = new double[SVcount][SVcount];
-		IntStream.range(0, SVcount).forEach(i -> covInvMat[i][i] = 1
-				/ Weight.computeCoVariance(satList.get(i).getCn0DbHz(), satList.get(i).getElevAzm()[0]));
+//		IntStream.range(0, SVcount).forEach(i -> covInvMat[i][i] = 1
+//				/ Weight.computeCoVariance(satList.get(i).getCn0DbHz(), satList.get(i).getElevAzm()[0]));
+		IntStream.range(0, SVcount)
+				.forEach(i -> covInvMat[i][i] = 1 / Math.pow(Math.sin(satList.get(i).getElevAzm()[0]), 2));
 		// double[][] normWeight = Weight.normalize(covMat);
 		return covInvMat;
 	}

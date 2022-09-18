@@ -48,7 +48,6 @@ public class GNSS_Log {
 					GNSSLog log = new GNSSLog(data);
 					long tRx = Math.round(log.gettRx() * 1e3);
 					String obsvCode = log.getObsvCode();
-					int svid = log.getSvid();
 					gnssLogMaps.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
 							.computeIfAbsent(obsvCode, k -> new ArrayList<GNSSLog>()).add(log);
 					logs.add(log.toString().split(","));

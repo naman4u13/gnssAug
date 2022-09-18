@@ -14,9 +14,9 @@ public class MainApp {
 
 		Instant start = Instant.now();
 
-		switch (2) {
+		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C" };
+			String[] obsvCodeList = new String[] { "G1C", "E1C", "C2I" };
 			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
 			String[] strList = basePath.split("\\\\");
 

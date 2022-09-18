@@ -99,7 +99,7 @@ public class LinearLeastSquare {
 		}
 
 		SimpleMatrix Cyy = null;
-		double priorVarOfUnitW = 0.011;
+		double priorVarOfUnitW = 0.03;
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;
 		for (int i = 0; i < n; i++) {
@@ -126,7 +126,7 @@ public class LinearLeastSquare {
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 0.01;
+			double alpha = 0.0001;
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
 			}

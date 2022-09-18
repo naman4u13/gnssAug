@@ -90,6 +90,7 @@ public class SingleFreq {
 				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
 				double t = 0;
+				double rawPR = 0;
 				if (!navMap.containsKey(svid)) {
 
 					System.err.println("No data for svid " + svid + " belonging to obsvCode" + obsvCode
@@ -118,15 +119,16 @@ public class SingleFreq {
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
 					t = tSV - satClkOff;
+					rawPR = (logObs.gettRx() - t) * SpeedofLight;
 
 				} else {
 					satECEF = navData.getSatECEF();
 					satVel = navData.getSatVel();
 					// For non-GPS signal there will be additional biases
-					t = logObs.gettTx() - navData.getSatClkBias();
+					t = (navData.gettSV() / 1e9) - navData.getSatClkBias();
+					rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
 				}
-				// Corrected for satClk Off
-				double rawPR = (logObs.gettRx() - t) * SpeedofLight;
+
 				double corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
 				double corrPRrate = logObs.getPseudorangeRateMetersPerSecond()
 						+ (SpeedofLight * navData.getSatClkDrift());
