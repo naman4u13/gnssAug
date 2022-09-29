@@ -77,7 +77,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel4_GPS_GAL_BEI_test5per";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel4_2_GPS_GAL_test5per_augBias";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
