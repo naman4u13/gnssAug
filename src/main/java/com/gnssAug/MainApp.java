@@ -14,7 +14,7 @@ public class MainApp {
 
 		Instant start = Instant.now();
 
-		switch (1) {
+		switch (2) {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
@@ -41,7 +41,7 @@ public class MainApp {
 			break;
 
 		case 2:
-			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 1, 0, true, true, 2, true, true);
+			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 1, 0, true, true, 3, true, false);
 			break;
 
 		}

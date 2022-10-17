@@ -29,10 +29,10 @@ public class KFconfig extends KF {
 
 		if (flag == Flag.POSITION) {
 
-			double[][] F = new double[5][5];
+			double[][] phi = new double[5][5];
 			double[][] _Q = new double[5][5];
-			IntStream.range(0, 5).forEach(i -> F[i][i] = 1);
-			F[3][4] = deltaT;
+			IntStream.range(0, 5).forEach(i -> phi[i][i] = 1);
+			phi[3][4] = deltaT;
 
 //			double[] qENU = new double[] { 12, 12, 0.2 };
 			double[] qENU = new double[] { 16, 16, 4 };
@@ -57,7 +57,7 @@ public class KFconfig extends KF {
 
 				throw new Exception("PositiveDefinite test Failed");
 			}
-			super.configure(F, Q);
+			super.configure(phi, Q);
 
 		} else if (flag == Flag.VELOCITY) {
 			double[][] F = new double[8][8];
@@ -97,16 +97,16 @@ public class KFconfig extends KF {
 	}
 	
 	public void configIGS(double deltaT) throws Exception {
-		double[][] F = new double[5][5];
+		double[][] phi = new double[5][5];
 		double[][] Q = new double[5][5];
 		Q[3][3] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
 		Q[3][4] = (sg * Math.pow(deltaT, 2))/ 2;
 		Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
 		Q[4][4] = sg * deltaT ;
 
-		IntStream.range(0, 5).forEach(x -> F[x][x] = 1);
-		F[3][4] = deltaT;
-		super.configure(F, Q);
+		IntStream.range(0, 5).forEach(x -> phi[x][x] = 1);
+		phi[3][4] = deltaT;
+		super.configure(phi, Q);
 	}
 
 }

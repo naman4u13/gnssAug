@@ -63,4 +63,10 @@ public class Matrix {
 		double c = A.transpose().mult(B.invert()).mult(A).get(0);
 		return c;
 	}
+
+	public static SimpleMatrix getPseudoInv(SimpleMatrix A, SimpleMatrix W) {
+		SimpleMatrix At = A.transpose();
+		SimpleMatrix Aplus = ((At.mult(W).mult(A)).invert()).mult(At).mult(W);
+		return Aplus;
+	}
 }

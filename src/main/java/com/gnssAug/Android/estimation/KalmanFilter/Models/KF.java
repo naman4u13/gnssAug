@@ -7,19 +7,25 @@ public class KF {
 	private final double SpeedofLight = 299792458;
 
 	// kinematics description
-	private SimpleMatrix F, Q;
+	private SimpleMatrix phi, Q;
 
 	// sytem state estimate
 	private SimpleMatrix x, P;
 
-	public void configure(double[][] F, double[][] Q) {
-		this.F = new SimpleMatrix(F);
+	// Kalman Gain
+	private SimpleMatrix K;
+
+	// Covariance of prefit residual or innovation
+	private SimpleMatrix Cvv;
+
+	public void configure(double[][] phi, double[][] Q) {
+		this.phi = new SimpleMatrix(phi);
 		this.Q = new SimpleMatrix(Q);
 
 	}
 
-	public void configure(double[][] F, SimpleMatrix Q) {
-		this.F = new SimpleMatrix(F);
+	public void configure(double[][] phi, SimpleMatrix Q) {
+		this.phi = new SimpleMatrix(phi);
 		this.Q = new SimpleMatrix(Q);
 
 	}
@@ -31,26 +37,34 @@ public class KF {
 
 	// Prediction step
 	public void predict() {
-		// x = F x
-		x = F.mult(x);
+		// x = phi x
+		x = phi.mult(x);
 
-		// P = F P F' + Q
-		P = F.mult(P).mult(F.transpose()).plus(Q);
+		// P = phi P phi' + Q
+		P = phi.mult(P).mult(phi.transpose()).plus(Q);
 
 	}
 
 	// Update Step
 	public void update(double[][] _z, double[][] _R, double[][] _ze, double[][] _H) {
 
-		SimpleMatrix z = new SimpleMatrix(_z);
 		SimpleMatrix R = new SimpleMatrix(_R);
-		SimpleMatrix ze = new SimpleMatrix(_ze);
 		SimpleMatrix H = new SimpleMatrix(_H);
-		SimpleMatrix Ht = H.transpose();
-		SimpleMatrix K = null;
+		update(_z, R, _ze, H);
+	}
 
+	// Update Step
+	public void update(double[][] _z, SimpleMatrix R, double[][] _ze, SimpleMatrix H) {
+
+		SimpleMatrix z = new SimpleMatrix(_z);
+
+		SimpleMatrix ze = new SimpleMatrix(_ze);
+
+		SimpleMatrix Ht = H.transpose();
+
+		Cvv = ((H.mult(P).mult(Ht)).plus(R));
 		// Kalman Gain
-		K = P.mult(Ht).mult(((H.mult(P).mult(Ht)).plus(R)).invert());
+		K = P.mult(Ht).mult(Cvv.invert());
 
 		// Posterior State Estimate
 		x = x.plus((K.mult(z.minus(ze))));
@@ -70,6 +84,22 @@ public class KF {
 
 	public SimpleMatrix getCovariance() {
 		return P;
+	}
+
+	public SimpleMatrix getKalmanGain() {
+		return K;
+	}
+
+	public SimpleMatrix getPhi() {
+		return phi;
+	}
+
+	public SimpleMatrix getCvv() {
+		return Cvv;
+	}
+
+	public SimpleMatrix getQ() {
+		return Q;
 	}
 
 }

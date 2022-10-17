@@ -62,6 +62,8 @@ public class IGS {
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
 			TreeMap<Long, ArrayList<Satellite>> satMap = new TreeMap<Long, ArrayList<Satellite>>();
 			HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<String, ArrayList<SatResidual>>>();
+			HashMap<String, HashMap<String, ArrayList<Double>>> satMeasNoiseMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
+
 			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
 			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
@@ -94,7 +96,7 @@ public class IGS {
 
 			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\GOLD2_test0.0001per2";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\GOLD_EKF_";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -139,7 +141,7 @@ public class IGS {
 				ionex = new IONEX(ionex_path);
 
 			}
-			double tRX0 = ObsvMsgs.get(0).getTRX();
+			double tRx0 = ObsvMsgs.get(0).getTRX();
 			for (ObservationMsg obsvMsg : ObsvMsgs) {
 
 				double tRX = obsvMsg.getTRX();
@@ -170,7 +172,7 @@ public class IGS {
 				}
 				long tRxMilli = (long) (tRX * 1000);
 				// Estimate
-				if (estimatorType == 1 || estimatorType == 4) {
+				if (estimatorType == 1 || estimatorType == 5) {
 					// Implement LS method
 					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
@@ -185,7 +187,7 @@ public class IGS {
 							satResMap.get("LS")
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+									.add(new SatResidual(tRX - tRx0, sat.getElevAzm()[0], residual[i]));
 
 						}
 
@@ -212,7 +214,7 @@ public class IGS {
 							satResMap.get("WLS")
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRX - tRX0, sat.getElevAzm()[0], residual[i]));
+									.add(new SatResidual(tRX - tRx0, sat.getElevAzm()[0], residual[i]));
 
 						}
 						if (doTest) {
@@ -232,14 +234,41 @@ public class IGS {
 
 				timeList.add(tRxMilli);
 			}
-			if (estimatorType == 3 || estimatorType == 5) {
+			if (estimatorType == 3 || estimatorType == 4) {
 				EKF ekf = new EKF();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest);
 				int n = timeList.size();
-				for (int i = 0; i < n; i++) {
+				if (doAnalyze) {
+					satResMap.put("EKF", new HashMap<String, ArrayList<SatResidual>>());
+					satMeasNoiseMap.put("EKF", new HashMap<String, ArrayList<Double>>());
+					ArrayList<double[]> redundancyList = ekf.getRedundancyList();
+					GraphPlotter.graphRedundancy(redundancyList);
+				}
+				for (int i = 1; i < n; i++) {
 					long time = timeList.get(i);
 					double[] estPos = estStateMap_pos.get(time);
 					estPosMap.computeIfAbsent("EKF", k -> new ArrayList<double[]>()).add(estPos);
+					if (doAnalyze) {
+						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
+						double[] residual = ekf.getResidualMap().get(time);
+						int m = satList.size();
+						long tRx = time / 1000;
+						double[] measNoise = ekf.getMeasNoiseMap().get(time);
+						for (int j = 0; j < m; j++) {
+							Satellite sat = satList.get(j);
+							satResMap.get("EKF")
+									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+											k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j], measNoise[j]));
+
+						}
+						satCountMap.computeIfAbsent("EKF", k -> new ArrayList<Long>())
+								.add(ekf.getSatCountMap().get(time));
+						Cxx_hat_map.computeIfAbsent("EKF", k -> new ArrayList<SimpleMatrix>())
+								.add(ekf.getErrCovMap().get(time));
+						postVarOfUnitWeightMap.computeIfAbsent("EKF", k -> new ArrayList<Double>())
+								.add(ekf.getPostVarOfUnitWMap().get(time));
+					}
 				}
 			}
 
@@ -306,12 +335,18 @@ public class IGS {
 			for (int i = 0; i < timeList.size(); i++) {
 				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
+
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
+			if (Cxx_hat_map.isEmpty()) {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+			} else {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
+			}
+
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				GraphPlotter.graphDOP(dopMap, satCountMap.get("WLS"), timeList);
+				GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
 			}
 		} catch (
 
