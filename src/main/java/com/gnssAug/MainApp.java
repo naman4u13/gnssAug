@@ -14,10 +14,10 @@ public class MainApp {
 
 		Instant start = Instant.now();
 
-		switch (2) {
+		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C", "E1C" };
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
+			String[] obsvCodeList = new String[] { "G1C" };
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-01-05-US-SVL-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
 			String[] date = strList[strList.length - 2].split("-");
@@ -37,7 +37,7 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			Android.posEstimate(true, 0, 0, 2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, false, false, true, true);
+					clock_path, orbit_path, false, false, false, false);
 			break;
 
 		case 2:

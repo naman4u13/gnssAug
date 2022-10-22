@@ -7,6 +7,7 @@ import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.ClockAllanVar;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.Matrix;
 
 public class KFconfig extends KF {
 
@@ -95,17 +96,26 @@ public class KFconfig extends KF {
 
 		}
 	}
-	
+
 	public void configIGS(double deltaT) throws Exception {
 		double[][] phi = new double[5][5];
 		double[][] Q = new double[5][5];
 		Q[3][3] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
-		Q[3][4] = (sg * Math.pow(deltaT, 2))/ 2;
+		Q[3][4] = (sg * Math.pow(deltaT, 2)) / 2;
 		Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
-		Q[4][4] = sg * deltaT ;
+		Q[4][4] = sg * deltaT;
 
 		IntStream.range(0, 5).forEach(x -> phi[x][x] = 1);
 		phi[3][4] = deltaT;
+		super.configure(phi, Q);
+	}
+
+	public void configDoppler(double deltaT, SimpleMatrix Cxx_dot_hat) {
+		double[][] phi = new double[4][4];
+
+		SimpleMatrix _Q = Cxx_dot_hat.scale(deltaT);
+		IntStream.range(0, 4).forEach(i -> phi[i][i] = 1);
+		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);
 	}
 

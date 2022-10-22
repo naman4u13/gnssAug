@@ -29,6 +29,7 @@ import org.orekit.utils.IERSConventions;
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
+import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
@@ -77,7 +78,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel4_2_GPS_GAL_test5per_augBias";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-01-05-US-SVL-1_Pixel5_EKF";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -240,7 +241,7 @@ public class Android {
 				}
 
 			}
-			if (estimatorType == 5 || estimatorType == 100) {
+			if (estimatorType == 5 || estimatorType == 2) {
 
 				EKF ekf = new EKF();
 //				 Implement EKF based on receiver’s position and clock offset errors as a
@@ -280,6 +281,18 @@ public class Android {
 
 				}
 
+			}
+
+			if (estimatorType == 2) {
+				EKFDoppler ekf = new EKFDoppler();
+				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList);
+				int n = timeList.size();
+				estPosMap.put("EKF - Doppler", new ArrayList<double[]>());
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap.get(time);
+					estPosMap.get("EKF - Doppler").add(estPos);
+				}
 			}
 
 			if (estimatorType == 6) {
@@ -349,14 +362,14 @@ public class Android {
 				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
 				int q95 = (int) (n * 0.95);
 
-				System.out.println("\n" + key + " 95%");
-				System.out.println("RMS - ");
-				System.out.println(" E - " + posErrList[0].get(q95));
-				System.out.println(" N - " + posErrList[1].get(q95));
-				System.out.println(" U - " + posErrList[2].get(q95));
-				System.out.println(" 3d Error - " + posErrList[3].get(q95));
-				System.out.println(" 2d Error - " + posErrList[4].get(q95));
-				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
+//				System.out.println("\n" + key + " 95%");
+//				System.out.println("RMS - ");
+//				System.out.println(" E - " + posErrList[0].get(q95));
+//				System.out.println(" N - " + posErrList[1].get(q95));
+//				System.out.println(" U - " + posErrList[2].get(q95));
+//				System.out.println(" 3d Error - " + posErrList[3].get(q95));
+//				System.out.println(" 2d Error - " + posErrList[4].get(q95));
+//				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
 			for (String key : estVelMap.keySet()) {
@@ -420,9 +433,14 @@ public class Android {
 				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
 			// Plot Error Graphs
-			GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
+			if (Cxx_hat_map.isEmpty()) {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			} else {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
+			}
 			// Plot Error Graphs
-			// GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			//
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);

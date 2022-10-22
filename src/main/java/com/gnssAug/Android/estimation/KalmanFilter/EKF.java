@@ -161,7 +161,7 @@ public class EKF {
 				// Est doppler derived observable
 				double estDopplerDerivedObs = -A.mult(new SimpleMatrix(3, 1, true, estVel)).get(0) + rxClkDrift;
 				ze[i + n][0] = estDopplerDerivedObs;
-				R[i + n][i + n] = Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 100;
+				R[i + n][i + n] = Math.pow(sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 10;
 			}
 
 		}

@@ -20,6 +20,8 @@ public class LinearLeastSquare {
 	private static double[] residual = null;
 	private static double postVarOfUnitW;
 	private static SimpleMatrix Cxx_hat;
+	// Variance of doppler derived velocity
+	private static SimpleMatrix Cxx_dot_hat;
 	private static double[] dop;
 	private static ArrayList<Satellite> testedSatList;
 
@@ -292,33 +294,11 @@ public class LinearLeastSquare {
 
 	}
 
-	// Get sum of weighted squared residuals based test statistic
-	public static double getNormT(ArrayList<Satellite> satList, double[][] _Cyy_inv) throws Exception {
-		int n = satList.size();
-		double[] res = new double[n];
-		double[] estEcefClk = regress(satList, _Cyy_inv);
-		for (int i = 0; i < n; i++) {
-			Satellite sat = satList.get(i);
-			// Its not really a ECI, therefore don't get confused
-			double[] satEcef = sat.getSatEci();
-			double pr = sat.getPseudorange();
-			final double[] _estEcefClk = estEcefClk;
-			// Approx Geometric Range
-			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - _estEcefClk[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			// Approx Pseudorange Range
-			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
-			res[i] = pr_hat - pr;
-
-		}
-		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, res);
-		SimpleMatrix Cyy_inv = new SimpleMatrix(_Cyy_inv);
-		double detectT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-
-		return (detectT / (n - 4));
+	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk) {
+		return getEstVel(satList, estEcefClk, false);
 	}
 
-	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk) {
+	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk, boolean doTest) {
 		// Satellite count
 		int n = satList.size();
 		// Weight matrix
@@ -327,7 +307,8 @@ public class LinearLeastSquare {
 			double elevAngle = satList.get(i).getElevAzm()[0];
 			double CNo = satList.get(i).getCn0DbHz();
 			double var = Math.pow(10, -(CNo / 10)) / Math.pow(Math.sin(elevAngle), 2);
-			weight[i][i] = 1 / Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
+			weight[i][i] = 1
+					/ (Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 10);
 		}
 		double[] estVel = new double[4];
 		double[] z = new double[n];
@@ -371,8 +352,9 @@ public class LinearLeastSquare {
 			SimpleMatrix X = HtWHinv.mult(Ht).mult(W).mult(Z);
 
 			// Velocity
-			IntStream.range(0, 3).forEach(i -> estVel[i] = X.get(i, 0));
-			estVel[3] = X.get(3, 0);
+			IntStream.range(0, 4).forEach(i -> estVel[i] = X.get(i, 0));
+
+			Cxx_dot_hat = new SimpleMatrix(HtWHinv);
 		}
 
 		return estVel;
@@ -396,6 +378,10 @@ public class LinearLeastSquare {
 
 	public static ArrayList<Satellite> getTestedSatList() {
 		return testedSatList;
+	}
+
+	public static SimpleMatrix getCxx_dot_hat() {
+		return Cxx_dot_hat;
 	}
 
 }
