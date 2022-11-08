@@ -19,6 +19,19 @@ public class Matrix {
 		return c;
 	}
 
+	// Only for 3*3 matrix
+	public static double[][] scale(double[][] a, double scaleFact) {
+		int n = a.length;
+		int m = a[1].length;
+		double[][] b = new double[n][m];
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < m; j++) {
+				b[i][j] = a[i][j] * scaleFact;
+			}
+		}
+		return b;
+	}
+
 	public static double[][] getSkewSymMat(double[] a) {
 		return getSkewSymMat(a, false);
 	}

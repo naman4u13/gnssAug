@@ -20,6 +20,7 @@ import org.jfree.data.xy.XYSeriesCollection;
 import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Rinex.models.SatResidual;
 
@@ -32,20 +33,20 @@ public class GraphPlotter extends ApplicationFrame {
 		JFreeChart chart = null;
 		if (isSatRes) {
 			if (flag) {
-				chart = ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time", "Satellite-Residual(in m)",
-						createDatasetSatRes(satResMap, isSatRes, flag));
+				chart = ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
+						"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag));
 			} else {
 				chart = ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
-						"Elevation-Angle(in degrees)", "Satellite-Residual(in m)",
+						"Elevation-Angle(in degrees)", "Satellite-Residual(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag));
 			}
 		} else {
 			if (flag) {
 				chart = ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
-						"Noise Std-Dev(in m)", createDatasetSatRes(satResMap, isSatRes, flag));
+						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag));
 			} else {
 				chart = ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
-						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m)",
+						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag));
 			}
 		}
@@ -74,12 +75,12 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(ArrayList<Long> dataList, ArrayList<Long> timeList) throws IOException {
-		super("Satellite Count");
+	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList) throws IOException {
+		super(title + " Satellite Count");
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart("Satellite Count", "GPS-time", "Satellite Count",
-				createDatasetSatCount(dataList, timeList));
+		final JFreeChart chart = ChartFactory.createXYLineChart(title + " Satellite Count", "GPS-time",
+				title + " Satellite Count", createDatasetSatCount(dataList, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -274,12 +275,21 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphPostUnitW(HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
-			throws IOException {
-		GraphPlotter chart = new GraphPlotter("Posteriori Variance of Unit Weight", data, timeList);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+	public static void graphPostUnitW(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data,
+			ArrayList<Long> timeList) throws IOException {
+		for (Measurement key : data.keySet()) {
+			String type;
+			if (key == Measurement.Pseudorange) {
+				type = "PseudoRange";
+			} else {
+				type = "Doppler";
+			}
+			HashMap<String, ArrayList<Double>> subData = data.get(key);
+			GraphPlotter chart = new GraphPlotter(type + " Posteriori Variance of Unit Weight", subData, timeList);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
 	}
 
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
@@ -411,30 +421,43 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphSatRes(HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap) {
-		for (String key : satResMap.keySet()) {
+	public static void graphSatRes(
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap) {
 
-			// For Satellite Residuals
-			GraphPlotter chart = new GraphPlotter(satResMap.get(key), key + ": Satellite-Residual", true, true);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+		for (Measurement key : satResMap.keySet()) {
+			HashMap<String, HashMap<String, ArrayList<SatResidual>>> subSatResMap = satResMap.get(key);
+			String type;
+			if (key == Measurement.Pseudorange) {
+				type = "PseudoRange";
+			} else {
+				type = "Doppler";
+			}
+			for (String subKey : subSatResMap.keySet()) {
 
-			chart = new GraphPlotter(satResMap.get(key), key + ": Satellite-Residual", true, false);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+				// For Satellite Residuals
+				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey),
+						type + " " + subKey + ": Satellite-Residual", true, true);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
 
-			// For Satellite measurement noise std dev
-			chart = new GraphPlotter(satResMap.get(key), key + ": Satellite-Measurement Noise Std Dev", false, true);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": Satellite-Residual", true,
+						false);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
 
-			chart = new GraphPlotter(satResMap.get(key), key + ": Satellite-Measurement Noise Std Dev", false, false);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+				// For Satellite measurement noise std dev
+				/*
+				 * chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
+				 * ": Satellite-Measurement Noise Std Dev", false, true); chart.pack();
+				 * RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
+				 * 
+				 * chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
+				 * ": Satellite-Measurement Noise Std Dev", false, false); chart.pack();
+				 * RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
+				 */
+			}
 		}
 
 	}
@@ -488,6 +511,26 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.setVisible(true);
 	}
 
+	public static void graphSatCount(HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap,
+			ArrayList<Long> timeList) throws IOException {
+
+		for (Measurement key : satCountMap.keySet()) {
+			String type;
+			if (key == Measurement.Pseudorange) {
+				type = "PseudoRange ";
+			} else {
+				type = "Doppler ";
+			}
+			for (String subKey : satCountMap.get(key).keySet()) {
+				type += subKey;
+				GraphPlotter chart = new GraphPlotter(type, satCountMap.get(key).get(subKey), timeList);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+			}
+		}
+	}
+
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
 			ArrayList<Long> timeList) throws Exception {
 
@@ -527,7 +570,7 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter(satCountList, timeList);
+		chart = new GraphPlotter("", satCountList, timeList);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);

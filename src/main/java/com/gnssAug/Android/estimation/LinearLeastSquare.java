@@ -2,6 +2,7 @@ package com.gnssAug.Android.estimation;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.stream.IntStream;
@@ -10,34 +11,53 @@ import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
-	private static double[] residual = null;
-	private static double postVarOfUnitW;
-	private static SimpleMatrix Cxx_hat;
-	// Variance of doppler derived velocity
-	private static SimpleMatrix Cxx_dot_hat;
+	private static HashMap<Measurement, double[]> residualMap = new HashMap<Measurement, double[]>();
+	private static HashMap<Measurement, Double> postVarOfUnitWMap = new HashMap<Measurement, Double>();
+	private static HashMap<Measurement, SimpleMatrix> Cxx_hat_Map = new HashMap<Measurement, SimpleMatrix>();
+	private static SimpleMatrix Cxx_hat_doppler_ecef = null;
 	private static double[] dop;
-	private static ArrayList<Satellite> testedSatList;
+	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
 
-	public static double[] process(ArrayList<Satellite> satList, boolean isWLS) throws Exception {
-		return process(satList, isWLS, false, false);
+	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS) throws Exception {
+		return process(satList, isWLS, false, false, Measurement.Pseudorange, null);
 	}
 
-	public static double[] process(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest)
+	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest)
 			throws Exception {
+		return process(satList, isWLS, doAnalyze, doTest, Measurement.Pseudorange, null);
+	}
+
+	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, double[] refPos) throws Exception {
+		return process(satList, isWLS, false, false, Measurement.Doppler, refPos);
+	}
+
+	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+			double[] refPos) throws Exception {
+		return process(satList, isWLS, doAnalyze, doTest, Measurement.Doppler, refPos);
+	}
+
+	private static double[] process(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+			Measurement type, double[] refPos) throws Exception {
 		// Satellite count
 		int n = satList.size();
 		// Weight matrix
 		double[][] weight = new double[n][n];
 		boolean useAndroidW = false;
-		boolean adaptAugState = false;
-		testedSatList = satList;
+
+		ArrayList<Satellite> testedSatList = satList;
+		double scale = 1;
+		if (type == Measurement.Doppler) {
+			scale = 100;
+		}
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
 		 * be based on elevation angle otherwise identity matrix will assigned for LS
@@ -49,75 +69,96 @@ public class LinearLeastSquare {
 
 					weight[i][i] = 1
 							/ Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
+
 				}
 			} else {
 				weight = Weight.computeCovInvMat2(satList);
-			}
 
+			}
+			weight = Matrix.scale(weight, scale);
 		} else {
 			for (int i = 0; i < n; i++) {
 				weight[i][i] = 1;
 			}
 		}
-		double[] estEcefClk = regress(satList, weight);
+		double[] estState = estimate(satList, weight, null, refPos, type);
 		if (doAnalyze) {
-			HashSet<Integer> indexSet = qualityControl(weight, estEcefClk, satList, useAndroidW, doTest);
+			HashSet<Integer> indexSet = qualityControl(weight, estState, satList, useAndroidW, doTest, type, refPos);
 			if (!indexSet.isEmpty()) {
 				double[][] _weight = weight;
-				testedSatList = satList;
-				if (adaptAugState) {
-					estEcefClk = regress(satList, weight, indexSet);
-				} else {
-					testedSatList = new ArrayList<Satellite>();
-					int j = 0;
-					int _n = n - indexSet.size();
-					_weight = new double[_n][_n];
-					for (int i = 0; i < n; i++) {
-						Satellite sat = satList.get(i);
-						if (!indexSet.contains(i)) {
-							testedSatList.add(sat);
-							_weight[j][j] = weight[i][i];
-							j++;
-						}
+				testedSatList = new ArrayList<Satellite>();
+				int j = 0;
+				int _n = n - indexSet.size();
+				_weight = new double[_n][_n];
+				for (int i = 0; i < n; i++) {
+					Satellite sat = satList.get(i);
+					if (!indexSet.contains(i)) {
+						testedSatList.add(sat);
+						_weight[j][j] = weight[i][i];
+						j++;
 					}
-					estEcefClk = regress(testedSatList, _weight);
-
 				}
-				qualityControl(_weight, estEcefClk, testedSatList, useAndroidW, false);
+				estState = estimate(testedSatList, _weight, null, refPos, type);
+				qualityControl(_weight, estState, testedSatList, useAndroidW, false, type, refPos);
 			}
 		}
-		return estEcefClk;
+		testedSatListMap.put(type, testedSatList);
+		return estState;
 	}
 
-	public static HashSet<Integer> qualityControl(double[][] weight, double[] estEcefClk, ArrayList<Satellite> satList,
-			boolean useAndroidW, boolean doTest) throws Exception {
+	private static HashSet<Integer> qualityControl(double[][] weight, double[] estState, ArrayList<Satellite> satList,
+			boolean useAndroidW, boolean doTest, Measurement type, double[] refPos) throws Exception {
 		HashSet<Integer> indexSet = new HashSet<Integer>();
 		int n = satList.size();
-		residual = new double[n];
+		double[] residual = new double[n];
 		double[][] h = new double[n][4];
+		double[] userEcef = estState;
+		if (type == Measurement.Doppler) {
+			userEcef = refPos;
+		}
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
 			// Its not really a ECI, therefore don't get confused
 			double[] satEcef = sat.getSatEci();
-			double pr = sat.getPseudorange();
-
-			// Approx Geometric Range
-			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - estEcefClk[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			// Approx Pseudorange Range
-			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
-			residual[i] = pr_hat - pr;
-			int _i = i;
-			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(satEcef[j] - estEcefClk[j]) / gr_hat);
+			double gr_hat = MathUtil.getEuclidean(satEcef, userEcef);
+			for (int j = 0; j < 3; j++) {
+				h[i][j] = -(satEcef[j] - userEcef[j]) / gr_hat;
+			}
 			h[i][3] = 1;
+			double y = 0;
+			double y_hat = 0;
+			if (type == Measurement.Pseudorange) {
+				y = sat.getPseudorange();
+				// Approx Pseudorange
+				y_hat = gr_hat + (SpeedofLight * estState[3]);
 
+			} else if (type == Measurement.Doppler) {
+				double rangeRate = sat.getRangeRate();
+				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+				SimpleMatrix A = new SimpleMatrix(1, 3, true, new double[] { -h[i][0], -h[i][1], -h[i][2] });
+				/*
+				 * Observable derived from doppler and satellite velocity, refer Kaplan and
+				 * personal notes
+				 */
+				double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+				y = dopplerDerivedObs;
+				// Approx DopplerDerivedObs
+				y_hat = -(A.get(0) * estState[0]) - (A.get(1) * estState[1]) - (A.get(2) * estState[2]) + estState[3];
+
+			}
+			residual[i] = y - y_hat;
 		}
-		double priorVarOfUnitW = 7;
+		double priorVarOfUnitW = 1;
 		SimpleMatrix Cyy = null;
 		if (useAndroidW) {
 			Cyy = new SimpleMatrix(weight).invert();
 
 		} else {
+			if (type == Measurement.Pseudorange) {
+				priorVarOfUnitW = 4.24;
+			} else if (type == Measurement.Doppler) {
+				priorVarOfUnitW = 0.0106;
+			}
 			double[][] cov = new double[n][n];
 			double max = Double.MIN_VALUE;
 			for (int i = 0; i < n; i++) {
@@ -136,16 +177,19 @@ public class LinearLeastSquare {
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
 		SimpleMatrix Cyy_inv = Cyy.invert();
 		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - 4);
+		double postVarOfUnitW = globalTq * priorVarOfUnitW / (n - 4);
 		if (n == 4) {
 			postVarOfUnitW = -1;
 		}
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
-		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		if (type == Measurement.Doppler) {
+			Cxx_hat_doppler_ecef = new SimpleMatrix(Cxx_hat);
+		}
 		if (doTest && n > 5) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 0.05;
+			double alpha = 0.01;
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
@@ -198,21 +242,30 @@ public class LinearLeastSquare {
 		}
 		// Convert to ENU frame
 		SimpleMatrix R = new SimpleMatrix(4, 4);
-		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estState)));
 		R.set(3, 3, 1);
 		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
 		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
+		Cxx_hat_Map.put(type, Cxx_hat);
+		postVarOfUnitWMap.put(type, postVarOfUnitW);
+		residualMap.put(type, residual);
 		return indexSet;
 	}
 
-	public static double[] regress(ArrayList<Satellite> satList, double[][] weight) throws Exception {
+	private static double[] estimate(ArrayList<Satellite> satList, double[][] weight, HashSet<Integer> indexSet,
+			double[] refPos, Measurement type) throws Exception {
 
-		return regress(satList, weight, null);
-
+		if (type == Measurement.Pseudorange) {
+			return estimatePos(satList, weight, null);
+		} else if (type == Measurement.Doppler) {
+			return estimateVel(satList, weight, refPos);
+		} else {
+			throw new Exception("Fatal Error: Wrong Measurement Type chosen");
+		}
 	}
 
-	public static double[] regress(ArrayList<Satellite> satList, double[][] weight, HashSet<Integer> indexSet)
+	private static double[] estimatePos(ArrayList<Satellite> satList, double[][] weight, HashSet<Integer> indexSet)
 			throws Exception {
 
 		boolean augBiasState = indexSet != null && !indexSet.isEmpty();
@@ -294,22 +347,11 @@ public class LinearLeastSquare {
 
 	}
 
-	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk) {
-		return getEstVel(satList, estEcefClk, false);
-	}
-
-	public static double[] getEstVel(ArrayList<Satellite> satList, double[] estEcefClk, boolean doTest) {
+	private static double[] estimateVel(ArrayList<Satellite> satList, double[][] weight, double[] estEcefClk)
+			throws Exception {
 		// Satellite count
 		int n = satList.size();
-		// Weight matrix
-		double[][] weight = new double[n][n];
-		for (int i = 0; i < n; i++) {
-			double elevAngle = satList.get(i).getElevAzm()[0];
-			double CNo = satList.get(i).getCn0DbHz();
-			double var = Math.pow(10, -(CNo / 10)) / Math.pow(Math.sin(elevAngle), 2);
-			weight[i][i] = 1
-					/ (Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2) / 10);
-		}
+
 		double[] estVel = new double[4];
 		double[] z = new double[n];
 
@@ -353,35 +395,35 @@ public class LinearLeastSquare {
 
 			// Velocity
 			IntStream.range(0, 4).forEach(i -> estVel[i] = X.get(i, 0));
-
-			Cxx_dot_hat = new SimpleMatrix(HtWHinv);
+			return estVel;
 		}
 
-		return estVel;
+		throw new Exception("Satellite count is less than 4, can't compute user position");
+
 	}
 
-	public static double getPostVarOfUnitW() {
-		return postVarOfUnitW;
+	public static double getPostVarOfUnitW(Measurement type) {
+		return postVarOfUnitWMap.get(type);
 	}
 
-	public static double[] getResidual() {
-		return residual;
+	public static double[] getResidual(Measurement type) {
+		return residualMap.get(type);
 	}
 
-	public static SimpleMatrix getCxx_hat() {
-		return Cxx_hat;
+	public static SimpleMatrix getCxx_hat(Measurement type) {
+		return Cxx_hat_Map.get(type);
 	}
 
 	public static double[] getDop() {
 		return dop;
 	}
 
-	public static ArrayList<Satellite> getTestedSatList() {
-		return testedSatList;
+	public static SimpleMatrix getDopplerCxx_hat_ecef() {
+		return Cxx_hat_doppler_ecef;
 	}
 
-	public static SimpleMatrix getCxx_dot_hat() {
-		return Cxx_dot_hat;
+	public static ArrayList<Satellite> getTestedSatList(Measurement type) {
+		return testedSatListMap.get(type);
 	}
 
 }

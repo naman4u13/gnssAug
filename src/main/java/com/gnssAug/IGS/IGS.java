@@ -26,6 +26,7 @@ import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Rinex.estimation.EKF;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
@@ -344,8 +345,12 @@ public class IGS {
 			}
 
 			if (doAnalyze) {
-				GraphPlotter.graphSatRes(satResMap);
-				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> _satResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+				_satResMap.put(Measurement.Pseudorange, satResMap);
+				GraphPlotter.graphSatRes(_satResMap);
+				HashMap<Measurement, HashMap<String, ArrayList<Double>>> _postVarOfUnitWeightMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
+				_postVarOfUnitWeightMap.put(Measurement.Pseudorange, postVarOfUnitWeightMap);
+				GraphPlotter.graphPostUnitW(_postVarOfUnitWeightMap, timeList);
 				GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
 			}
 		} catch (

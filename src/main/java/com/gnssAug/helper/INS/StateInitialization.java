@@ -35,7 +35,7 @@ public class StateInitialization {
 			double[] mag = imu.get(AndroidSensor.Magnetometer).getVal();
 			double[] magBias = imu.get(AndroidSensor.Magnetometer).getBias();
 			ArrayList<Satellite> satList = SVlist.get(i - 1);
-			double[] ecef = LinearLeastSquare.process(satList, true);
+			double[] ecef = LinearLeastSquare.getEstPos(satList, true);
 			for (int j = 0; j < 3; j++) {
 				acc0[j] = (acc0[j] * (i - 1) / i) + ((acc[j] - accBias[j]) / i);
 				mag0[j] = (mag0[j] * (i - 1) / i) + ((mag[j] - magBias[j]) / i);

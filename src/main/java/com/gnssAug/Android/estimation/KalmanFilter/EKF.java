@@ -44,7 +44,7 @@ public class EKF {
 		 * assigned 25 m^2 value. Other state variables are assigned infinite(big)
 		 * variance
 		 */
-		double[] intialECEF = LinearLeastSquare.process(SatMap.firstEntry().getValue(), true);
+		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true);
 		IntStream.range(0, 3).forEach(i -> x[i][0] = intialECEF[i]);
 		x[3][0] = SpeedofLight * intialECEF[3];
 		IntStream.range(0, 4).forEach(i -> P[i][i] = 100);

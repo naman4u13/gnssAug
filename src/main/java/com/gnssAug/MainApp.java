@@ -16,7 +16,7 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C" };
+			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-01-05-US-SVL-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
@@ -36,12 +36,12 @@ public class MainApp {
 			String bias_path = base_url + year + "_" + doy + "\\CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
-			Android.posEstimate(true, 0, 0, 2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, false, false, false, false);
+			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, false, false, true, false);
 			break;
 
 		case 2:
-			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 1, 0, true, true, 3, true, false);
+			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 1, 0, true, true, 3, true, true);
 			break;
 
 		}

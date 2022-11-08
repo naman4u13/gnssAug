@@ -32,7 +32,7 @@ public class EKFDoppler {
 		 * assigned 25 m^2 value. Other state variables are assigned infinite(big)
 		 * variance
 		 */
-		double[] intialECEF = LinearLeastSquare.process(SatMap.firstEntry().getValue(), true);
+		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true);
 		IntStream.range(0, 3).forEach(i -> _X[i][0] = intialECEF[i]);
 		_X[3][0] = SpeedofLight * intialECEF[3];
 		// Total State
@@ -68,9 +68,10 @@ public class EKFDoppler {
 		return estStateMap;
 	}
 
-	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT) {
+	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT) throws Exception {
 
-		double[] vel = LinearLeastSquare.getEstVel(satList, new double[] { X.get(0), X.get(1), X.get(2), X.get(3) });
+		double[] vel = LinearLeastSquare.getEstVel(satList, true,
+				new double[] { X.get(0), X.get(1), X.get(2), X.get(3) });
 		for (int i = 0; i < 4; i++) {
 			X.set(i, X.get(i) + vel[i] * deltaT);
 		}
@@ -80,7 +81,7 @@ public class EKFDoppler {
 
 		// Satellite count
 		int n = satList.size();
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_dot_hat();
+		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getDopplerCxx_hat_ecef();
 		// Assign Q and F matrix
 		kfObj.configDoppler(deltaT, Cxx_dot_hat);
 		kfObj.predict();

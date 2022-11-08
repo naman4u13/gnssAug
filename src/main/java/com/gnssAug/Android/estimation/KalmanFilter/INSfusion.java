@@ -31,7 +31,7 @@ public class INSfusion {
 		// Convert DCM from Body Frame to ENU to Body frame to NED
 		SimpleMatrix dcm = new SimpleMatrix(LatLonUtil.enu_ned_convert(_dcm));
 		dcm = Rotation.reorthonormDcm(dcm);
-		double[] ecef0 = LinearLeastSquare.process(SVlist.get(0), true);
+		double[] ecef0 = LinearLeastSquare.getEstPos(SVlist.get(0), true);
 		double[] llh0 = LatLonUtil.ecef2lla(ecef0);
 		IntStream.range(0, 2).forEach(i -> llh0[i] = Math.toRadians(llh0[i]));
 		// Velocity in ENU frame, zero initially
