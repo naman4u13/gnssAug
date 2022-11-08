@@ -125,17 +125,10 @@ public class Clock {
 
 	}
 
-	public double getBias(double x, int SVID, String obsvCode, boolean applyDCB) {
-
-		return getBias(x, SVID, new String[] { obsvCode }, applyDCB)[0];
-
-	}
-
-	@SuppressWarnings("unused")
-	public double[] getBias(double x, int SVID, String[] obsvCode, boolean applyDCB) {
+	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB) {
 		double[] X = new double[2];
 		double[] Y = new double[2];
-		char SSI = obsvCode[0].charAt(0);
+		char SSI = obsvCode.charAt(0);
 		for (int i = 0; i < 2; i++) {
 
 			IGSClock clk = IGSClockList.get(pts[i]);
@@ -143,14 +136,13 @@ public class Clock {
 			try {
 				Y[i] = clk.getClkBias().get(SSI).get(SVID);
 			} catch (Exception e) {
-				System.out.println();
+				System.err.println("Error in IGS clock data: missing data");
 			}
 
 		}
 
 		double clkBias = Interpolator.linear(X, Y, x);
-		int fN = obsvCode.length;
-		double[] clkBiases = new double[fN];
+		double clkDrift = (Y[1] - Y[0]) / (X[1] - X[0]);
 		if (applyDCB) {
 			if (SSI == 'G') {
 				double gpsFreqRatio = Math.pow(Constellation.frequency.get('G').get(1), 2)
@@ -158,34 +150,30 @@ public class Clock {
 
 				double TGD = bias.getISC("G2W", SVID) / (1 - gpsFreqRatio);
 
-				for (int i = 0; i < fN; i++) {
-					double ISC = bias.getISC(obsvCode[i], SVID);
-					clkBiases[i] = clkBias - TGD + ISC;
-				}
+				double ISC = bias.getISC(obsvCode, SVID);
+				clkBias = clkBias - TGD + ISC;
+
 			} else if (SSI == 'E') {
 				double galileoFreqRatio = Math.pow(Constellation.frequency.get('E').get(1), 2)
 						/ Math.pow(Constellation.frequency.get('E').get(5), 2);
-				for (int i = 0; i < fN; i++) {
 
-					if (obsvCode[i] == "E1C") {
-						double BGD = bias.getISC("E5Q", SVID) / (1 - galileoFreqRatio);
-						clkBiases[i] = clkBias - BGD;
+				if (obsvCode == "E1C") {
+					double BGD = bias.getISC("E5Q", SVID) / (1 - galileoFreqRatio);
+					clkBias = clkBias - BGD;
 
-					} else if (obsvCode[i] == "E5X") {
-						double BGD = bias.getISC("E5X", SVID) / (1 - galileoFreqRatio);
-						clkBiases[i] = clkBias - (galileoFreqRatio * BGD);
-					}
+				} else if (obsvCode == "E5X") {
+					double BGD = bias.getISC("E5X", SVID) / (1 - galileoFreqRatio);
+					clkBias = clkBias - (galileoFreqRatio * BGD);
 				}
+
 			} else if (SSI == 'C') {
 
-				for (int i = 0; i < fN; i++) {
-					Double ISC = bias.getISC("C2I", SVID);
-					clkBiases[i] = clkBias + ISC;
-				}
+				Double ISC = bias.getISC("C2I", SVID);
+				clkBias = clkBias + ISC;
 
 			}
 		}
-		return clkBiases;
+		return new double[] { clkBias, clkDrift };
 
 	}
 

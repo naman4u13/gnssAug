@@ -52,7 +52,7 @@ public class SingleFreq {
 					int SVID = sat.getSVID();
 					double tSV = tRX - (sat.getPseudorange() / SpeedofLight);
 
-					double satClkOff = clock.getBias(tSV, SVID, obsvCode, true);
+					double satClkOff = clock.getBiasAndDrift(tSV, SVID, obsvCode, true)[0];
 					// GPS System transmission time
 					double t = tSV - satClkOff;
 					double[][] satPV = orbit.getPV(t, SVID, polyOrder, SSI);

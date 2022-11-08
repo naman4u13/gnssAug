@@ -95,4 +95,8 @@ public class Satellite extends GNSSLog {
 		this.failsTest = failsTest;
 	}
 
+	public void setPseudorange(double pseudorange) {
+		this.pseudorange = pseudorange;
+	}
+
 }

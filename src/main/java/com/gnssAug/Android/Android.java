@@ -7,13 +7,11 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
-import org.apache.commons.math3.distribution.NormalDistribution;
 import org.ejml.simple.SimpleMatrix;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
@@ -43,9 +41,11 @@ import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.fileParser.Bias;
 import com.gnssAug.Rinex.fileParser.Clock;
+import com.gnssAug.Rinex.fileParser.IONEX;
 import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.ComputeEleAzm;
+import com.gnssAug.helper.ComputeTropoCorr;
 import com.gnssAug.helper.INS.IMUconfigure;
 import com.gnssAug.helper.INS.StateInitialization;
 import com.gnssAug.utility.Analyzer;
@@ -55,9 +55,11 @@ import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
 
 public class Android {
+	private static Geoid geoid = null;
+
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
-			String clock_path, String orbit_path, boolean useIGS, boolean checkOutlier, boolean doAnalyze,
+			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze,
 			boolean doTest) {
 		try {
 
@@ -79,8 +81,8 @@ public class Android {
 			Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
-
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_analysis3";
+			IONEX ionex = null;
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_analysis_IGS_test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -99,6 +101,8 @@ public class Android {
 				orbit = new Orbit(orbit_path);
 				bias = new Bias(bias_path);
 				clock = new Clock(clock_path, bias);
+				ionex = new IONEX(ionex_path);
+				geoid = buildGeoid();
 
 			}
 
@@ -140,12 +144,9 @@ public class Android {
 				for (Satellite sat : satList) {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(refUserEcef, sat.getSatEci()));
 				}
-				filterSat(satList, cutOffAng, snrMask);
+				filterSat(satList, cutOffAng, snrMask, refUserEcef, useIGS, ionex, time);
 				double[] truePosEcef = LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
-				if (checkOutlier) {
-					checkOutlier(satList, truePosEcef);
-				}
 
 				if (satList.size() < 4) {
 					System.err.println("Less than 4 satellites");
@@ -488,47 +489,33 @@ public class Android {
 		}
 	}
 
-	public static void filterSat(ArrayList<Satellite> satList, double cutOffAng, double snrMask) {
+	public static void filterSat(ArrayList<Satellite> satList, double cutOffAng, double snrMask, double[] refEcef,
+			boolean useIGS, IONEX ionex, Calendar time) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
 		if (snrMask >= 0) {
 			satList.removeIf(i -> i.getCn0DbHz() < snrMask);
 		}
-	}
+		if (useIGS) {
+			double[] refLatLon = LatLonUtil.ecef2lla(refEcef);
+			// Geocentric Latitude
+			double gcLat = LatLonUtil.gd2gc(refLatLon[0], refLatLon[2]);
+			int n = satList.size();
+			ComputeTropoCorr tropo = new ComputeTropoCorr(refLatLon, time, geoid);
+			for (int i = 0; i < n; i++) {
+				Satellite sat = satList.get(i);
+				double[] eleAzm = sat.getElevAzm();
+				double ionoErr = 0;
+				double tropoErr = 0;
 
-	public static void checkOutlier(ArrayList<Satellite> satList, double[] truePos) {
-		final double SpeedofLight = 299792458;
-		int n = satList.size();
-		double max = Double.MIN_VALUE;
-		int index = -1;
-		HashSet<Satellite> indexSet = new HashSet<Satellite>();
-		NormalDistribution norm = new NormalDistribution();
-		for (int i = 0; i < n; i++) {
-			Satellite sat = satList.get(i);
-			double[] satPos = sat.getSatEci();
-			double trueRange = MathUtil.getEuclidean(truePos, satPos);
-			double pseudoRange = sat.getPseudorange();
-			double err = Math.abs(pseudoRange - trueRange);
-			double sigma = satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9;
-			double test = err / sigma;
-			if (1 - norm.cumulativeProbability(Math.abs(test)) < 0.001) {
-				indexSet.add(sat);
-				if (test > max) {
-					max = test;
-					index = i;
-					sat.setFailsTest(true);
-				}
+				ionoErr = ionex.computeIonoCorr(eleAzm[0], eleAzm[1], gcLat, refLatLon[1], sat.gettRx(),
+						sat.getCarrierFrequencyHz(), time);
+
+				tropoErr = tropo.getSlantDelay(eleAzm[0]);
+
+				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
 			}
-			sat.setTestStat(test);
-
-		}
-		if (index != -1) {
-			satList.get(index).setOutlier(true);
-			// satList.remove(index);
-		}
-		if (!indexSet.isEmpty()) {
-			satList.removeAll(indexSet);
 		}
 	}
 

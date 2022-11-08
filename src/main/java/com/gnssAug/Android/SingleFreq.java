@@ -28,46 +28,50 @@ public class SingleFreq {
 		ArrayList<Satellite> SV = new ArrayList<Satellite>();
 		long key = Math.round(tRX * 1e3);
 		HashMap<String, HashMap<Integer, Derived>> derObsvMap = null;
+		if (!useIGS) {
+			if (derivedMap.containsKey(key)) {
+				derObsvMap = derivedMap.get(key);
+			} else if (derivedMap.containsKey(key + 1)) {
+				derObsvMap = derivedMap.get(key + 1);
+			} else if (derivedMap.containsKey(key - 1)) {
+				derObsvMap = derivedMap.get(key - 1);
+			} else {
 
-		if (derivedMap.containsKey(key)) {
-			derObsvMap = derivedMap.get(key);
-		} else if (derivedMap.containsKey(key + 1)) {
-			derObsvMap = derivedMap.get(key + 1);
-		} else if (derivedMap.containsKey(key - 1)) {
-			derObsvMap = derivedMap.get(key - 1);
-		} else {
-
-			ArrayList<GNSSLog> errLog = null;
-			for (int i = 0; i < obsvCodeList.length; i++) {
-				if (gnssLogMap.get(obsvCodeList[i]) != null) {
-					errLog = gnssLogMap.get(obsvCodeList[i]);
-					break;
+				ArrayList<GNSSLog> errLog = null;
+				for (int i = 0; i < obsvCodeList.length; i++) {
+					if (gnssLogMap.get(obsvCodeList[i]) != null) {
+						errLog = gnssLogMap.get(obsvCodeList[i]);
+						break;
+					}
 				}
-			}
 
-			if (errLog == null) {
-				System.err.println("No PR info available or captured = " + errStr);
+				if (errLog == null) {
+					System.err.println("No PR info available or captured = " + errStr);
+					return SV;
+				}
+				errLog.removeAll(Collections.singleton(null));
+				if (errLog.size() == 0) {
+					System.err.println("No PR info available or captured = " + errStr);
+					return SV;
+				}
+
+				System.err.println("Missing data in derived.csv at time = " + errStr);
 				return SV;
 			}
-			errLog.removeAll(Collections.singleton(null));
-			if (errLog.size() == 0) {
-				System.err.println("No PR info available or captured = " + errStr);
-				return SV;
-			}
-
-			System.err.println("Missing data in derived.csv at time = " + errStr);
-			return SV;
 		}
 
 		for (String obsvCode : obsvCodeList) {
+			HashMap<Integer, Derived> navMap = null;
+			if (!useIGS) {
+				if (!derObsvMap.containsKey(obsvCode)) {
 
-			if (!derObsvMap.containsKey(obsvCode)) {
+					System.err.println("No data for obsvCode " + obsvCode + " in derived.csv at time = " + errStr);
+					continue;
 
-				System.err.println("No data for obsvCode " + obsvCode + " in derived.csv at time = " + errStr);
-				continue;
+				}
+
+				navMap = derObsvMap.get(obsvCode);
 			}
-
-			HashMap<Integer, Derived> navMap = derObsvMap.get(obsvCode);
 			ArrayList<GNSSLog> gnssLog = gnssLogMap.get(obsvCode);
 
 			if (gnssLog == null) {
@@ -90,22 +94,19 @@ public class SingleFreq {
 				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
 				double t = 0;
-				double rawPR = 0;
-				if (!navMap.containsKey(svid)) {
 
-					System.err.println("No data for svid " + svid + " belonging to obsvCode" + obsvCode
-							+ " in derived.csv at time = " + errStr);
-					continue;
-				}
-
-				Derived navData = navMap.get(svid);
+				Derived navData = null;
 				double[] satECEF = null;
 				double[] satVel = null;
+				double corrPR = 0;
+				double corrPRrate = 0;
 				if (useIGS) {
 
 					double tSV = logObs.gettTx();
 
-					double satClkOff = clock.getBias(tSV, svid, obsvCode, true);
+					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, true);
+					double satClkOff = sat_ClkOff_Drift[0];
+					double satClkDrift = sat_ClkOff_Drift[1];
 					// GPS System transmission time
 					t = tSV - satClkOff;
 					double[][] satPV = orbit.getPV(t, svid, polyOrder, SSI);
@@ -119,19 +120,27 @@ public class SingleFreq {
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
 					t = tSV - satClkOff;
-					rawPR = (logObs.gettRx() - t) * SpeedofLight;
+					double rawPR = (logObs.gettRx() - t) * SpeedofLight;
+					corrPR = rawPR;
+					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * satClkDrift);
 
 				} else {
+					if (!navMap.containsKey(svid)) {
+
+						System.err.println("No data for svid " + svid + " belonging to obsvCode" + obsvCode
+								+ " in derived.csv at time = " + errStr);
+						continue;
+					}
+					navData = navMap.get(svid);
 					satECEF = navData.getSatECEF();
 					satVel = navData.getSatVel();
 					// For non-GPS signal there will be additional biases
 					t = (navData.gettSV() / 1e9) - navData.getSatClkBias();
-					rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
+					double rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
+					corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
+					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * navData.getSatClkDrift());
 				}
 
-				double corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
-				double corrPRrate = logObs.getPseudorangeRateMetersPerSecond()
-						+ (SpeedofLight * navData.getSatClkDrift());
 				// double diff = MathUtil.getEuclidean(satVel, navData.getSatVel());
 				// NOTE: satClkDrift require investigation
 				Satellite sat = new Satellite(logObs, t, corrPR, satECEF, satVel, corrPRrate);
