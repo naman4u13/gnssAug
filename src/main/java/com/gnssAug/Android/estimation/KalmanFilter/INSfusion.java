@@ -26,17 +26,18 @@ public class INSfusion {
 	private final static double SpeedofLight = 299792458;
 
 	public static TreeMap<Long, double[]> process(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
-			TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList, double[][] _dcm) throws Exception {
+			TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList, double[][] _dcm, boolean useIGS)
+			throws Exception {
 		ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
 		// Convert DCM from Body Frame to ENU to Body frame to NED
 		SimpleMatrix dcm = new SimpleMatrix(LatLonUtil.enu_ned_convert(_dcm));
 		dcm = Rotation.reorthonormDcm(dcm);
-		double[] ecef0 = LinearLeastSquare.getEstPos(SVlist.get(0), true);
+		double[] ecef0 = LinearLeastSquare.getEstPos(SVlist.get(0), true, useIGS);
 		double[] llh0 = LatLonUtil.ecef2lla(ecef0);
 		IntStream.range(0, 2).forEach(i -> llh0[i] = Math.toRadians(llh0[i]));
 		// Velocity in ENU frame, zero initially
 		double[] vel0 = new double[3];
-		double rxClkOff = SpeedofLight * ecef0[3];
+		double rxClkOff = ecef0[3];
 		State X = new State(llh0[0], llh0[1], llh0[2], vel0[0], vel0[1], vel0[2], dcm, 0, 0, 0, 0, 0, 0, rxClkOff, 0);
 		// Attitude std deviation is 20 degree, values mentioned below in covariance
 		// matrix is in radians

@@ -16,8 +16,9 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G1C" };
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\Pixel4";
+			String[] obsvCodeList = new String[] { "G1C", "E1C" };
+
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-01-05-US-SVL-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
 			String[] date = strList[strList.length - 2].split("-");
@@ -26,7 +27,8 @@ public class MainApp {
 			int day = Integer.parseInt(date[2]);
 			Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 			cal.set(year, month - 1, day, 0, 0, 0);
-			int doy = cal.get(Calendar.DAY_OF_YEAR);
+
+			String doy = String.format("%03d", cal.get(Calendar.DAY_OF_YEAR));
 			String base_url = "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 			String mobName = strList[strList.length - 1];
 			String obs_path = basePath + "\\supplemental\\" + mobName + "_GnssLog.20o";
@@ -38,7 +40,7 @@ public class MainApp {
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
 			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, false);
+					clock_path, orbit_path, ionex_path, true, true, true);
 			break;
 
 		case 2:

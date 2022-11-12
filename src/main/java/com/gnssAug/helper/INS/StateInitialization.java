@@ -19,7 +19,7 @@ import com.gnssAug.utility.Matrix;
 public class StateInitialization {
 
 	public static double[][] initialize(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap,
-			TreeMap<Long, ArrayList<Satellite>> SatMap) throws Exception {
+			TreeMap<Long, ArrayList<Satellite>> SatMap, boolean useIGS) throws Exception {
 		ArrayList<ArrayList<Satellite>> SVlist = new ArrayList<ArrayList<Satellite>>(SatMap.values());
 		double[] acc0 = new double[3];
 		double[] mag0 = new double[3];
@@ -35,7 +35,7 @@ public class StateInitialization {
 			double[] mag = imu.get(AndroidSensor.Magnetometer).getVal();
 			double[] magBias = imu.get(AndroidSensor.Magnetometer).getBias();
 			ArrayList<Satellite> satList = SVlist.get(i - 1);
-			double[] ecef = LinearLeastSquare.getEstPos(satList, true);
+			double[] ecef = LinearLeastSquare.getEstPos(satList, true, useIGS);
 			for (int j = 0; j < 3; j++) {
 				acc0[j] = (acc0[j] * (i - 1) / i) + ((acc[j] - accBias[j]) / i);
 				mag0[j] = (mag0[j] * (i - 1) / i) + ((mag[j] - magBias[j]) / i);

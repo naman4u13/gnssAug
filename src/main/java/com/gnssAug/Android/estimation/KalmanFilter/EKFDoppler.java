@@ -20,8 +20,8 @@ public class EKFDoppler {
 		kfObj = new KFconfig();
 	}
 
-	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList)
-			throws Exception {
+	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
+			boolean useIGS) throws Exception {
 
 		int n = 4;
 		double[][] _X = new double[n][1];
@@ -32,21 +32,21 @@ public class EKFDoppler {
 		 * assigned 25 m^2 value. Other state variables are assigned infinite(big)
 		 * variance
 		 */
-		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true);
+		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, useIGS);
 		IntStream.range(0, 3).forEach(i -> _X[i][0] = intialECEF[i]);
-		_X[3][0] = SpeedofLight * intialECEF[3];
+		_X[3][0] = intialECEF[3];
 		// Total State
 		SimpleMatrix X = new SimpleMatrix(_X);
 		IntStream.range(0, 4).forEach(i -> P[i][i] = 100);
 		// Error State intialized as zero
 		double[][] x = new double[n][1];
 		kfObj.setState_ProcessCov(x, P);
-		return iterate(X, SatMap, timeList);
+		return iterate(X, SatMap, timeList, useIGS);
 
 	}
 
 	TreeMap<Long, double[]> iterate(SimpleMatrix X, TreeMap<Long, ArrayList<Satellite>> SatMap,
-			ArrayList<Long> timeList) throws Exception {
+			ArrayList<Long> timeList, boolean useIGS) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		long time = timeList.get(0);
 		// Start from 2nd epoch
@@ -54,7 +54,7 @@ public class EKFDoppler {
 			long currentTime = timeList.get(i);
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
-			predictTotalState(X, satList, deltaT);
+			predictTotalState(X, satList, deltaT, useIGS);
 			runFilter(X, deltaT, satList);
 			double[] estState = new double[] { X.get(0), X.get(1), X.get(2), X.get(3) };
 			// Add position estimate to the list
@@ -68,10 +68,11 @@ public class EKFDoppler {
 		return estStateMap;
 	}
 
-	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT) throws Exception {
+	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
+			throws Exception {
 
 		double[] vel = LinearLeastSquare.getEstVel(satList, true,
-				new double[] { X.get(0), X.get(1), X.get(2), X.get(3) });
+				new double[] { X.get(0), X.get(1), X.get(2), X.get(3) }, useIGS);
 		for (int i = 0; i < 4; i++) {
 			X.set(i, X.get(i) + vel[i] * deltaT);
 		}

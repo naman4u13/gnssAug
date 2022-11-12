@@ -60,7 +60,8 @@ public class Matrix {
 
 	public static SimpleMatrix getProjection(SimpleMatrix A, SimpleMatrix W) {
 		SimpleMatrix At = A.transpose();
-		SimpleMatrix P_A = A.mult((At.mult(W).mult(A)).invert()).mult(At).mult(W);
+		SimpleMatrix P_A = null;
+		P_A = A.mult((At.mult(W).mult(A)).invert()).mult(At).mult(W);
 		return P_A;
 	}
 

@@ -82,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_analysis_IGS_test";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_IGS_GPS_GAL_test_1per";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -110,6 +110,10 @@ public class Android {
 			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
 					.gettRx();
 			for (long tRxMilli : gnssLogMaps.keySet()) {
+				if (gtIndex == 37) {
+					gtIndex++;
+					continue;
+				}
 				if (gtIndex >= rxLLH.size()) {
 					break;
 				}
@@ -129,13 +133,14 @@ public class Android {
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
 						weekNo, clock, orbit, useIGS);
-				if (satList.size() < 4) {
-					System.err.println("Less than 4 satellites");
+				int m = obsvCodeList.length;
+				if (satList.size() < 3 + m) {
+					System.err.println("Less than " + (3 + m) + " satellites");
 					continue;
 				}
 				double[] refUserEcef = new double[3];
 				try {
-					refUserEcef = LinearLeastSquare.getEstPos(satList, false, false, false);
+					refUserEcef = LinearLeastSquare.getEstPos(satList, false, false, false, useIGS);
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception
 					e.printStackTrace();
@@ -148,8 +153,8 @@ public class Android {
 				double[] truePosEcef = LatLonUtil
 						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
 
-				if (satList.size() < 4) {
-					System.err.println("Less than 4 satellites");
+				if (satList.size() < 3 + m) {
+					System.err.println("Less than " + (3 + m) + " satellites");
 					continue;
 				}
 				double[] estEcefClk = null;
@@ -189,9 +194,9 @@ public class Android {
 				}
 				if (estimatorType == 2 || estimatorType == 3) {
 					// Implement WLS method
-					estEcefClk = LinearLeastSquare.getEstPos(satList, true, doAnalyze, false);
+					estEcefClk = LinearLeastSquare.getEstPos(satList, true, doAnalyze, false, useIGS);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					double[] estVel = LinearLeastSquare.getEstVel(satList, true, doAnalyze, doTest, estEcefClk);
+					double[] estVel = LinearLeastSquare.getEstVel(satList, true, doAnalyze, doTest, estEcefClk, useIGS);
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
 					if (doAnalyze) {
 						for (Measurement type : new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }) {
@@ -246,8 +251,8 @@ public class Android {
 				}
 
 				// Body Frame to ENU
-				double[][] dcm = StateInitialization.initialize(imuMap, SatMap);
-				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SatMap, timeList, dcm);
+				double[][] dcm = StateInitialization.initialize(imuMap, SatMap, useIGS);
+				TreeMap<Long, double[]> ecefMap = INSfusion.process(imuMap, SatMap, timeList, dcm, useIGS);
 				// GraphPlotter.graphGnssIns(ecefMap, trueECEFlist, timeList);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
@@ -263,13 +268,14 @@ public class Android {
 				EKF ekf = new EKF();
 //				 Implement EKF based on receiver’s position and clock offset errors as a
 //				 random walk process
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(SatMap, timeList, Flag.POSITION, false);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(SatMap, timeList, Flag.POSITION, false, useIGS);
 //				 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //				 walk process
-				TreeMap<Long, double[]> estStateMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, false);
+				TreeMap<Long, double[]> estStateMap_vel = ekf.process(SatMap, timeList, Flag.VELOCITY, false, useIGS);
 //				 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //				 walk process along with doppler updates
-				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(SatMap, timeList, Flag.VELOCITY, true);
+				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(SatMap, timeList, Flag.VELOCITY, true,
+						useIGS);
 				int n = timeList.size();
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
@@ -302,7 +308,7 @@ public class Android {
 
 			if (estimatorType == 2) {
 				EKFDoppler ekf = new EKFDoppler();
-				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList);
+				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList, useIGS);
 				int n = timeList.size();
 				estPosMap.put("EKF - Doppler", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {

@@ -23,7 +23,7 @@ public class EKF {
 	}
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
-			Flag flag, boolean useDoppler) throws Exception {
+			Flag flag, boolean useDoppler, boolean useIGS) throws Exception {
 
 		int n = 0;
 		/* constant position model - state vector(n=5) -> (x,y,z,cdt,cdt_dot) */
@@ -44,9 +44,9 @@ public class EKF {
 		 * assigned 25 m^2 value. Other state variables are assigned infinite(big)
 		 * variance
 		 */
-		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true);
+		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, useIGS);
 		IntStream.range(0, 3).forEach(i -> x[i][0] = intialECEF[i]);
-		x[3][0] = SpeedofLight * intialECEF[3];
+		x[3][0] = intialECEF[3];
 		IntStream.range(0, 4).forEach(i -> P[i][i] = 100);
 		if (n == 5) {
 			P[4][4] = 1e5;
