@@ -2,9 +2,11 @@ package com.gnssAug.utility;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
@@ -12,14 +14,17 @@ import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 
 public class Analyzer {
+	private final static double SpeedofLight = 299792458;
 
-	public static void process(TreeMap<Long, ArrayList<Satellite>> SatMap,
+	public static void processAndroid(TreeMap<Long, ArrayList<Satellite>> SatMap,
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap, ArrayList<double[]> truePosEcef,
-			TreeMap<Long, double[]> trueVelEcef) throws Exception {
+			TreeMap<Long, double[]> trueVelEcef, HashMap<String, ArrayList<double[]>> estPosMap,
+			HashMap<String, ArrayList<double[]>> estVelMap) throws Exception {
 
-		HashMap<String, TreeMap<Integer, Double>> doppplerMap = new HashMap<String, TreeMap<Integer, Double>>();
+		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
-
+		rangeMap.put("RxClkOff(offset of 100 added)", new TreeMap<Integer, Double>());
+		dopplerMap.put("RxClkDrift(offset of 25 added)", new TreeMap<Integer, Double>());
 		if (truePosEcef.size() != SatMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
@@ -32,53 +37,106 @@ public class Analyzer {
 			if (!trueVelEcef.containsKey(time)) {
 				continue;
 			}
-
+			double rxClkOff = estPosMap.get("WLS").get(i)[3];
+			double rxClkDrift = estVelMap.get("WLS").get(i)[3];
 			double[] trueVel = trueVelEcef.get(time);
 			int timeDiff = (int) ((time - time0) / 1e3);
+			rangeMap.get("RxClkOff(offset of 100 added)").put(timeDiff, 100 + rxClkOff);
+			dopplerMap.get("RxClkDrift(offset of 25 added)").put(timeDiff, 25 + rxClkDrift);
 			ArrayList<Satellite> satList = SatMap.get(time);
 			for (Satellite sat : satList) {
 
 				double[] satPos = sat.getSatEci();
 				double[] satVel = sat.getSatVel();
-
 				double trueRange = MathUtil.getEuclidean(truePos, satPos);
-
 				double[] unitLos = IntStream.range(0, 3).mapToDouble(j -> (satPos[j] - truePos[j]) / trueRange)
 						.toArray();
 				double[] relVel = IntStream.range(0, 3).mapToDouble(j -> satVel[j] - trueVel[j]).toArray();
 				double trueRangeRate = IntStream.range(0, 3).mapToDouble(j -> unitLos[j] * relVel[j]).sum();
-				double rangeRate = sat.getPseudorangeRateMetersPerSecond();
-				double range = sat.getPseudorange();
+				double rangeRate = sat.getRangeRate() - rxClkDrift;
+				double range = sat.getPseudorange() - rxClkOff;
 				int svid = sat.getSvid();
-				String code = sat.getObsvCode().charAt(0) + "";
-				double[] first = null;
-				if (firstVal.containsKey(code + svid)) {
-					first = firstVal.get(code + svid);
-				} else {
-					first = new double[] { range, rangeRate };
-					firstVal.put(code + svid, first);
-				}
-				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						range - trueRange);
+				double sigma_noise = sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9;
 
-				doppplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						rangeRate - trueRangeRate);
+				String code = sat.getObsvCode().charAt(0) + "";
+				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
+						(range - trueRange));
+
+				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
+						(rangeRate - trueRangeRate));
 			}
 
 		}
-		HashMap<String, Double> dopplerFirst = new HashMap<String, Double>();
-		HashMap<String, Double> rangeFirst = new HashMap<String, Double>();
-		for (String key : firstVal.keySet()) {
-			rangeFirst.put(key, firstVal.get(key)[0]);
-			dopplerFirst.put(key, firstVal.get(key)[1]);
-		}
 
-		GraphPlotter chart = new GraphPlotter("Error in Range-Rate(in m/s)", doppplerMap);
+		GraphPlotter chart = new GraphPlotter("Error in Range-Rate(in m/s)", dopplerMap);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
 		chart = new GraphPlotter("Error in Range(in m)", rangeMap);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+		// GraphPlotter.graphIMU(imuMap);
+
+	}
+
+	public static void processIGS(TreeMap<Long, ArrayList<com.gnssAug.Rinex.models.Satellite>> satMap, double[] rxARP,
+			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap) throws Exception {
+
+		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
+		long time0 = satMap.firstKey();
+		double alpha = 0.01;
+		String estType = "EKF";
+		int i = 0;
+		if (estType.equals("EKF")) {
+			satMap.remove(satMap.firstKey());
+		}
+		for (Long time : satMap.keySet()) {
+
+			ArrayList<com.gnssAug.Rinex.models.Satellite> satList = satMap.get(time);
+			String[] obsvCodeList = findObsvCodeSet(satList);
+			int m = obsvCodeList.length;
+			double[] rxClkOff = new double[m];
+			int timeDiff = (int) ((time - time0) / 1e3);
+			for (int j = 0; j < m; j++) {
+				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
+				rangeMap.computeIfAbsent("RxClkOff(offset of 10 added) " + obsvCodeList[j],
+						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkOff[j]);
+			}
+
+			for (com.gnssAug.Rinex.models.Satellite sat : satList) {
+
+				String obsvCode = sat.getObsvCode();
+				double[] pco = rxPCO.get(obsvCode);
+				double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> rxARP[x] + pco[x]).toArray();
+				double[] satPos = sat.getSatEci();
+				double trueRange = MathUtil.getEuclidean(rxAPC, satPos);
+				double range = sat.getPseudorange();
+				for (int j = 0; j < m; j++) {
+					if (obsvCode.equals(obsvCodeList[j])) {
+						range -= rxClkOff[j];
+					}
+				}
+				int svid = sat.getSVID();
+				String code = sat.getObsvCode().charAt(0) + "";
+				double sigma = Math.sqrt(0.3);
+				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
+						(range - trueRange) / sigma);
+
+			}
+			i++;
+		}
+
+		// findOutliers(satMap, rangeMap, alpha);
+
+		GraphPlotter chart = new GraphPlotter("Error in Range(in m)", rangeMap);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+		chart = new GraphPlotter("Outlier and Inliers(in m)", rangeMap, alpha);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -144,5 +202,37 @@ public class Analyzer {
 //		chart.setVisible(true);
 
 		return velMap;
+	}
+
+	private static String[] findObsvCodeSet(ArrayList<com.gnssAug.Rinex.models.Satellite> satList) {
+		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
+		for (int i = 0; i < satList.size(); i++) {
+			obsvCodeSet.add(satList.get(i).getObsvCode());
+		}
+		return obsvCodeSet.toArray(new String[0]);
+
+	}
+
+	private static void findOutliers(TreeMap<Long, ArrayList<com.gnssAug.Rinex.models.Satellite>> satMap,
+			HashMap<String, TreeMap<Integer, Double>> rangeMap, double alpha) {
+		long time0 = satMap.firstKey();
+		NormalDistribution normal = new NormalDistribution();
+		for (Long time : satMap.keySet()) {
+
+			ArrayList<com.gnssAug.Rinex.models.Satellite> satList = satMap.get(time);
+			int timeDiff = (int) ((time - time0) / 1e3);
+			for (com.gnssAug.Rinex.models.Satellite sat : satList) {
+
+				String svid = sat.getSSI() + "" + sat.getSVID();
+				if (rangeMap.get(svid).containsKey(timeDiff)) {
+					double err = rangeMap.get(svid).get(timeDiff);
+					double pval = 1 - normal.cumulativeProbability(err);
+					if (pval < alpha) {
+						sat.setOutlier(true);
+					}
+				}
+			}
+		}
+
 	}
 }

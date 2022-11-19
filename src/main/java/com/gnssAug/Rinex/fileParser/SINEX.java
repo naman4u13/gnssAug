@@ -136,7 +136,7 @@ public class SINEX {
 			double[] pco_ecef = new double[3];
 			if (pco == null) {
 				System.err.println("Rx PCO info unavailable for frequency - " + freq + " !");
-
+				PCO_ECEF.put(obsvCode, new double[3]);
 				continue;
 			}
 

@@ -4,12 +4,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.stream.IntStream;
 
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
-import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
-import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Rinex.models.Satellite;
@@ -48,9 +47,10 @@ public class LinearLeastSquare {
 				weight[i][i] = 1;
 			}
 		}
-		double[] estEcefClk = regress(satList, PCO, weight);
+		String[] obsvCodeList = findObsvCodeSet(satList);
+		double[] estEcefClk = regress(satList, PCO, weight, obsvCodeList);
 		if (doAnalyze) {
-			HashSet<Integer> indexSet = qualityControl2(weight, satList, estEcefClk, PCO, doTest);
+			HashSet<Integer> indexSet = qualityControl2(weight, satList, estEcefClk, PCO, doTest, obsvCodeList);
 
 			if (!indexSet.isEmpty()) {
 				testedSatList = new ArrayList<Satellite>();
@@ -68,8 +68,9 @@ public class LinearLeastSquare {
 
 					}
 				}
-				estEcefClk = regress(testedSatList, PCO, _weight);
-				qualityControl2(_weight, testedSatList, estEcefClk, PCO, false);
+				obsvCodeList = findObsvCodeSet(testedSatList);
+				estEcefClk = regress(testedSatList, PCO, _weight, obsvCodeList);
+				qualityControl2(_weight, testedSatList, estEcefClk, PCO, false, obsvCodeList);
 			}
 		}
 		return estEcefClk;
@@ -77,24 +78,32 @@ public class LinearLeastSquare {
 	}
 
 	public static HashSet<Integer> qualityControl2(double[][] weight, ArrayList<Satellite> satList, double[] estEcefClk,
-			HashMap<String, double[]> PCO, boolean doTest) throws Exception {
+			HashMap<String, double[]> PCO, boolean doTest, String[] obsvCodeList) throws Exception {
 		int n = satList.size();
+		int m = obsvCodeList.length;
+		int l = 3 + m;
 		HashSet<Integer> indexSet = new HashSet<Integer>();
 		residual = new double[n];
-		double[][] h = new double[n][4];
+		double[][] h = new double[n][l];
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
-			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+			String obsvCode = sat.getObsvCode();
 			double[] pco = PCO.get(obsvCode);
 			double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
 
 			double pr = sat.getPseudorange();
 			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - rxAPC[j])
 					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
+			double pr_hat = gr_hat;
 			final int _i = i;
 			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(sat.getSatEci()[j] - rxAPC[j]) / gr_hat);
-			h[i][3] = 1;
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					h[i][3 + j] = 1;
+					pr_hat += estEcefClk[3 + j];
+				}
+			}
+
 			residual[i] = pr_hat - pr;
 		}
 
@@ -117,15 +126,15 @@ public class LinearLeastSquare {
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
 		SimpleMatrix Cyy_inv = Cyy.invert();
 		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - 4);
-		if (n == 4) {
+		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - l);
+		if (n == l) {
 			postVarOfUnitW = -1;
 		}
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
-		if (doTest && n > 5) {
-			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
+		if (doTest && n > l + 1) {
+			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - l);
 			double alpha = 0.0001;
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
@@ -135,7 +144,7 @@ public class LinearLeastSquare {
 			if (globalPVal < alpha) {
 				double pVal_min = Double.MAX_VALUE;
 				double fd_test_max = Double.MIN_VALUE;
-				int len = n - 5;
+				int len = n - (l + 1);
 				for (int i = 1; i <= len; i++) {
 					Iterator<int[]> iterator = CombinatoricsUtils.combinationsIterator(n, i);
 					csd = new ChiSquaredDistribution(i);
@@ -173,9 +182,11 @@ public class LinearLeastSquare {
 		}
 
 		// Convert to ENU frame
-		SimpleMatrix R = new SimpleMatrix(4, 4);
+		SimpleMatrix R = new SimpleMatrix(l, l);
 		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
-		R.set(3, 3, 1);
+		for (int i = 0; i < m; i++) {
+			R.set(3 + i, 3 + i, 1);
+		}
 		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
 		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
@@ -183,210 +194,13 @@ public class LinearLeastSquare {
 
 	}
 
-	public static HashSet<Integer> qualityControl(double[][] weight, ArrayList<Satellite> satList, double[] estEcefClk,
-			HashMap<String, double[]> PCO, boolean doTest) throws Exception {
-		HashSet<Integer> indexSet = new HashSet<Integer>();
-		int n = satList.size();
-		residual = new double[n];
-		double[][] h = new double[n][4];
-		for (int i = 0; i < n; i++) {
-			Satellite sat = satList.get(i);
-			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
-			double[] pco = PCO.get(obsvCode);
-			double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
-
-			double pr = sat.getPseudorange();
-			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - rxAPC[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			double pr_hat = gr_hat + (SpeedofLight * estEcefClk[3]);
-			final int _i = i;
-			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(sat.getSatEci()[j] - rxAPC[j]) / gr_hat);
-			h[i][3] = 1;
-			residual[i] = pr_hat - pr;
-		}
-
-		SimpleMatrix Cyy = null;
-		double priorVarOfUnitW = 0.09;
-		double[][] cov = new double[n][n];
-		double max = Double.MIN_VALUE;
-		for (int i = 0; i < n; i++) {
-			max = Math.max(weight[i][i], max);
-		}
-		for (int i = 0; i < n; i++) {
-			weight[i][i] = weight[i][i] / max;
-		}
-
-		for (int i = 0; i < n; i++) {
-			cov[i][i] = priorVarOfUnitW / weight[i][i];
-		}
-		Cyy = new SimpleMatrix(cov);
-
-		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
-		SimpleMatrix Cyy_inv = Cyy.invert();
-		double globalT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-		postVarOfUnitW = globalT * priorVarOfUnitW / (n - 4);
-		if (n == 4) {
-			postVarOfUnitW = -1;
-		}
-		SimpleMatrix H = new SimpleMatrix(h);
-		SimpleMatrix Ht = H.transpose();
-		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
-		boolean isSingleOut = false;
-		if (doTest && n > 5) {
-			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - 4);
-			double alpha = 1;
-			if (globalT == 0) {
-				throw new Exception("Error: T stat is zero");
-			}
-			// Detection
-			double pVal = 1 - csd.cumulativeProbability(globalT);
-			if (pVal < alpha) {
-
-				SimpleMatrix Cyy_hat = H.mult(Cxx_hat).mult(Ht);
-				SimpleMatrix Cee_hat = Cyy.minus(Cyy_hat);
-				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy.getMatrix())) {
-
-					throw new Exception("PositiveDiagonal Cyy test Failed");
-				}
-				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cyy_hat.getMatrix())) {
-
-					throw new Exception("PositiveDiagonal Cyy_hat test Failed");
-				}
-				if (!MatrixFeatures_DDRM.isDiagonalPositive(Cee_hat.getMatrix())) {
-
-					throw new Exception("PositiveDiagonal Cee_hat test Failed");
-				}
-
-				ArrayList<Integer> indexList = new ArrayList<Integer>();
-				ArrayList<Double> wList = new ArrayList<Double>();
-
-				double alpha2 = 0.05;
-				// Identification
-				for (int i = 0; i < n; i++) {
-					SimpleMatrix c = new SimpleMatrix(n, 1);
-					c.set(i, 1);
-					SimpleMatrix ct = c.transpose();
-					double lam = ct.mult(Cyy_inv).mult(Cee_hat).mult(Cyy_inv).mult(c).get(0);
-					if (lam < 0) {
-						throw new Exception("PositiveDiagonal lam < 0");
-					}
-					double w = (ct.mult(Cyy_inv).mult(e_hat).get(0)) / (Math.sqrt(lam));
-
-					NormalDistribution norm = new NormalDistribution();
-					if (1 - norm.cumulativeProbability(Math.abs(w)) < (alpha2 / 2)) {
-						indexList.add(i);
-						wList.add(Math.abs(w));
-					}
-				}
-				if (isSingleOut) {
-					double maxW = Double.MIN_VALUE;
-					int index = -1;
-					for (int i = 0; i < wList.size(); i++) {
-						if (wList.get(i) > maxW) {
-							index = indexList.get(i);
-							maxW = wList.get(i);
-						}
-					}
-					if (index != -1) {
-						indexSet.add(index);
-					}
-				} else {
-
-					double maxPVal = Double.MIN_VALUE;
-					int m = indexList.size();
-
-					int len = Math.min(m, n - 4 - 1);
-					// Normalized t stat with number of sat, this is a personal theorized stat,
-					// unsure about its validity
-
-					for (int i = 1; i <= len; i++) {
-						Iterator<int[]> iterator = CombinatoricsUtils.combinationsIterator(m, i);
-						while (iterator.hasNext()) {
-							int[] combination = iterator.next();
-							HashSet<Integer> _indexSet = new HashSet<Integer>();
-							for (int j = 0; j < combination.length; j++) {
-								_indexSet.add(indexList.get(combination[j]));
-							}
-
-							ArrayList<Satellite> _satList = new ArrayList<Satellite>();
-							int k = 0;
-							int _n = n - _indexSet.size();
-							double[][] _Cyy_inv = new double[_n][_n];
-							for (int j = 0; j < n; j++) {
-								if (!_indexSet.contains(j)) {
-									_satList.add(satList.get(j));
-									_Cyy_inv[k][k] = Cyy_inv.get(j, j);
-									k++;
-								}
-							}
-
-							double localT = getLocalTestStat(_satList, _Cyy_inv, PCO);
-							csd = new ChiSquaredDistribution(_n - 4);
-							double localPVal = 1 - csd.cumulativeProbability(localT);
-							if (localPVal > pVal && localPVal > maxPVal) {
-								if (localT == 0) {
-									throw new Exception("Error: localT is zero");
-								}
-								maxPVal = localPVal;
-								indexSet = new HashSet<Integer>(_indexSet);
-							}
-						}
-					}
-
-				}
-				if (indexSet.isEmpty()) {
-					System.err.println("Quality Control implementation failed: No Identification despite detection");
-					// throw new Exception("Quality Control implementation failed");
-				}
-			}
-
-		}
-		// Convert to ENU frame
-		SimpleMatrix R = new SimpleMatrix(4, 4);
-		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
-		R.set(3, 3, 1);
-		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
-		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
-		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
-		return indexSet;
-	}
-
-	// Get sum of weighted squared residuals based test statistic
-	public static double getLocalTestStat(ArrayList<Satellite> satList, double[][] _Cyy_inv,
-			HashMap<String, double[]> PCO) throws Exception {
-		int n = satList.size();
-		double[] res = new double[n];
-		double[] estEcefClk = regress(satList, PCO, _Cyy_inv);
-		for (int i = 0; i < n; i++) {
-			Satellite sat = satList.get(i);
-			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
-			double[] pco = PCO.get(obsvCode);
-			double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
-			// Its not really a ECI, therefore don't get confused
-			double[] satEcef = sat.getSatEci();
-			double PR = sat.getPseudorange();
-
-			// Approx Geometric Range
-			double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - rxAPC[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			// Approx Pseudorange Range
-			double approxPR = approxGR + (SpeedofLight * estEcefClk[3]);
-			res[i] = approxPR - PR;
-
-		}
-		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, res);
-		SimpleMatrix Cyy_inv = new SimpleMatrix(_Cyy_inv);
-		double detectT = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-
-		return detectT;
-	}
-
-	public static double[] regress(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, double[][] weight)
-			throws Exception {
+	public static double[] regress(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, double[][] weight,
+			String[] obsvCodeList) throws Exception {
 
 		int n = satList.size();
+		int m = obsvCodeList.length;
 		// variable to store estimated Rx position and clk offset
-		double[] estEcefClk = new double[] { 0, 0, 0, 0 };
+		double[] estEcefClk = new double[3 + m];
 		/*
 		 * Error variable based on norm value deltaX vector, intially assigned a big
 		 * value
@@ -395,18 +209,18 @@ public class LinearLeastSquare {
 		// Threshold to stop iteration or regression
 		double threshold = 1e-3;
 		// Minimum 4 satellite are required to proceed
-		if (n >= 4) {
+		if (n >= 3 + m) {
 
 			while (error >= threshold) {
 
 				// Misclosure vector
 				double[][] deltaPR = new double[n][1];
 				// Jacobian or Design Matrix
-				double[][] h = new double[n][4];
+				double[][] h = new double[n][3 + m];
 				// Iterate through each satellite, to compute LOS vector and Approx pseudorange
 				for (int i = 0; i < n; i++) {
 					Satellite sat = satList.get(i);
-					String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+					String obsvCode = sat.getObsvCode();
 					double[] pco = PCO.get(obsvCode);
 					double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
 
@@ -416,12 +230,19 @@ public class LinearLeastSquare {
 					// Approx Geometric Range
 					double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - rxAPC[j])
 							.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-					// Approx Pseudorange Range
-					double approxPR = approxGR + (SpeedofLight * estEcefClk[3]);
-					deltaPR[i][0] = approxPR - PR;
 					int index = i;
-					IntStream.range(0, 3).forEach(j -> h[index][j] = (satEcef[j] - rxAPC[j]) / approxGR);
-					h[i][3] = 1;
+					IntStream.range(0, 3).forEach(j -> h[index][j] = -(satEcef[j] - rxAPC[j]) / approxGR);
+					// Approx Pseudorange Range
+					double approxPR = approxGR;
+					for (int j = 0; j < m; j++) {
+						if (obsvCode.equals(obsvCodeList[j])) {
+							h[i][3 + j] = 1;
+							approxPR += estEcefClk[3 + j];
+						}
+					}
+
+					deltaPR[i][0] = PR - approxPR;
+
 				}
 				// Least Squares implementation
 				SimpleMatrix H = new SimpleMatrix(h);
@@ -434,8 +255,7 @@ public class LinearLeastSquare {
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector
-				IntStream.range(0, 3).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
-				estEcefClk[3] += (-DeltaX.get(3, 0)) / SpeedofLight;
+				IntStream.range(0, 3 + m).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
 				// Recomputing error - norm of deltaX vector
 				error = Math.sqrt(IntStream.range(0, 3).mapToDouble(i -> Math.pow(DeltaX.get(i, 0), 2)).reduce(0,
 						(i, j) -> i + j));
@@ -450,7 +270,7 @@ public class LinearLeastSquare {
 			return estEcefClk;
 		}
 
-		throw new Exception("Satellite count is less than 4, can't compute user position");
+		throw new Exception("Satellite count is less than " + (3 + m) + ", can't compute user position");
 
 	}
 
@@ -472,6 +292,15 @@ public class LinearLeastSquare {
 
 	public static ArrayList<Satellite> getTestedSatList() {
 		return testedSatList;
+	}
+
+	private static String[] findObsvCodeSet(ArrayList<Satellite> satList) {
+		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
+		for (int i = 0; i < satList.size(); i++) {
+			obsvCodeSet.add(satList.get(i).getObsvCode());
+		}
+		return obsvCodeSet.toArray(new String[0]);
+
 	}
 
 }

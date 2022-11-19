@@ -41,9 +41,10 @@ public class EKF {
 	}
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
-			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest) throws Exception {
+			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, String[] obsvCodeList) throws Exception {
 
-		int n = 5;
+		int m = obsvCodeList.length;
+		int n = 3 + (2 * m);
 
 		/*
 		 * state XYZ is intialized WLS generated Rx position estimated using first epoch
@@ -54,10 +55,10 @@ public class EKF {
 		double[][] x = new double[n][1];
 		double[][] P = new double[n][n];
 		double[] intialECEF = LinearLeastSquare.process(SatMap.firstEntry().getValue(), rxPCO, true);
-		IntStream.range(0, 3).forEach(i -> x[i][0] = intialECEF[i]);
-		x[3][0] = SpeedofLight * intialECEF[3];
-		IntStream.range(0, 4).forEach(i -> P[i][i] = 10);
-		P[4][4] = 1e5;
+		IntStream.range(0, 3 + m).forEach(i -> x[i][0] = intialECEF[i]);
+
+		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 10);
+		IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e5);
 
 		kfObj.setState_ProcessCov(x, P);
 		if (doAnalyze) {
@@ -71,14 +72,15 @@ public class EKF {
 			measNoiseMap = new TreeMap<Long, double[]>();
 		}
 		// Begin iteration or recursion
-		return iterate(SatMap, rxPCO, timeList, doAnalyze, doTest);
+		return iterate(SatMap, rxPCO, timeList, doAnalyze, doTest, obsvCodeList);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
-			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest) throws Exception {
+			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, String[] obsvCodeList) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
-
+		int m = obsvCodeList.length;
+		int x_size = 3 + (2 * m);
 		long time = timeList.get(0);
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
@@ -86,22 +88,23 @@ public class EKF {
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
 			// Perform Predict and Update
-			runFilter(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest);
+			runFilter(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest, obsvCodeList);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
 
-			double[] estState = new double[] { x.get(0), x.get(1), x.get(2) };
+			double[] estState = new double[x_size];
+			IntStream.range(0, x_size).forEach(j -> estState[j] = x.get(j));
 
 			// Add position estimate to the list
 			estStateMap.put(currentTime, estState);
 			if (doAnalyze) {
 				// Convert to ENU frame
-				SimpleMatrix R = new SimpleMatrix(4, 4);
+				SimpleMatrix R = new SimpleMatrix(x_size, x_size);
 				R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estState)));
-				R.set(3, 3, 1);
-				SimpleMatrix errCov = P.extractMatrix(0, 4, 0, 4);
-				errCov = R.mult(errCov).mult(R.transpose());
+				IntStream.range(3, x_size).forEach(j -> R.set(j, j, 1));
+
+				SimpleMatrix errCov = R.mult(P).mult(R.transpose());
 				errCovMap.put(currentTime, errCov);
 				innovationMap.put(currentTime, innovation);
 			}
@@ -121,24 +124,28 @@ public class EKF {
 	}
 
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, HashMap<String, double[]> rxPCO,
-			long currentTime, boolean doAnalyze, boolean doTest) throws Exception {
+			long currentTime, boolean doAnalyze, boolean doTest, String[] obsvCodeList) throws Exception {
 
 		// Satellite count
 		int n = satList.size();
+		int m = obsvCodeList.length;
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 		// Assign Q and F matrix
-		kfObj.configIGS(deltaT);
+		kfObj.configIGS(deltaT, m);
 		kfObj.predict();
 		boolean isWeighted = false;
 		SimpleMatrix x = kfObj.getState();
 		final double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-		double rxClkOff = x.get(3);// in meters
+		double[] rxClkOff = new double[m];// in meters
+		for (int i = 0; i < m; i++) {
+			rxClkOff[i] = x.get(i + 3);
+		}
 
 		/*
 		 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
 		 * with respect to x
 		 */
-		SimpleMatrix H = getJacobian(satList, estPos);
+		SimpleMatrix H = getJacobian(satList, estPos, obsvCodeList);
 
 		// Measurement vector
 		double[][] z = new double[n][1];
@@ -150,16 +157,21 @@ public class EKF {
 		for (int i = 0; i < n; i++) {
 
 			Satellite sat = satList.get(i);
-			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+			String obsvCode = sat.getObsvCode();
 			double[] pco = rxPCO.get(obsvCode);
 			double[] rxAPC = IntStream.range(0, 3).mapToDouble(j -> estPos[j] + pco[j]).toArray();
 			z[i][0] = sat.getPseudorange();
 			ze[i][0] = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> rxAPC[j] - sat.getSatEci()[j]).map(j -> j * j)
-					.reduce(0, (j, k) -> j + k)) + rxClkOff;
+					.reduce(0, (j, k) -> j + k));
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					ze[i][0] += rxClkOff[j];
+				}
+			}
 
 			innovation[i] = z[i][0] - ze[i][0];
 		}
-		double priorVarOfUnitW = 4;
+		double priorVarOfUnitW = 0.3;
 		if (isWeighted) {
 			double[][] weight = Weight.computeCovInvMat(satList);
 			SimpleMatrix Cyy = null;
@@ -247,7 +259,7 @@ public class EKF {
 				SimpleMatrix R_ = new SimpleMatrix(_n, _n);
 				double[][] z_ = new double[_n][1];
 				double[][] ze_ = new double[_n][1];
-				SimpleMatrix H_ = new SimpleMatrix(_n, 5);
+				SimpleMatrix H_ = new SimpleMatrix(_n, 3 + (2 * m));
 				for (int i = 0; i < n; i++) {
 					Satellite sat = satList.get(i);
 					if (!indexSet.contains(i)) {
@@ -255,7 +267,7 @@ public class EKF {
 						R_.set(j, j, R.get(i, i));
 						z_[j][0] = z[i][0];
 						ze_[j][0] = ze[i][0];
-						for (int k = 0; k < 5; k++) {
+						for (int k = 0; k < 3 + (2 * m); k++) {
 							H_.set(j, k, H.get(i, k));
 						}
 						j++;
@@ -280,7 +292,10 @@ public class EKF {
 			double[] measNoise = new double[_n];
 			x = kfObj.getState();
 			final double[] _estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-			rxClkOff = x.get(3);// in meters
+			rxClkOff = new double[m];// in meters
+			for (int i = 0; i < m; i++) {
+				rxClkOff[i] = x.get(i + 3);
+			}
 			ze = new double[_n][1];
 			z = new double[_n][1];
 			for (int i = 0; i < _n; i++) {
@@ -291,8 +306,12 @@ public class EKF {
 				double[] rxAPC = IntStream.range(0, 3).mapToDouble(j -> _estPos[j] + pco[j]).toArray();
 				z[i][0] = sat.getPseudorange();
 				ze[i][0] = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> rxAPC[j] - sat.getSatEci()[j])
-						.map(j -> j * j).reduce(0, (j, k) -> j + k)) + rxClkOff;
-
+						.map(j -> j * j).reduce(0, (j, k) -> j + k));
+				for (int j = 0; j < m; j++) {
+					if (obsvCode.equals(obsvCodeList[j])) {
+						ze[i][0] += rxClkOff[j];
+					}
+				}
 				residual[i] = z[i][0] - ze[i][0];
 				measNoise[i] = Math.sqrt(R.get(i, i));
 			}
@@ -328,13 +347,15 @@ public class EKF {
 		}
 	}
 
-	private SimpleMatrix getJacobian(ArrayList<Satellite> satList, double[] estECEF) {
+	private SimpleMatrix getJacobian(ArrayList<Satellite> satList, double[] estECEF, String[] obsvCodeList) {
+		int m = obsvCodeList.length;
 		int n = satList.size();
 		int rows = n;
-		double[][] H = new double[rows][5];
+		double[][] H = new double[rows][3 + (2 * m)];
 
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
+			String obsvCode = sat.getObsvCode();
 			// Line of Sight vector
 			// Its not really a ECI, therefore don't get confused
 			double[] LOS = IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - estECEF[j]).toArray();
@@ -343,7 +364,12 @@ public class EKF {
 			// Converting LOS to unit vector
 			final int _i = i;
 			IntStream.range(0, 3).forEach(j -> H[_i][j] = -LOS[j] / GR);
-			H[i][3] = 1;
+
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					H[i][3 + j] = 1;
+				}
+			}
 
 		}
 

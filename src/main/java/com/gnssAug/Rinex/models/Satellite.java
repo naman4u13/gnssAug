@@ -23,6 +23,9 @@ public class Satellite extends Observable {
 	private double ionoErr;
 	private double tropoErr;
 
+	// Experimental param
+	private boolean isOutlier;
+
 	public double[] getSatEcef() {
 		return satEcef;
 	}
@@ -92,9 +95,9 @@ public class Satellite extends Observable {
 
 	@Override
 	public String toString() {
-		return super.toString() + "Satellite [satEcef=" + Arrays.toString(satEcef) + ", satClkOff=" + satClkOff + ", t=" + t
-				+ ", tRX=" + tRX + ", satVel=" + Arrays.toString(satVel) + ", satClkDrift=" + satClkDrift + ", satEci="
-				+ Arrays.toString(satEci) + "]";
+		return super.toString() + "Satellite [satEcef=" + Arrays.toString(satEcef) + ", satClkOff=" + satClkOff + ", t="
+				+ t + ", tRX=" + tRX + ", satVel=" + Arrays.toString(satVel) + ", satClkDrift=" + satClkDrift
+				+ ", satEci=" + Arrays.toString(satEci) + "]";
 	}
 
 	public double[] getSatVel() {
@@ -161,6 +164,14 @@ public class Satellite extends Observable {
 	public void setTropoErr(double tropoErr) {
 		this.tropoErr = tropoErr;
 
+	}
+
+	public boolean isOutlier() {
+		return isOutlier;
+	}
+
+	public void setOutlier(boolean isOutlier) {
+		this.isOutlier = isOutlier;
 	}
 
 }

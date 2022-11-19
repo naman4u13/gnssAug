@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.ejml.simple.SimpleMatrix;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -187,7 +188,22 @@ public class GraphPlotter extends ApplicationFrame {
 		super(name);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name, createAnalyseDataset(map));
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name, createAnalyseDataset(map));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map, double alpha) throws IOException {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name,
+				createAnalyseDataset2(map, alpha));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -685,6 +701,38 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			dataset.addSeries(series);
 		}
+		return dataset;
+	}
+
+	private XYDataset createAnalyseDataset2(HashMap<String, TreeMap<Integer, Double>> map, double alpha) {
+		NormalDistribution normal = new NormalDistribution();
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries inliers = new XYSeries("inliers");
+		final XYSeries outliers = new XYSeries("outliers");
+		int in = 0;
+		int out = 0;
+		for (String key : map.keySet()) {
+
+			TreeMap<Integer, Double> data = map.get(key);
+			for (int x : data.keySet()) {
+				double y = data.get(x);
+				double pval = 1 - normal.cumulativeProbability(Math.abs(y));
+				if (pval < alpha) {
+					outliers.add(x, y);
+					out++;
+				} else {
+					inliers.add(x, y);
+					in++;
+				}
+
+			}
+
+		}
+		inliers.setKey("Inliers (Count: " + in + ")");
+		outliers.setKey("Outliers (Count: " + out + ")");
+
+		dataset.addSeries(inliers);
+		dataset.addSeries(outliers);
 		return dataset;
 	}
 

@@ -27,7 +27,6 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.Measurement;
-import com.gnssAug.Rinex.estimation.EKF;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Bias;
@@ -45,6 +44,7 @@ import com.gnssAug.Rinex.models.TimeCorrection;
 import com.gnssAug.helper.ComputeEleAzm;
 import com.gnssAug.helper.ComputeIonoCorr;
 import com.gnssAug.helper.ComputeTropoCorr;
+import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
@@ -54,9 +54,10 @@ public class IGS {
 
 	private static Geoid geoid = null;
 
-	public static void posEstimate(boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
-			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType, boolean doAnalyze, boolean doTest) {
+	public static void posEstimate(String bias_path, String clock_path, String orbit_path, String ionex_path,
+			String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX, String[] obsvCodeList,
+			int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo, int estimatorType,
+			boolean doAnalyze, boolean doTest) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
@@ -80,24 +81,13 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\GOLD00USA_R_20201000000_01D_30S_MO.crx\\GOLD00USA_R_20201000000_01D_30S_MO.rnx";
-
-			String bias_path = base_path
-					+ "\\complementary\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX\\CAS0MGXRAP_20201000000_01D_01D_DCB.BSX";
-
-			String orbit_path = base_path + "\\complementary\\igs21004.sp3\\igs21004.sp3";
-
-			String sinex_path = base_path + "\\complementary\\igs20P21004.snx\\igs20P21004.snx";
+					+ "\\ALBH00CAN_R_20211190000_01D_30S_MO.crx\\ALBH00CAN_R_20211190000_01D_30S_MO.rnx";
 
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
 
-			String clock_path = base_path + "\\complementary\\igs21004.clk_30s\\igs21004.clk_30s";
-
-			String ionex_path = base_path + "\\complementary\\igsg1000.20i\\igsg1000.20i";
-
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\GOLD_EKF_";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\ALBH5";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -144,14 +134,9 @@ public class IGS {
 			}
 			double tRx0 = ObsvMsgs.get(0).getTRX();
 			for (ObservationMsg obsvMsg : ObsvMsgs) {
-
 				double tRX = obsvMsg.getTRX();
-
 				double dayTime = tRX % 86400;
 				long weekNo = obsvMsg.getWeekNo();
-				if (dayTime == 68580) {
-					System.out.println();
-				}
 				Calendar time = Time.getDate(tRX, weekNo, 0);
 				if (Time.getGPSTime(time)[0] != tRX) {
 					System.err.println("FATAL ERROR TIME calendar");
@@ -173,7 +158,7 @@ public class IGS {
 				}
 				long tRxMilli = (long) (tRX * 1000);
 				// Estimate
-				if (estimatorType == 1 || estimatorType == 5) {
+				if (estimatorType == 1 || estimatorType == 4) {
 					// Implement LS method
 					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false, doAnalyze, doTest);
 					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
@@ -235,9 +220,10 @@ public class IGS {
 
 				timeList.add(tRxMilli);
 			}
-			if (estimatorType == 3 || estimatorType == 4) {
-				EKF ekf = new EKF();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest);
+			if (estimatorType == 3 || estimatorType == 5) {
+				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
+						obsvCodeList);
 				int n = timeList.size();
 				if (doAnalyze) {
 					satResMap.put("EKF", new HashMap<String, ArrayList<SatResidual>>());
@@ -272,7 +258,9 @@ public class IGS {
 					}
 				}
 			}
-
+			if (estimatorType == 5) {
+				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap);
+			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			for (String key : estPosMap.keySet()) {
@@ -351,7 +339,10 @@ public class IGS {
 				HashMap<Measurement, HashMap<String, ArrayList<Double>>> _postVarOfUnitWeightMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
 				_postVarOfUnitWeightMap.put(Measurement.Pseudorange, postVarOfUnitWeightMap);
 				GraphPlotter.graphPostUnitW(_postVarOfUnitWeightMap, timeList);
-				GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
+				// GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
+				HashMap<Measurement, TreeMap<String, ArrayList<Long>>> _satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
+				_satCountMap.put(Measurement.Pseudorange, satCountMap);
+				GraphPlotter.graphSatCount(_satCountMap, timeList);
 			}
 		} catch (
 

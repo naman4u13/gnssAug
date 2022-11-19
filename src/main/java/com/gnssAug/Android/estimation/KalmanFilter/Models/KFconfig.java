@@ -97,16 +97,18 @@ public class KFconfig extends KF {
 		}
 	}
 
-	public void configIGS(double deltaT) throws Exception {
-		double[][] phi = new double[5][5];
-		double[][] Q = new double[5][5];
-		Q[3][3] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
-		Q[3][4] = (sg * Math.pow(deltaT, 2)) / 2;
-		Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
-		Q[4][4] = sg * deltaT;
-
-		IntStream.range(0, 5).forEach(x -> phi[x][x] = 1);
-		phi[3][4] = deltaT;
+	public void configIGS(double deltaT, int m) throws Exception {
+		int n = 3 + (2 * m);
+		double[][] phi = new double[n][n];
+		double[][] Q = new double[n][n];
+		for (int i = 3; i < 3 + m; i++) {
+			Q[i][i] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
+			Q[i][i + m] = (sg * Math.pow(deltaT, 2)) / 2;
+			Q[i + m][i] = (sg * Math.pow(deltaT, 2)) / 2;
+			Q[i + m][i + m] = sg * deltaT;
+			phi[i][i + m] = deltaT;
+		}
+		IntStream.range(0, n).forEach(x -> phi[x][x] = 1);
 		super.configure(phi, Q);
 	}
 

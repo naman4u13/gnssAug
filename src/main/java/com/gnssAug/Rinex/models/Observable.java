@@ -17,6 +17,8 @@ public class Observable {
 	private double prUncM;
 	private double phase;
 	private int freqID;
+	private char codeID;
+	private String obsvCode;
 
 	public int getSVID() {
 		return SVID;
@@ -27,7 +29,7 @@ public class Observable {
 	}
 
 	public Observable(char SSI, String SVID, String pseudorange, String CNo, String doppler, String cycle,
-			String carrier_frequency, int freqID) {
+			String carrier_frequency, int freqID, char codeID) {
 		this.SSI = SSI;
 		this.SVID = Integer.parseInt(SVID.replaceAll("[A-Z]", ""));
 		this.pseudorange = pseudorange != null ? Double.parseDouble(parseObs(pseudorange, true)) : 0;
@@ -41,6 +43,8 @@ public class Observable {
 		this.phase = this.cycle * this.carrier_wavelength;
 		this.pseudoRangeRate = -this.doppler * this.carrier_wavelength;
 		this.isLocked = false;
+		this.codeID = codeID;
+		this.obsvCode = SSI + "" + freqID + "" + codeID;
 
 	}
 
@@ -59,6 +63,8 @@ public class Observable {
 		this.LLI = satModel.LLI();
 		this.prUncM = satModel.getPrUncM();
 		this.freqID = satModel.freqID;
+		this.codeID = satModel.codeID;
+		this.obsvCode = satModel.obsvCode;
 	}
 
 	@Override
@@ -182,6 +188,14 @@ public class Observable {
 
 	public int getFreqID() {
 		return freqID;
+	}
+
+	public char getCodeID() {
+		return codeID;
+	}
+
+	public String getObsvCode() {
+		return obsvCode;
 	}
 
 }

@@ -13,12 +13,12 @@ public class MainApp {
 	public static void main(String[] args) {
 
 		Instant start = Instant.now();
-
-		switch (1) {
+		String base_url = "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
+		switch (2) {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 
-			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-01-05-US-SVL-1\\Pixel5";
+			String basePath = "C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-28-US-MTV-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
 			String[] date = strList[strList.length - 2].split("-");
@@ -29,7 +29,7 @@ public class MainApp {
 			cal.set(year, month - 1, day, 0, 0, 0);
 
 			String doy = String.format("%03d", cal.get(Calendar.DAY_OF_YEAR));
-			String base_url = "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
+
 			String mobName = strList[strList.length - 1];
 			String obs_path = basePath + "\\supplemental\\" + mobName + "_GnssLog.20o";
 			String derived_csv_path = basePath + "\\" + mobName + "_derived.csv";
@@ -39,12 +39,20 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0, 3, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, true);
+			Android.posEstimate(true, 0, 0, 6, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, false, true, false);
 			break;
 
 		case 2:
-			IGS.posEstimate(true, true, true, true, new String[] { "G1C" }, 4, 1, 0, true, true, 3, true, true);
+			year = 2021;
+			doy = "" + 119;
+			bias_path = base_url + year + "_" + doy + "\\CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
+			clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
+			orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
+			ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
+			String sinex_path = base_url + year + "_" + doy + "\\igs21P21554.SNX";
+			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
+					new String[] { "G1C" }, 5, 1, 0, true, true, 5, true, false);
 			break;
 
 		}

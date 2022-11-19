@@ -52,7 +52,10 @@ public class SingleFreq {
 					int SVID = sat.getSVID();
 					double tSV = tRX - (sat.getPseudorange() / SpeedofLight);
 
-					double satClkOff = clock.getBiasAndDrift(tSV, SVID, obsvCode, true)[0];
+					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, SVID, obsvCode, true);
+					double satClkOff = sat_ClkOff_Drift[0];
+					double satClkDrift = sat_ClkOff_Drift[1];
+
 					// GPS System transmission time
 					double t = tSV - satClkOff;
 					double[][] satPV = orbit.getPV(t, SVID, polyOrder, SSI);
@@ -70,7 +73,8 @@ public class SingleFreq {
 					// full cycles and then multiply by wavelength
 					/* double windup = satPC_windup[3]; */
 					sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * satClkOff));
-					Satellite _sat = new Satellite(sat, satECEF, satClkOff, t, tRX, satVel, 0.0, null, time);
+					sat.setPseudoRangeRate(sat.getPseudoRangeRate() + (SpeedofLight * satClkDrift));
+					Satellite _sat = new Satellite(sat, satECEF, satClkOff, t, tRX, satVel, satClkDrift, null, time);
 					_sat.compECI();
 					/* _sat.setPhaseWindUp(windup); */
 
@@ -120,6 +124,7 @@ public class SingleFreq {
 				// TimeScalesFactory.getGPS());
 //				double ele = tpf.getElevation(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
 //				double az = tpf.getAzimuth(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
+				sat.setPseudoRangeRate(sat.getPseudoRangeRate() + (SpeedofLight * SatClkDrift));
 				sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * ECEF_SatClkOff[3]));
 				SV.add(new Satellite(sat, Arrays.copyOfRange(ECEF_SatClkOff, 0, 3), ECEF_SatClkOff[3], t, tRX, SatVel,
 						SatClkDrift, ECI, time));

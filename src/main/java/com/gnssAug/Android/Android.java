@@ -5,7 +5,6 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
@@ -82,7 +81,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_IGS_GPS_GAL_test_1per";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\Pixel5_test3";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -110,10 +109,7 @@ public class Android {
 			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
 					.gettRx();
 			for (long tRxMilli : gnssLogMaps.keySet()) {
-				if (gtIndex == 37) {
-					gtIndex++;
-					continue;
-				}
+
 				if (gtIndex >= rxLLH.size()) {
 					break;
 				}
@@ -192,9 +188,9 @@ public class Android {
 //					}
 
 				}
-				if (estimatorType == 2 || estimatorType == 3) {
+				if (estimatorType == 2 || estimatorType == 6) {
 					// Implement WLS method
-					estEcefClk = LinearLeastSquare.getEstPos(satList, true, doAnalyze, false, useIGS);
+					estEcefClk = LinearLeastSquare.getEstPos(satList, true, doAnalyze, doTest, useIGS);
 					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
 					double[] estVel = LinearLeastSquare.getEstVel(satList, true, doAnalyze, doTest, estEcefClk, useIGS);
 					estVelMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estVel);
@@ -306,7 +302,7 @@ public class Android {
 
 			}
 
-			if (estimatorType == 2) {
+			if (estimatorType == 7) {
 				EKFDoppler ekf = new EKFDoppler();
 				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList, useIGS);
 				int n = timeList.size();
@@ -322,7 +318,7 @@ public class Android {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);
-				Analyzer.process(SatMap, imuMap, trueEcefList, trueVelEcef);
+				Analyzer.processAndroid(SatMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap);
 
 			}
 
@@ -382,17 +378,17 @@ public class Android {
 
 				// 95th Percentile
 
-				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
-				int q95 = (int) (n * 0.95);
-
-				System.out.println("\n" + key + " 95%");
-				System.out.println("RMS - ");
-				System.out.println(" E - " + posErrList[0].get(q95));
-				System.out.println(" N - " + posErrList[1].get(q95));
-				System.out.println(" U - " + posErrList[2].get(q95));
-				System.out.println(" 3d Error - " + posErrList[3].get(q95));
-				System.out.println(" 2d Error - " + posErrList[4].get(q95));
-				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
+//				IntStream.range(0, 6).forEach(i -> Collections.sort(posErrList[i]));
+//				int q95 = (int) (n * 0.95);
+//
+//				System.out.println("\n" + key + " 95%");
+//				System.out.println("RMS - ");
+//				System.out.println(" E - " + posErrList[0].get(q95));
+//				System.out.println(" N - " + posErrList[1].get(q95));
+//				System.out.println(" U - " + posErrList[2].get(q95));
+//				System.out.println(" 3d Error - " + posErrList[3].get(q95));
+//				System.out.println(" 2d Error - " + posErrList[4].get(q95));
+//				System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
 			for (String key : estVelMap.keySet()) {
@@ -446,16 +442,16 @@ public class Android {
 
 				// 95th Percentile
 
-				IntStream.range(0, 5).forEach(i -> Collections.sort(velErrList[i]));
-				int q95 = (int) (n * 0.95);
-
-				System.out.println("\n" + key + " 95%");
-				System.out.println("RMS - ");
-				System.out.println(" E - " + velErrList[0].get(q95));
-				System.out.println(" N - " + velErrList[1].get(q95));
-				System.out.println(" U - " + velErrList[2].get(q95));
-				System.out.println(" 3d Error - " + velErrList[3].get(q95));
-				System.out.println(" 2d Error - " + velErrList[4].get(q95));
+//				IntStream.range(0, 5).forEach(i -> Collections.sort(velErrList[i]));
+//				int q95 = (int) (n * 0.95);
+//
+//				System.out.println("\n" + key + " 95%");
+//				System.out.println("RMS - ");
+//				System.out.println(" E - " + velErrList[0].get(q95));
+//				System.out.println(" N - " + velErrList[1].get(q95));
+//				System.out.println(" U - " + velErrList[2].get(q95));
+//				System.out.println(" 3d Error - " + velErrList[3].get(q95));
+//				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
 			long t0 = (long) (timeList.get(0) * 1e-3);
@@ -469,16 +465,16 @@ public class Android {
 					System.out.println("t-t0:" + (t - t0) + " i:" + i + " ctr:" + ctr);
 				}
 			}
-			// Plot Error Graphs
-			if (Cxx_hat_map.isEmpty()) {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true);
-				GraphPlotter.graphENU(GraphVelMap, timeList, false);
-			} else {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
-				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
-			}
-			// Plot Error Graphs
-			//
+//			// Plot Error Graphs
+//			if (Cxx_hat_map.isEmpty()) {
+//				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+//				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+//			} else {
+//				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
+//				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
+//			}
+//			// Plot Error Graphs
+//			//
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);

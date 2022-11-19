@@ -16,7 +16,7 @@ public class StringUtil {
 		int lenSum = Arrays.stream(lens).sum();
 		if (lenSum != str.length()) {
 			if (flag) {
-				System.out.println("ERROR: splitter args are incorrect");
+				System.err.println("ERROR: splitter args are incorrect");
 				return null;
 			} else {
 				int lastEle = str.length() - lenSum;

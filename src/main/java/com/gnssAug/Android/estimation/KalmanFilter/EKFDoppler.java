@@ -7,6 +7,7 @@ import java.util.stream.IntStream;
 import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.Satellite;
@@ -71,7 +72,7 @@ public class EKFDoppler {
 	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
 			throws Exception {
 
-		double[] vel = LinearLeastSquare.getEstVel(satList, true,
+		double[] vel = LinearLeastSquare.getEstVel(satList, true, true, false,
 				new double[] { X.get(0), X.get(1), X.get(2), X.get(3) }, useIGS);
 		for (int i = 0; i < 4; i++) {
 			X.set(i, X.get(i) + vel[i] * deltaT);
@@ -82,7 +83,7 @@ public class EKFDoppler {
 
 		// Satellite count
 		int n = satList.size();
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getDopplerCxx_hat_ecef();
+		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler);
 		// Assign Q and F matrix
 		kfObj.configDoppler(deltaT, Cxx_dot_hat);
 		kfObj.predict();

@@ -136,8 +136,8 @@ public class ObservationRNX {
 
 						SV.computeIfAbsent(SSI, k -> new HashMap<Integer, HashMap<Character, ArrayList<Observable>>>())
 								.computeIfAbsent(freqID, k -> new HashMap<Character, ArrayList<Observable>>())
-								.computeIfAbsent(codeID, k -> new ArrayList<Observable>())
-								.add(new Observable(SSI, SVID, pseudorange, CNo, doppler, cycle, frequency, freqID));
+								.computeIfAbsent(codeID, k -> new ArrayList<Observable>()).add(new Observable(SSI, SVID,
+										pseudorange, CNo, doppler, cycle, frequency, freqID, codeID));
 
 					}
 
