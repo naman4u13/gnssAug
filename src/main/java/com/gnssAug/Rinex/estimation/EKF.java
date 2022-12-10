@@ -54,7 +54,7 @@ public class EKF {
 		 */
 		double[][] x = new double[n][1];
 		double[][] P = new double[n][n];
-		double[] intialECEF = LinearLeastSquare.process(SatMap.firstEntry().getValue(), rxPCO, true);
+		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), rxPCO, true);
 		IntStream.range(0, 3 + m).forEach(i -> x[i][0] = intialECEF[i]);
 
 		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 10);

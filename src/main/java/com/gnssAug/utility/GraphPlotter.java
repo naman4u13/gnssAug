@@ -27,36 +27,49 @@ import com.gnssAug.Rinex.models.SatResidual;
 
 public class GraphPlotter extends ApplicationFrame {
 
-	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean isSatRes,
-			boolean flag) {
+	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean isSatRes, boolean flag,
+			boolean outlierAnalyze) {
 
 		super(name);
-		JFreeChart chart = null;
+		ArrayList<JFreeChart> charts = new ArrayList<JFreeChart>();
 		if (isSatRes) {
+
 			if (flag) {
-				chart = ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
-						"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag));
+				charts.add(ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
+						"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
+				if (outlierAnalyze) {
+					charts.add(ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
+							"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
+				}
 			} else {
-				chart = ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
+				charts.add(ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
 						"Elevation-Angle(in degrees)", "Satellite-Residual(in m or m/s)",
-						createDatasetSatRes(satResMap, isSatRes, flag));
+						createDatasetSatRes(satResMap, isSatRes, flag, false)));
+				if (outlierAnalyze) {
+					charts.add(ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
+							"Elevation-Angle(in degrees)", "Satellite-Residual(in m or m/s)",
+							createDatasetSatRes(satResMap, isSatRes, flag, true)));
+				}
 			}
 		} else {
+
 			if (flag) {
-				chart = ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
-						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag));
+				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
+						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
 			} else {
-				chart = ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
+				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
 						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m or m/s)",
-						createDatasetSatRes(satResMap, isSatRes, flag));
+						createDatasetSatRes(satResMap, isSatRes, flag, false)));
 			}
 		}
-		final ChartPanel chartPanel = new ChartPanel(chart);
-		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
-		chartPanel.setMouseZoomable(true, false);
-		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
-		// 1000, 600);
-		setContentPane(chartPanel);
+		for (JFreeChart chart : charts) {
+			final ChartPanel chartPanel = new ChartPanel(chart);
+			chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+			chartPanel.setMouseZoomable(true, false);
+			// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+			// 1000, 600);
+			setContentPane(chartPanel);
+		}
 
 	}
 
@@ -204,6 +217,22 @@ public class GraphPlotter extends ApplicationFrame {
 
 		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name,
 				createAnalyseDataset2(map, alpha));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map,
+			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name,
+				createAnalyseDataset3(map, outlierMap));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -439,6 +468,12 @@ public class GraphPlotter extends ApplicationFrame {
 
 	public static void graphSatRes(
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap) {
+		graphSatRes(satResMap, false);
+	}
+
+	public static void graphSatRes(
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
+			boolean outlierAnaylze) {
 
 		for (Measurement key : satResMap.keySet()) {
 			HashMap<String, HashMap<String, ArrayList<SatResidual>>> subSatResMap = satResMap.get(key);
@@ -452,13 +487,13 @@ public class GraphPlotter extends ApplicationFrame {
 
 				// For Satellite Residuals
 				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey),
-						type + " " + subKey + ": Satellite-Residual", true, true);
+						type + " " + subKey + ": Satellite-Residual", true, true, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
 				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": Satellite-Residual", true,
-						false);
+						false, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
@@ -736,6 +771,47 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
+	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, Double>> map,
+			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries inliers = new XYSeries("inliers");
+		final XYSeries outliers = new XYSeries("outliers");
+		int in = 0;
+		int out = 0;
+		for (String key : map.keySet()) {
+
+			TreeMap<Integer, Double> data = map.get(key);
+			if (outlierMap.containsKey(key)) {
+				ArrayList<SatResidual> outlierList = outlierMap.get(key);
+
+				if (data.size() != outlierList.size()) {
+					throw new Exception("Error while Analysing data in GraphPlotter");
+				}
+				int i = 0;
+				for (int x : data.keySet()) {
+					double y = data.get(x);
+					SatResidual satRes = outlierList.get(i);
+					i++;
+
+					if (satRes.isOutlier()) {
+						outliers.add(x, y);
+						out++;
+					} else {
+						inliers.add(x, y);
+						in++;
+					}
+
+				}
+			}
+		}
+		inliers.setKey("Inliers (Count: " + in + ")");
+		outliers.setKey("Outliers (Count: " + out + ")");
+
+		dataset.addSeries(inliers);
+		dataset.addSeries(outliers);
+		return dataset;
+	}
+
 	private XYDataset createDatasetGnssIns(TreeMap<Long, double[]> ecefMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
@@ -930,48 +1006,74 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean isSatRes,
-			boolean flag) {
+			boolean flag, boolean outlierAnalyze) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		for (String key : dataMap.keySet()) {
-			final XYSeries series = new XYSeries(key);
-			ArrayList<SatResidual> dataList = dataMap.get(key);
+		if (outlierAnalyze && isSatRes) {
+			final XYSeries inlier = new XYSeries("inlier");
+			final XYSeries outlier = new XYSeries("outlier");
+			for (String key : dataMap.keySet()) {
+				ArrayList<SatResidual> dataList = dataMap.get(key);
 
-			if (flag) {
 				double t0 = 0;
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
-					double t = satData.getT();
-					double data;
-					if (isSatRes) {
-						data = satData.getResidual();
+					double x = 0;
+					if (flag) {
+						double t = satData.getT();
+
+						x = t;
 					} else {
-						data = satData.getNoise();
+						double elevAngle = Math.toDegrees(satData.getElevAngle());
+						x = elevAngle;
+					}
+					double data = satData.getResidual();
+
+					if (satData.isOutlier()) {
+						outlier.add(x, data);
+					} else {
+						inlier.add(x, data);
 					}
 
-					if (t - t0 > 1) {
-						series.add(t0, null);
-					}
-					series.add(t, data);
-					t0 = t;
 				}
-			} else {
+
+			}
+			dataset.addSeries(outlier);
+			dataset.addSeries(inlier);
+		} else {
+
+			for (String key : dataMap.keySet()) {
+				final XYSeries series = new XYSeries(key);
+				ArrayList<SatResidual> dataList = dataMap.get(key);
+
+				double t0 = 0;
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
-					double elevAngle = Math.toDegrees(satData.getElevAngle());
+					double x = 0;
+					if (flag) {
+						double t = satData.getT();
+						if (t - t0 > 1) {
+							series.add(t0, null);
+						}
+						t0 = t;
+						x = t;
+					} else {
+						double elevAngle = Math.toDegrees(satData.getElevAngle());
+						x = elevAngle;
+					}
+
 					double data;
 					if (isSatRes) {
 						data = satData.getResidual();
 					} else {
 						data = satData.getNoise();
 					}
-
-					series.add(elevAngle, data);
+					series.add(x, data);
 
 				}
-			}
 
-			dataset.addSeries(series);
+				dataset.addSeries(series);
+			}
 		}
 
 		return dataset;

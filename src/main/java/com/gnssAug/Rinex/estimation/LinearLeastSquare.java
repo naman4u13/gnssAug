@@ -11,104 +11,217 @@ import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
-	private static double[] residual = null;
-	private static double postVarOfUnitW;
-	private static SimpleMatrix Cxx_hat;
-	private static double[] dop;
-	private static ArrayList<Satellite> testedSatList;
+	final private static double pseudorange_priorVarOfUnitW = 0.113;
+	final private static double doppler_priorVarOfUnitW = 6.24e-4;
+	private static HashMap<Measurement, double[]> residualMap = new HashMap<Measurement, double[]>();
+	private static HashMap<Measurement, Double> postVarOfUnitWMap = new HashMap<Measurement, Double>();
+	private static HashMap<Measurement, SimpleMatrix> Cxx_hat_Map = new HashMap<Measurement, SimpleMatrix>();
 
-	public static double[] process(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS)
+	private static double[] dop;
+	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
+
+	public static double[] getEstPos(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS)
 			throws Exception {
-		return process(satList, PCO, isWLS, false, false);
+		return process(satList, PCO, isWLS, false, false, false, Measurement.Pseudorange, null);
+	}
+
+	public static double[] getEstPos(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS,
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze) throws Exception {
+		return process(satList, PCO, isWLS, doAnalyze, doTest, outlierAnalyze, Measurement.Pseudorange, null);
+	}
+
+	public static double[] getEstVel(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS,
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, double[] refPos) throws Exception {
+		return process(satList, PCO, isWLS, doAnalyze, doTest, outlierAnalyze, Measurement.Doppler, refPos);
 	}
 
 	public static double[] process(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, boolean isWLS,
-			boolean doAnalyze, boolean doTest) throws Exception {
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Measurement type, double[] refPos)
+			throws Exception {
 		// Satellite count
 		int n = satList.size();
+		int DIA_type = 2;
 		// Weight matrix
 		double[][] weight = new double[n][n];
-		testedSatList = satList;
+		for (int i = 0; i < n; i++) {
+			satList.get(i).setOutlier(false);
+		}
+		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
+
+		double scale = 1;
+		if (type == Measurement.Doppler) {
+			scale = 100;
+		}
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
 		 * be based on elevation angle otherwise identity matrix will assigned for LS
 		 */
 		if (isWLS) {
 			weight = Weight.computeCovInvMat(satList);
+			weight = Matrix.scale(weight, scale);
 		} else {
 			for (int i = 0; i < n; i++) {
 				weight[i][i] = 1;
 			}
 		}
 		String[] obsvCodeList = findObsvCodeSet(satList);
-		double[] estEcefClk = regress(satList, PCO, weight, obsvCodeList);
+		double[] estState = estimate(testedSatList, weight, PCO, refPos, type, obsvCodeList);
 		if (doAnalyze) {
-			HashSet<Integer> indexSet = qualityControl2(weight, satList, estEcefClk, PCO, doTest, obsvCodeList);
+			switch (DIA_type) {
+			case 1:
+				HashSet<Integer> indexSet = qualityControl(weight, estState, testedSatList, PCO, doTest, type, refPos,
+						obsvCodeList);
 
-			if (!indexSet.isEmpty()) {
-				testedSatList = new ArrayList<Satellite>();
-				int j = 0;
-				int _n = n - indexSet.size();
-				double[][] _weight = new double[_n][_n];
+				if (!indexSet.isEmpty()) {
+					testedSatList = new ArrayList<Satellite>();
+					int j = 0;
+					int _n = n - indexSet.size();
+					double[][] _weight = new double[_n][_n];
 
-				for (int i = 0; i < n; i++) {
-					Satellite sat = satList.get(i);
-					if (!indexSet.contains(i)) {
+					for (int i = 0; i < n; i++) {
+						Satellite sat = satList.get(i);
+						if (!indexSet.contains(i)) {
+							sat.setOutlier(false);
+							testedSatList.add(sat);
+							_weight[j][j] = weight[i][i];
+							j++;
 
-						testedSatList.add(sat);
-						_weight[j][j] = weight[i][i];
-						j++;
-
+						} else {
+							sat.setOutlier(true);
+						}
+					}
+					obsvCodeList = findObsvCodeSet(testedSatList);
+					estState = estimate(testedSatList, _weight, PCO, refPos, type, obsvCodeList);
+					if (!outlierAnalyze) {
+						qualityControl(_weight, estState, testedSatList, PCO, false, type, refPos, obsvCodeList);
 					}
 				}
-				obsvCodeList = findObsvCodeSet(testedSatList);
-				estEcefClk = regress(testedSatList, PCO, _weight, obsvCodeList);
-				qualityControl2(_weight, testedSatList, estEcefClk, PCO, false, obsvCodeList);
+				break;
+			case 2:
+				if (outlierAnalyze) {
+					qualityControl(weight, estState, satList, PCO, false, type, refPos, obsvCodeList);
+				}
+				double[][] _weight = weight;
+				if (doTest) {
+
+					int index = 0;
+					int _n = n;
+					while (index != -1) {
+
+						index = qualityControl2(_weight, estState, testedSatList, PCO, type, refPos, obsvCodeList);
+						if (index != -1) {
+							Satellite sat = testedSatList.remove(index);
+							satList.get(satList.indexOf(sat)).setOutlier(true);
+							_n = _n - 1;
+							int j = 0;
+							double[][] _tempweight = new double[_n][_n];
+							for (int i = 0; i < _n + 1; i++) {
+								if (i != index) {
+									_tempweight[j][j] = _weight[i][i];
+									j++;
+								}
+							}
+							_weight = _tempweight;
+							obsvCodeList = findObsvCodeSet(testedSatList);
+
+							estState = estimate(testedSatList, _weight, PCO, refPos, type, obsvCodeList);
+						}
+					}
+				}
+				if (!outlierAnalyze) {
+					qualityControl(_weight, estState, testedSatList, PCO, false, type, refPos, obsvCodeList);
+				}
+				break;
+
 			}
+
 		}
-		return estEcefClk;
+		if (outlierAnalyze) {
+			testedSatListMap.put(type, satList);
+		} else {
+			testedSatListMap.put(type, testedSatList);
+		}
+		return estState;
 
 	}
 
-	public static HashSet<Integer> qualityControl2(double[][] weight, ArrayList<Satellite> satList, double[] estEcefClk,
-			HashMap<String, double[]> PCO, boolean doTest, String[] obsvCodeList) throws Exception {
+	public static HashSet<Integer> qualityControl(double[][] weight, double[] estState, ArrayList<Satellite> satList,
+			HashMap<String, double[]> PCO, boolean doTest, Measurement type, double[] refPos, String[] obsvCodeList)
+			throws Exception {
 		int n = satList.size();
 		int m = obsvCodeList.length;
 		int l = 3 + m;
 		HashSet<Integer> indexSet = new HashSet<Integer>();
-		residual = new double[n];
+		double[] residual = new double[n];
 		double[][] h = new double[n][l];
+		double[] userEcef = estState;
+		if (type == Measurement.Doppler) {
+			userEcef = refPos;
+		}
 		for (int i = 0; i < n; i++) {
+
 			Satellite sat = satList.get(i);
 			String obsvCode = sat.getObsvCode();
+			// Its not really a ECI, therefore don't get confused
+			double[] satEcef = sat.getSatEci();
 			double[] pco = PCO.get(obsvCode);
-			double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> estEcefClk[x] + pco[x]).toArray();
+			double[] rxAPC = new double[3];
+			for (int j = 0; j < 3; j++) {
+				rxAPC[j] = userEcef[j] + pco[j];
+			}
+			double gr_hat = MathUtil.getEuclidean(satEcef, rxAPC);
+			for (int j = 0; j < 3; j++) {
+				h[i][j] = -(satEcef[j] - userEcef[j]) / gr_hat;
+			}
+			double y = 0;
+			double y_hat = 0;
 
-			double pr = sat.getPseudorange();
-			double gr_hat = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> sat.getSatEci()[j] - rxAPC[j])
-					.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
-			double pr_hat = gr_hat;
-			final int _i = i;
-			IntStream.range(0, 3).forEach(j -> h[_i][j] = -(sat.getSatEci()[j] - rxAPC[j]) / gr_hat);
 			for (int j = 0; j < m; j++) {
 				if (obsvCode.equals(obsvCodeList[j])) {
 					h[i][3 + j] = 1;
-					pr_hat += estEcefClk[3 + j];
+					y_hat += estState[3 + j];
 				}
 			}
 
-			residual[i] = pr_hat - pr;
+			if (type == Measurement.Pseudorange) {
+				y = sat.getPseudorange();
+				// Approx Pseudorange
+				y_hat += gr_hat;
+
+			} else if (type == Measurement.Doppler) {
+				double rangeRate = sat.getPseudoRangeRate();
+				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+				SimpleMatrix A = new SimpleMatrix(1, 3, true, new double[] { -h[i][0], -h[i][1], -h[i][2] });
+				/*
+				 * Observable derived from doppler and satellite velocity, refer Kaplan and
+				 * personal notes
+				 */
+				double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+				y = dopplerDerivedObs;
+				// Approx DopplerDerivedObs
+				y_hat += -(A.get(0) * estState[0]) - (A.get(1) * estState[1]) - (A.get(2) * estState[2]);
+
+			}
+			residual[i] = y - y_hat;
+
 		}
 
 		SimpleMatrix Cyy = null;
-		double priorVarOfUnitW = 0.03;
+		double priorVarOfUnitW = 1;
+		if (type == Measurement.Pseudorange) {
+			priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+		} else if (type == Measurement.Doppler) {
+			priorVarOfUnitW = doppler_priorVarOfUnitW;
+		}
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;
 		for (int i = 0; i < n; i++) {
@@ -126,16 +239,21 @@ public class LinearLeastSquare {
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
 		SimpleMatrix Cyy_inv = Cyy.invert();
 		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
-		postVarOfUnitW = globalTq * priorVarOfUnitW / (n - l);
+		double postVarOfUnitW = globalTq * priorVarOfUnitW / (n - l);
 		if (n == l) {
 			postVarOfUnitW = -1;
 		}
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
-		Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+		SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
+//		for (int i = 0; i < n; i++) {
+//			residual[i] = Math.abs(e_hat.get(i) / Math.sqrt(Cee_hat.get(i, i)));
+//		}
 		if (doTest && n > l + 1) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - l);
-			double alpha = 0.0001;
+			double alpha = 0.01;
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
@@ -156,7 +274,8 @@ public class LinearLeastSquare {
 							C.set(combination[j], j, 1);
 							_indexSet.add(combination[j]);
 						}
-						SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+						// SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H,
+						// Cyy_inv);
 						SimpleMatrix C_ = P_H_perpendicular.mult(C);
 						SimpleMatrix P_C_ = Matrix.getProjection(C_, Cyy_inv);
 						double Tq = Matrix.getNorm(P_C_.mult(e_hat), Cyy);
@@ -183,18 +302,148 @@ public class LinearLeastSquare {
 
 		// Convert to ENU frame
 		SimpleMatrix R = new SimpleMatrix(l, l);
-		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estEcefClk)));
+		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estState)));
 		for (int i = 0; i < m; i++) {
 			R.set(3 + i, 3 + i, 1);
 		}
 		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
 		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
+		Cxx_hat_Map.put(type, Cxx_hat);
+		postVarOfUnitWMap.put(type, postVarOfUnitW);
+		residualMap.put(type, residual);
 		return indexSet;
 
 	}
 
-	public static double[] regress(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, double[][] weight,
+	// Baarda's Iterative Data Snooping
+	private static int qualityControl2(double[][] weight, double[] estState, ArrayList<Satellite> satList,
+			HashMap<String, double[]> PCO, Measurement type, double[] refPos, String[] obsvCodeList) throws Exception {
+
+		int n = satList.size();
+		int m = obsvCodeList.length;
+		int l = 3 + m;
+		HashSet<Integer> indexSet = new HashSet<Integer>();
+		double[] residual = new double[n];
+		double[][] h = new double[n][l];
+		double[] userEcef = estState;
+		if (type == Measurement.Doppler) {
+			userEcef = refPos;
+		}
+		for (int i = 0; i < n; i++) {
+
+			Satellite sat = satList.get(i);
+			String obsvCode = sat.getObsvCode();
+			// Its not really a ECI, therefore don't get confused
+			double[] satEcef = sat.getSatEci();
+			double[] pco = PCO.get(obsvCode);
+			double[] rxAPC = new double[3];
+			for (int j = 0; j < 3; j++) {
+				rxAPC[j] = userEcef[j] + pco[j];
+			}
+			double gr_hat = MathUtil.getEuclidean(satEcef, rxAPC);
+			for (int j = 0; j < 3; j++) {
+				h[i][j] = -(satEcef[j] - userEcef[j]) / gr_hat;
+			}
+			double y = 0;
+			double y_hat = 0;
+
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					h[i][3 + j] = 1;
+					y_hat += estState[3 + j];
+				}
+			}
+
+			if (type == Measurement.Pseudorange) {
+				y = sat.getPseudorange();
+				// Approx Pseudorange
+				y_hat += gr_hat;
+
+			} else if (type == Measurement.Doppler) {
+				double rangeRate = sat.getPseudoRangeRate();
+				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+				SimpleMatrix A = new SimpleMatrix(1, 3, true, new double[] { -h[i][0], -h[i][1], -h[i][2] });
+				/*
+				 * Observable derived from doppler and satellite velocity, refer Kaplan and
+				 * personal notes
+				 */
+				double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+				y = dopplerDerivedObs;
+				// Approx DopplerDerivedObs
+				y_hat += -(A.get(0) * estState[0]) - (A.get(1) * estState[1]) - (A.get(2) * estState[2]);
+
+			}
+			residual[i] = y - y_hat;
+
+		}
+
+		SimpleMatrix Cyy = null;
+		double priorVarOfUnitW = 1;
+		if (type == Measurement.Pseudorange) {
+			priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+		} else if (type == Measurement.Doppler) {
+			priorVarOfUnitW = doppler_priorVarOfUnitW;
+		}
+		double[][] cov = new double[n][n];
+		double max = Double.MIN_VALUE;
+		for (int i = 0; i < n; i++) {
+			max = Math.max(weight[i][i], max);
+		}
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / max;
+		}
+
+		for (int i = 0; i < n; i++) {
+			cov[i][i] = priorVarOfUnitW / weight[i][i];
+		}
+		Cyy = new SimpleMatrix(cov);
+
+		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
+		SimpleMatrix Cyy_inv = Cyy.invert();
+		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
+		int index = -1;
+		if (n > (l + 1)) {
+			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - l);
+			double alpha = 0.01;
+			if (globalTq == 0) {
+				throw new Exception("Error: T stat is zero");
+			}
+			// Detection
+			double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+			if (globalPVal < alpha) {
+				// Identification
+				double max_w = Double.MIN_VALUE;
+				SimpleMatrix H = new SimpleMatrix(h);
+				SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+				SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
+				for (int j = 0; j < n; j++) {
+					double w = Math.abs(e_hat.get(j) / Math.sqrt(Cee_hat.get(j, j)));
+					if (w > max_w) {
+						max_w = w;
+						index = j;
+					}
+				}
+
+			}
+		}
+
+		return index;
+	}
+
+	private static double[] estimate(ArrayList<Satellite> satList, double[][] weight, HashMap<String, double[]> PCO,
+			double[] refPos, Measurement type, String[] obsvCodeList) throws Exception {
+
+		if (type == Measurement.Pseudorange) {
+			return estimatePos(satList, PCO, weight, obsvCodeList);
+		} else if (type == Measurement.Doppler) {
+			return estimateVel(satList, weight, refPos, obsvCodeList);
+		} else {
+			throw new Exception("Fatal Error: Wrong Measurement Type chosen");
+		}
+	}
+
+	public static double[] estimatePos(ArrayList<Satellite> satList, HashMap<String, double[]> PCO, double[][] weight,
 			String[] obsvCodeList) throws Exception {
 
 		int n = satList.size();
@@ -249,9 +498,12 @@ public class LinearLeastSquare {
 				SimpleMatrix Ht = H.transpose();
 				SimpleMatrix W = new SimpleMatrix(weight);
 				SimpleMatrix HtWHinv = null;
-
-				HtWHinv = (Ht.mult(W).mult(H)).invert();
-
+				try {
+					HtWHinv = (Ht.mult(W).mult(H)).invert();
+				} catch (Exception e) {
+					// TODO: handle exception
+					System.err.println(e);
+				}
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector
@@ -274,24 +526,86 @@ public class LinearLeastSquare {
 
 	}
 
-	public static double[] getResidual() {
-		return residual;
+	private static double[] estimateVel(ArrayList<Satellite> satList, double[][] weight, double[] estEcefClk,
+			String[] obsvCodeList) throws Exception {
+		// Satellite count
+		int n = satList.size();
+		int m = obsvCodeList.length;
+		double[] estVel = new double[3 + m];
+		double[] z = new double[n];
+
+		// Jacobian or Design Matrix
+		double[][] h = new double[n][3 + m];
+		// Minimum 4 satellite are required to proceed
+
+		if (n >= 3 + m) {
+			// Iterate through each satellite, to compute LOS vector and Approx pseudorange
+			for (int i = 0; i < n; i++) {
+
+				Satellite sat = satList.get(i);
+				String obsvCode = sat.getObsvCode();
+				// Its not really a ECI, therefore don't get confused
+				double[] satEcef = sat.getSatEci();
+
+				// Approx Geometric Range
+				double approxGR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - estEcefClk[j])
+						.map(j -> Math.pow(j, 2)).reduce((j, k) -> j + k).getAsDouble());
+				int index = i;
+				IntStream.range(0, 3).forEach(j -> h[index][j] = -(satEcef[j] - estEcefClk[j]) / approxGR);
+
+				for (int j = 0; j < m; j++) {
+					if (obsvCode.equals(obsvCodeList[j])) {
+						h[i][3 + j] = 1;
+					}
+				}
+
+				double rangeRate = sat.getPseudoRangeRate();
+				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
+				SimpleMatrix A = new SimpleMatrix(1, 3, true, new double[] { -h[i][0], -h[i][1], -h[i][2] });
+
+				/*
+				 * Observable derived from doppler and satellite velocity, refer Kaplan and
+				 * personal notes
+				 */
+				double dopplerDerivedObs = rangeRate - A.mult(satVel).get(0);
+				z[i] = dopplerDerivedObs;
+
+			}
+			// Least Squares implementation
+			SimpleMatrix H = new SimpleMatrix(h);
+			SimpleMatrix Ht = H.transpose();
+			SimpleMatrix W = new SimpleMatrix(weight);
+			SimpleMatrix HtWHinv = (Ht.mult(W).mult(H)).invert();
+			SimpleMatrix Z = new SimpleMatrix(n, 1, true, z);
+			SimpleMatrix X = HtWHinv.mult(Ht).mult(W).mult(Z);
+
+			// Velocity
+			IntStream.range(0, 3 + m).forEach(i -> estVel[i] = X.get(i, 0));
+			return estVel;
+		}
+
+		throw new Exception("Satellite count is less than " + (3 + m) + " , can't compute user position");
+
 	}
 
-	public static double getPostVarOfUnitW() {
-		return postVarOfUnitW;
+	public static double getPostVarOfUnitW(Measurement type) {
+		return postVarOfUnitWMap.get(type);
 	}
 
-	public static SimpleMatrix getCxx_hat() {
-		return Cxx_hat;
+	public static double[] getResidual(Measurement type) {
+		return residualMap.get(type);
+	}
+
+	public static SimpleMatrix getCxx_hat(Measurement type) {
+		return Cxx_hat_Map.get(type);
 	}
 
 	public static double[] getDop() {
 		return dop;
 	}
 
-	public static ArrayList<Satellite> getTestedSatList() {
-		return testedSatList;
+	public static ArrayList<Satellite> getTestedSatList(Measurement type) {
+		return testedSatListMap.get(type);
 	}
 
 	private static String[] findObsvCodeSet(ArrayList<Satellite> satList) {

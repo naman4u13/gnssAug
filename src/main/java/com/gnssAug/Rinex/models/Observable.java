@@ -5,7 +5,7 @@ public class Observable {
 	private static final double SPEED_OF_LIGHT = 299792458;
 	private final double carrier_frequency;
 	private final double carrier_wavelength;
-	private int SVID;
+	private int svid;
 	private double pseudorange;
 	private double CNo;
 	private double doppler;
@@ -21,7 +21,7 @@ public class Observable {
 	private String obsvCode;
 
 	public int getSVID() {
-		return SVID;
+		return svid;
 	}
 
 	public double getPseudorange() {
@@ -31,7 +31,7 @@ public class Observable {
 	public Observable(char SSI, String SVID, String pseudorange, String CNo, String doppler, String cycle,
 			String carrier_frequency, int freqID, char codeID) {
 		this.SSI = SSI;
-		this.SVID = Integer.parseInt(SVID.replaceAll("[A-Z]", ""));
+		this.svid = Integer.parseInt(SVID.replaceAll("[A-Z]", ""));
 		this.pseudorange = pseudorange != null ? Double.parseDouble(parseObs(pseudorange, true)) : 0;
 		this.CNo = CNo != null ? Double.parseDouble(parseObs(CNo)) : 0;
 		this.doppler = doppler != null ? Double.parseDouble(parseObs(doppler)) : 0;
@@ -41,6 +41,8 @@ public class Observable {
 		this.freqID = freqID;
 		this.carrier_wavelength = SPEED_OF_LIGHT / this.carrier_frequency;
 		this.phase = this.cycle * this.carrier_wavelength;
+		// The negative sign is removed, because the RINEX store doppler with opposite
+		// sign
 		this.pseudoRangeRate = -this.doppler * this.carrier_wavelength;
 		this.isLocked = false;
 		this.codeID = codeID;
@@ -50,7 +52,7 @@ public class Observable {
 
 	public Observable(Observable satModel) {
 		this.SSI = satModel.getSSI();
-		this.SVID = satModel.getSVID();
+		this.svid = satModel.getSVID();
 		this.pseudorange = satModel.getPseudorange();
 		this.CNo = satModel.getCNo();
 		this.doppler = satModel.getDoppler();
@@ -69,7 +71,7 @@ public class Observable {
 
 	@Override
 	public String toString() {
-		return "Observable [SVID=" + SVID + ", pseudorange=" + pseudorange + ", CNo=" + CNo + ", doppler=" + doppler
+		return "Observable [svid=" + svid + ", pseudorange=" + pseudorange + ", CNo=" + CNo + ", doppler=" + doppler
 				+ ", pseudoRangeRate=" + pseudoRangeRate + "]";
 	}
 
@@ -90,7 +92,7 @@ public class Observable {
 	}
 
 	public void setSVID(int sVID) {
-		SVID = sVID;
+		svid = sVID;
 	}
 
 	public void setPseudorange(double pseudorange) {

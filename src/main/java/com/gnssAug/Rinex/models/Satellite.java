@@ -23,7 +23,9 @@ public class Satellite extends Observable {
 	private double ionoErr;
 	private double tropoErr;
 
-	// Experimental param
+	// Experimental param, set by comparing range from true range
+	private boolean isTrueOutlier;
+	// set by using outlier detection/DIA method
 	private boolean isOutlier;
 
 	public double[] getSatEcef() {
@@ -164,6 +166,14 @@ public class Satellite extends Observable {
 	public void setTropoErr(double tropoErr) {
 		this.tropoErr = tropoErr;
 
+	}
+
+	public boolean isTrueOutlier() {
+		return isTrueOutlier;
+	}
+
+	public void setTrueOutlier(boolean isOutlier) {
+		this.isTrueOutlier = isOutlier;
 	}
 
 	public boolean isOutlier() {

@@ -27,6 +27,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.Measurement;
+import com.gnssAug.Android.constants.State;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Bias;
@@ -57,19 +58,21 @@ public class IGS {
 	public static void posEstimate(String bias_path, String clock_path, String orbit_path, String ionex_path,
 			String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX, String[] obsvCodeList,
 			int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo, int estimatorType,
-			boolean doAnalyze, boolean doTest) {
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
 			HashMap<String, ArrayList<double[]>> estPosMap = new HashMap<String, ArrayList<double[]>>();
+			HashMap<String, ArrayList<double[]>> estVelMap = new HashMap<String, ArrayList<double[]>>();
 			TreeMap<Long, ArrayList<Satellite>> satMap = new TreeMap<Long, ArrayList<Satellite>>();
-			HashMap<String, HashMap<String, ArrayList<SatResidual>>> satResMap = new HashMap<String, HashMap<String, ArrayList<SatResidual>>>();
 			HashMap<String, HashMap<String, ArrayList<Double>>> satMeasNoiseMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 
-			HashMap<String, ArrayList<Double>> postVarOfUnitWeightMap = new HashMap<String, ArrayList<Double>>();
-			HashMap<String, ArrayList<SimpleMatrix>> Cxx_hat_map = new HashMap<String, ArrayList<SimpleMatrix>>();
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+
+			HashMap<Measurement, HashMap<String, ArrayList<Double>>> postVarOfUnitWeightMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
+			HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>> Cxx_hat_map = new HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
-			TreeMap<String, ArrayList<Long>> satCountMap = new TreeMap<String, ArrayList<Long>>();
+			HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			Bias bias = null;
 			Orbit orbit = null;
@@ -81,13 +84,13 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\ALBH00CAN_R_20211190000_01D_30S_MO.crx\\ALBH00CAN_R_20211190000_01D_30S_MO.rnx";
+					+ "\\LROC00FRA_R_20211190000_01D_30S_MO.crx\\LROC00FRA_R_20211190000_01D_30S_MO.rnx";
 
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
 
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\ALBH5";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -134,85 +137,90 @@ public class IGS {
 			}
 			double tRx0 = ObsvMsgs.get(0).getTRX();
 			for (ObservationMsg obsvMsg : ObsvMsgs) {
-				double tRX = obsvMsg.getTRX();
-				double dayTime = tRX % 86400;
+				double tRx = obsvMsg.getTRX();
+				double dayTime = tRx % 86400;
 				long weekNo = obsvMsg.getWeekNo();
-				Calendar time = Time.getDate(tRX, weekNo, 0);
-				if (Time.getGPSTime(time)[0] != tRX) {
+				Calendar time = Time.getDate(tRx, weekNo, 0);
+				if (Time.getGPSTime(time)[0] != tRx) {
 					System.err.println("FATAL ERROR TIME calendar");
 					return;
 				}
 				ArrayList<Satellite> satList = null;
 				satList = SingleFreq.process(obsvMsg, NavMsgs, obsvCodeList, useIGS, useBias, ionoCoeff, bias, orbit,
-						clock, antenna, tRX, weekNo, time);
+						clock, antenna, tRx, weekNo, time);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
-				double[] refEcef = LinearLeastSquare.process(satList, rxPCO, false);
+				double[] refEcef = LinearLeastSquare.getEstPos(satList, rxPCO, false);
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refEcef, i.getSatEci())));
 				filterSat(satList, refEcef, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
-				long tRxMilli = (long) (tRX * 1000);
-				// Estimate
-				if (estimatorType == 1 || estimatorType == 4) {
-					// Implement LS method
-					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, false, doAnalyze, doTest);
-					estPosMap.computeIfAbsent("LS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					if (doAnalyze) {
-						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("LS", k -> new HashMap<String, ArrayList<SatResidual>>());
-						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
-						int n = testedSatList.size();
-						for (int i = 0; i < n; i++) {
-							Satellite sat = testedSatList.get(i);
+				long tRxMilli = (long) (tRx * 1000);
 
-							satResMap.get("LS")
-									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
-											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRX - tRx0, sat.getElevAzm()[0], residual[i]));
-
-						}
-
-						postVarOfUnitWeightMap.computeIfAbsent("LS", k -> new ArrayList<Double>())
-								.add(LinearLeastSquare.getPostVarOfUnitW());
-						Cxx_hat_map.computeIfAbsent("LS", k -> new ArrayList<SimpleMatrix>())
-								.add(LinearLeastSquare.getCxx_hat());
-						// dopMap.computeIfAbsent("LS", k -> new
-						// ArrayList<double[]>()).add(LinearLeastSquare.getDop());
+				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3) {
+					int[] arr = new int[] { estimatorType };
+					if (estimatorType == 3) {
+						arr = new int[] { 1, 2 };
 					}
-
-				}
-				if (estimatorType == 2 || estimatorType == 4) {
-					// Implement WLS method
-					double[] estEcefClk = LinearLeastSquare.process(satList, rxPCO, true, doAnalyze, doTest);
-					estPosMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(estEcefClk);
-					if (doAnalyze) {
-						double[] residual = LinearLeastSquare.getResidual();
-						satResMap.computeIfAbsent("WLS", k -> new HashMap<String, ArrayList<SatResidual>>());
-						ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList();
-						int n = testedSatList.size();
-						for (int i = 0; i < n; i++) {
-							Satellite sat = testedSatList.get(i);
-							satResMap.get("WLS")
-									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
-											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRX - tRx0, sat.getElevAzm()[0], residual[i]));
-
+					for (int i : arr) {
+						boolean isWLS = false;
+						String estType = "LS";
+						if (i == 2) {
+							isWLS = true;
+							estType = "WLS";
 						}
-						if (doTest) {
-							n = satList.size() - n;
-						}
-						satCountMap.computeIfAbsent("WLS", k -> new ArrayList<Long>()).add((long) n);
-						postVarOfUnitWeightMap.computeIfAbsent("WLS", k -> new ArrayList<Double>())
-								.add(LinearLeastSquare.getPostVarOfUnitW());
-						Cxx_hat_map.computeIfAbsent("WLS", k -> new ArrayList<SimpleMatrix>())
-								.add(LinearLeastSquare.getCxx_hat());
-						dopMap.computeIfAbsent("WLS", k -> new ArrayList<double[]>()).add(LinearLeastSquare.getDop());
+						// Implement WLS method
+						double[] estEcefClk = null;
+						double[] estVel = null;
+						for (Measurement type : new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }) {
+							if (type == Measurement.Pseudorange) {
+								estEcefClk = LinearLeastSquare.getEstPos(satList, rxPCO, isWLS, doAnalyze, doTest,
+										outlierAnalyze);
+								estPosMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estEcefClk);
+							} else {
+								estVel = LinearLeastSquare.getEstVel(satList, rxPCO, isWLS, doAnalyze, doTest,
+										outlierAnalyze, estEcefClk);
+								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
+							}
+							if (doAnalyze) {
 
+								double[] residual = LinearLeastSquare.getResidual(type);
+								satResMap
+										.computeIfAbsent(type,
+												k -> new HashMap<String, HashMap<String, ArrayList<SatResidual>>>())
+										.computeIfAbsent(estType, k -> new HashMap<String, ArrayList<SatResidual>>());
+								ArrayList<Satellite> testedSatList = LinearLeastSquare.getTestedSatList(type);
+								int n = testedSatList.size();
+								for (int j = 0; j < n; j++) {
+									Satellite sat = testedSatList.get(j);
+									satResMap.get(type).get(estType)
+											.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSVID(),
+													k -> new ArrayList<SatResidual>())
+											.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
+													sat.isOutlier()));
+
+								}
+								if (doTest) {
+									n = satList.size() - n;
+								}
+								satCountMap.computeIfAbsent(type, k -> new TreeMap<String, ArrayList<Long>>())
+										.computeIfAbsent(estType, k -> new ArrayList<Long>()).add((long) n);
+								postVarOfUnitWeightMap
+										.computeIfAbsent(type, k -> new HashMap<String, ArrayList<Double>>())
+										.computeIfAbsent(estType, k -> new ArrayList<Double>())
+										.add(LinearLeastSquare.getPostVarOfUnitW(type));
+								State state = (type != Measurement.Pseudorange) ? State.Velocity : State.Position;
+								Cxx_hat_map.computeIfAbsent(state, k -> new HashMap<String, ArrayList<SimpleMatrix>>())
+										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
+										.add(LinearLeastSquare.getCxx_hat(type));
+							}
+							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
+									.add(LinearLeastSquare.getDop());
+						}
 					}
 				}
 
@@ -220,13 +228,18 @@ public class IGS {
 
 				timeList.add(tRxMilli);
 			}
-			if (estimatorType == 3 || estimatorType == 5) {
+			if (estimatorType == 3 || estimatorType == 4) {
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
 						obsvCodeList);
 				int n = timeList.size();
 				if (doAnalyze) {
-					satResMap.put("EKF", new HashMap<String, ArrayList<SatResidual>>());
+					satResMap.put(Measurement.Pseudorange,
+							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
+					satResMap.get(Measurement.Pseudorange).put("EKF", new HashMap<String, ArrayList<SatResidual>>());
+					satCountMap.put(Measurement.Pseudorange, new TreeMap<String, ArrayList<Long>>());
+					Cxx_hat_map.put(State.Position, new HashMap<String, ArrayList<SimpleMatrix>>());
+					postVarOfUnitWeightMap.put(Measurement.Pseudorange, new HashMap<String, ArrayList<Double>>());
 					satMeasNoiseMap.put("EKF", new HashMap<String, ArrayList<Double>>());
 					ArrayList<double[]> redundancyList = ekf.getRedundancyList();
 					GraphPlotter.graphRedundancy(redundancyList);
@@ -243,26 +256,29 @@ public class IGS {
 						double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
-							satResMap.get("EKF")
+							satResMap.get(Measurement.Pseudorange).get("EKF")
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j], measNoise[j]));
 
 						}
-						satCountMap.computeIfAbsent("EKF", k -> new ArrayList<Long>())
+						satCountMap.get(Measurement.Pseudorange).computeIfAbsent("EKF", k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
-						Cxx_hat_map.computeIfAbsent("EKF", k -> new ArrayList<SimpleMatrix>())
+						Cxx_hat_map.get(State.Position).computeIfAbsent("EKF", k -> new ArrayList<SimpleMatrix>())
 								.add(ekf.getErrCovMap().get(time));
-						postVarOfUnitWeightMap.computeIfAbsent("EKF", k -> new ArrayList<Double>())
+						postVarOfUnitWeightMap.get(Measurement.Pseudorange)
+								.computeIfAbsent("EKF", k -> new ArrayList<Double>())
 								.add(ekf.getPostVarOfUnitWMap().get(time));
 					}
 				}
 			}
-			if (estimatorType == 5) {
-				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap);
+			if (estimatorType == 1) {
+				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap);
 			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
+			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
+
 			for (String key : estPosMap.keySet()) {
 				ArrayList<Double>[] posErrList = new ArrayList[5];
 
@@ -320,29 +336,88 @@ public class IGS {
 				System.out.println(" 2d Error - " + posErrList[4].get(q95));
 
 			}
+
+			for (String key : estVelMap.keySet()) {
+				ArrayList<Double>[] velErrList = new ArrayList[5];
+				ArrayList<double[]> estVelList = null;
+				ArrayList<double[]> enuVelList = null;
+				IntStream.range(0, 5).forEach(i -> velErrList[i] = new ArrayList<Double>());
+				enuVelList = new ArrayList<double[]>();
+				estVelList = estVelMap.get(key);
+				int n = estVelList.size();
+				final double[] trueVel = new double[3];
+				for (int i = 0; i < n; i++) {
+					double[] estVel = estVelList.get(i);
+					long time = timeList.get(i);
+					if (estVel == null) {
+						continue;
+					}
+
+					double[] velErr = IntStream.range(0, 3).mapToDouble(j -> estVel[j] - trueVel[j]).toArray();
+					double[] enu = LatLonUtil.ecef2enu(velErr, rxARP, false);
+
+					enuVelList.add(enu);
+					// error in East direction
+					velErrList[0].add(Math.sqrt(enu[0] * enu[0]));
+					// error in North direction
+					velErrList[1].add(Math.sqrt(enu[1] * enu[1]));
+					// error in Up direction
+					velErrList[2].add(Math.sqrt(enu[2] * enu[2]));
+					// 3d error
+					velErrList[3].add(Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+					// 2d error
+					velErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+
+				}
+//				for (int i = removalList.size() - 1; i >= 0; i--) {
+//					Cxx_hat_map.get(State.Velocity).get(key).remove((int) removalList.get(i));
+//				}
+
+				GraphVelMap.put(key, enuVelList);
+
+				// RMSE
+				System.out.println("\n" + key);
+				System.out.println("Velocity RMS - ");
+				System.out.println(" E - " + MathUtil.RMS(velErrList[0]));
+				System.out.println(" N - " + MathUtil.RMS(velErrList[1]));
+				System.out.println(" U - " + MathUtil.RMS(velErrList[2]));
+				System.out.println(" 3d Error - " + MathUtil.RMS(velErrList[3]));
+				System.out.println(" 2d Error - " + MathUtil.RMS(velErrList[4]));
+
+				// 95th Percentile
+
+				IntStream.range(0, 5).forEach(i -> Collections.sort(velErrList[i]));
+				int q95 = (int) (n * 0.95);
+
+				System.out.println("\n" + key + " 95%");
+				System.out.println("RMS - ");
+				System.out.println(" E - " + velErrList[0].get(q95));
+				System.out.println(" N - " + velErrList[1].get(q95));
+				System.out.println(" U - " + velErrList[2].get(q95));
+				System.out.println(" 3d Error - " + velErrList[3].get(q95));
+				System.out.println(" 2d Error - " + velErrList[4].get(q95));
+
+			}
 			long t0 = timeList.get(0);
 			for (int i = 0; i < timeList.size(); i++) {
 				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
 
 			// Plot Error Graphs
-			if (Cxx_hat_map.isEmpty()) {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true);
-			} else {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map);
-			}
+//			if (Cxx_hat_map.isEmpty()) {
+//				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+//				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+//			} else {
+//				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
+//				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
+//			}
 
 			if (doAnalyze) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> _satResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				_satResMap.put(Measurement.Pseudorange, satResMap);
-				GraphPlotter.graphSatRes(_satResMap);
-				HashMap<Measurement, HashMap<String, ArrayList<Double>>> _postVarOfUnitWeightMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
-				_postVarOfUnitWeightMap.put(Measurement.Pseudorange, postVarOfUnitWeightMap);
-				GraphPlotter.graphPostUnitW(_postVarOfUnitWeightMap, timeList);
+
+				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
+				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 				// GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
-				HashMap<Measurement, TreeMap<String, ArrayList<Long>>> _satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
-				_satCountMap.put(Measurement.Pseudorange, satCountMap);
-				GraphPlotter.graphSatCount(_satCountMap, timeList);
+				GraphPlotter.graphSatCount(satCountMap, timeList);
 			}
 		} catch (
 

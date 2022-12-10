@@ -10,8 +10,10 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.Rinex.models.SatResidual;
 
 public class Analyzer {
 	private final static double SpeedofLight = 299792458;
@@ -83,12 +85,16 @@ public class Analyzer {
 	}
 
 	public static void processIGS(TreeMap<Long, ArrayList<com.gnssAug.Rinex.models.Satellite>> satMap, double[] rxARP,
-			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap) throws Exception {
-
+			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap,
+			HashMap<String, ArrayList<double[]>> estVelMap,
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap) throws Exception {
+		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
+		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
+		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 		long time0 = satMap.firstKey();
 		double alpha = 0.01;
-		String estType = "EKF";
+		String estType = "LS";
 		int i = 0;
 		if (estType.equals("EKF")) {
 			satMap.remove(satMap.firstKey());
@@ -98,32 +104,56 @@ public class Analyzer {
 			ArrayList<com.gnssAug.Rinex.models.Satellite> satList = satMap.get(time);
 			String[] obsvCodeList = findObsvCodeSet(satList);
 			int m = obsvCodeList.length;
+			int n = satList.size();
 			double[] rxClkOff = new double[m];
+			double[] rxClkDrift = new double[m];
+			double[] trueVel = new double[3];
 			int timeDiff = (int) ((time - time0) / 1e3);
 			for (int j = 0; j < m; j++) {
 				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
 				rangeMap.computeIfAbsent("RxClkOff(offset of 10 added) " + obsvCodeList[j],
 						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkOff[j]);
+				if (estType.equals("WLS") || estType.equals("LS")) {
+					rxClkDrift[j] = estVelMap.get(estType).get(i)[j + 3];
+					dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
+							k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+				}
 			}
 
-			for (com.gnssAug.Rinex.models.Satellite sat : satList) {
-
+			for (int j = 0; j < n; j++) {
+				com.gnssAug.Rinex.models.Satellite sat = satList.get(j);
 				String obsvCode = sat.getObsvCode();
 				double[] pco = rxPCO.get(obsvCode);
 				double[] rxAPC = IntStream.range(0, 3).mapToDouble(x -> rxARP[x] + pco[x]).toArray();
 				double[] satPos = sat.getSatEci();
 				double trueRange = MathUtil.getEuclidean(rxAPC, satPos);
 				double range = sat.getPseudorange();
-				for (int j = 0; j < m; j++) {
-					if (obsvCode.equals(obsvCodeList[j])) {
-						range -= rxClkOff[j];
+				for (int k = 0; k < m; k++) {
+					if (obsvCode.equals(obsvCodeList[k])) {
+						range -= rxClkOff[k];
 					}
 				}
 				int svid = sat.getSVID();
 				String code = sat.getObsvCode().charAt(0) + "";
-				double sigma = Math.sqrt(0.3);
+
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						(range - trueRange) / sigma);
+						(range - trueRange) / pseudorange_priorSigmaOfUnitW);
+				if (estType.equals("WLS") || estType.equals("LS")) {
+					double[] satVel = sat.getSatVel();
+					double[] relVel = IntStream.range(0, 3).mapToDouble(k -> satVel[k] - trueVel[k]).toArray();
+					double[] unitLos = IntStream.range(0, 3).mapToDouble(k -> (satPos[k] - rxAPC[k]) / trueRange)
+							.toArray();
+					double trueRangeRate = IntStream.range(0, 3).mapToDouble(k -> unitLos[k] * relVel[k]).sum();
+					double rangeRate = sat.getPseudoRangeRate();
+					for (int k = 0; k < m; k++) {
+						if (obsvCode.equals(obsvCodeList[k])) {
+							rangeRate -= rxClkDrift[k];
+						}
+					}
+
+					dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
+							(rangeRate - trueRangeRate) / doppler_priorSimgaOfUnitW);
+				}
 
 			}
 			i++;
@@ -136,10 +166,33 @@ public class Analyzer {
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
-		chart = new GraphPlotter("Outlier and Inliers(in m)", rangeMap, alpha);
+		chart = new GraphPlotter("Range Outlier and Inliers(in m)", rangeMap, alpha);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
+		if (estType.equals("WLS") || estType.equals("LS")) {
+			chart = new GraphPlotter("Error in Range-Rate(in m/s)", dopplerMap);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+
+			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+
+			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+					satResMap.get(Measurement.Pseudorange).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+
+			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+					satResMap.get(Measurement.Doppler).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
 
 		// GraphPlotter.graphIMU(imuMap);
 
@@ -228,7 +281,7 @@ public class Analyzer {
 					double err = rangeMap.get(svid).get(timeDiff);
 					double pval = 1 - normal.cumulativeProbability(err);
 					if (pval < alpha) {
-						sat.setOutlier(true);
+						sat.setTrueOutlier(true);
 					}
 				}
 			}
