@@ -774,8 +774,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, Double>> map,
 			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		final XYSeries inliers = new XYSeries("inliers");
 		final XYSeries outliers = new XYSeries("outliers");
+		final XYSeries inliers = new XYSeries("inliers");
+
 		int in = 0;
 		int out = 0;
 		for (String key : map.keySet()) {
@@ -806,9 +807,9 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 		inliers.setKey("Inliers (Count: " + in + ")");
 		outliers.setKey("Outliers (Count: " + out + ")");
-
-		dataset.addSeries(inliers);
 		dataset.addSeries(outliers);
+		dataset.addSeries(inliers);
+
 		return dataset;
 	}
 

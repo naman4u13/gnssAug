@@ -404,13 +404,13 @@ public class IGS {
 			}
 
 			// Plot Error Graphs
-//			if (Cxx_hat_map.isEmpty()) {
-//				GraphPlotter.graphENU(GraphPosMap, timeList, true);
-//				GraphPlotter.graphENU(GraphVelMap, timeList, false);
-//			} else {
-//				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
-//				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
-//			}
+			if (Cxx_hat_map.isEmpty()) {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			} else {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
+				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
+			}
 
 			if (doAnalyze) {
 

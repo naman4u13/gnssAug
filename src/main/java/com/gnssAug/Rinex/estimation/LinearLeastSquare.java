@@ -20,8 +20,8 @@ import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
-	final private static double pseudorange_priorVarOfUnitW = 0.113;
-	final private static double doppler_priorVarOfUnitW = 6.24e-4;
+	final private static double pseudorange_priorVarOfUnitW = 0.181;
+	final private static double doppler_priorVarOfUnitW = 2.39e-4;
 	private static HashMap<Measurement, double[]> residualMap = new HashMap<Measurement, double[]>();
 	private static HashMap<Measurement, Double> postVarOfUnitWMap = new HashMap<Measurement, Double>();
 	private static HashMap<Measurement, SimpleMatrix> Cxx_hat_Map = new HashMap<Measurement, SimpleMatrix>();
@@ -49,7 +49,7 @@ public class LinearLeastSquare {
 			throws Exception {
 		// Satellite count
 		int n = satList.size();
-		int DIA_type = 2;
+		int DIA_type = 1;
 		// Weight matrix
 		double[][] weight = new double[n][n];
 		for (int i = 0; i < n; i++) {

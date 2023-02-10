@@ -88,8 +88,8 @@ public class Analyzer {
 			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap,
 			HashMap<String, ArrayList<double[]>> estVelMap,
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap) throws Exception {
-		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
-		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
+//		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
+//		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 		long time0 = satMap.firstKey();
@@ -137,7 +137,7 @@ public class Analyzer {
 				String code = sat.getObsvCode().charAt(0) + "";
 
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						(range - trueRange) / pseudorange_priorSigmaOfUnitW);
+						(range - trueRange));
 				if (estType.equals("WLS") || estType.equals("LS")) {
 					double[] satVel = sat.getSatVel();
 					double[] relVel = IntStream.range(0, 3).mapToDouble(k -> satVel[k] - trueVel[k]).toArray();
@@ -152,7 +152,7 @@ public class Analyzer {
 					}
 
 					dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-							(rangeRate - trueRangeRate) / doppler_priorSimgaOfUnitW);
+							(rangeRate - trueRangeRate));
 				}
 
 			}
@@ -166,20 +166,20 @@ public class Analyzer {
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
-		chart = new GraphPlotter("Range Outlier and Inliers(in m)", rangeMap, alpha);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+//		chart = new GraphPlotter("Range Outlier and Inliers(in m)", rangeMap, alpha);
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
 		if (estType.equals("WLS") || estType.equals("LS")) {
 			chart = new GraphPlotter("Error in Range-Rate(in m/s)", dopplerMap);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 
-			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+//			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
+//			chart.pack();
+//			RefineryUtilities.positionFrameRandomly(chart);
+//			chart.setVisible(true);
 
 			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
