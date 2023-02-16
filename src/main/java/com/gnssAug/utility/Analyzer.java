@@ -94,7 +94,7 @@ public class Analyzer {
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 		long time0 = satMap.firstKey();
 		double alpha = 0.01;
-		String estType = "LS";
+		String estType = "EKF";
 		int i = 0;
 		if (estType.equals("EKF")) {
 			satMap.remove(satMap.firstKey());
@@ -180,7 +180,7 @@ public class Analyzer {
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
-
+/*
 			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
 			chart.pack();
@@ -191,7 +191,7 @@ public class Analyzer {
 					satResMap.get(Measurement.Doppler).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+			chart.setVisible(true);*/
 		}
 
 		// GraphPlotter.graphIMU(imuMap);

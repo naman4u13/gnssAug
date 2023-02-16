@@ -34,6 +34,11 @@ public class KF {
 		this.x = new SimpleMatrix(x);
 		this.P = new SimpleMatrix(P);
 	}
+	
+	public void setState_ProcessCov(SimpleMatrix x, SimpleMatrix P) {
+		this.x = x;
+		this.P = P;
+	}
 
 	// Prediction step
 	public void predict() {
