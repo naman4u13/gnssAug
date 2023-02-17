@@ -26,6 +26,7 @@ public class EKF {
 	private KFconfig kfObj;
 	private double prObsNoiseVar;
 	private double[] innovation;
+	private double[] temp_innovation;
 	private TreeMap<Long, double[]> innovationMap;
 	private TreeMap<Long, double[]> residualMap;
 	private TreeMap<Long, double[]> measNoiseMap;
@@ -107,7 +108,7 @@ public class EKF {
 
 				SimpleMatrix errCov = R.mult(P).mult(R.transpose());
 				errCovMap.put(currentTime, errCov);
-				innovationMap.put(currentTime, innovation);
+				innovationMap.put(currentTime, temp_innovation);
 			}
 			/*
 			 * Check whether estimate error covariance matrix is positive semidefinite
@@ -158,6 +159,8 @@ public class EKF {
 		// Measurement Noise
 		double[][] _R = new double[n][n];
 		innovation = new double[n];
+		temp_innovation = new double[n];
+		
 		for (int i = 0; i < n; i++) {
 
 			Satellite sat = satList.get(i);
@@ -175,7 +178,7 @@ public class EKF {
 
 			innovation[i] = z[i][0] - ze[i][0];
 		}
-		double priorVarOfUnitW = 0.146;
+		double priorVarOfUnitW = 0.181;
 		if (isWeighted) {
 			double[][] weight = Weight.computeCovInvMat(satList);
 			SimpleMatrix Cyy = null;
@@ -202,21 +205,41 @@ public class EKF {
 			}
 		}
 		SimpleMatrix R = new SimpleMatrix(_R);
+		
+		SimpleMatrix P = kfObj.getCovariance();
+		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
+		SimpleMatrix Cvv_inv = Cvv.invert();
+		SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
+		for (int i = 0; i < n; i++) {
+			SimpleMatrix cv = new SimpleMatrix(n,1);
+			cv.set(i, 1);
+			double w = cv.transpose().mult(Cvv_inv).mult(v).get(0)/Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
+			temp_innovation[i] = w;
+		}
+		
 		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);	
 		if(doTest&&!outlierAnalyze)
 		{
-			performTesting(R, H, n, m, satList, testedSatList, z, ze);
+			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
+			R = (SimpleMatrix) params[0];
+			H = (SimpleMatrix) params[1];
+			z =  (double[][]) params[2];
+			ze = (double[][]) params[3];
 		}
 		kfObj.update(z, R, ze, H);
 		if(doAnalyze)
 		{
-			performAnalysis(testedSatList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,obsvCodeList);
+			performAnalysis(testedSatList,satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,obsvCodeList,outlierAnalyze);
 		}
 		if(outlierAnalyze)
 		{
 			kfObj.setState_ProcessCov(priorX, priorP);
 			kfObj.predict();
-			performTesting(R, H, n, m, satList, testedSatList, z, ze);
+			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
+			R = (SimpleMatrix) params[0];
+			H = (SimpleMatrix) params[1];
+			z =  (double[][]) params[2];
+			ze = (double[][]) params[3];
 			kfObj.update(z, R, ze, H);
 		}
 		
@@ -224,7 +247,7 @@ public class EKF {
 		
 	}
 
-	private void performAnalysis(ArrayList<Satellite> testedSatList,HashMap<String, double[]> rxPCO,SimpleMatrix R,SimpleMatrix H,SimpleMatrix priorP,long currentTime,boolean doTest,double priorVarOfUnitW,int n,String[] obsvCodeList)
+	private void performAnalysis(ArrayList<Satellite> testedSatList,ArrayList<Satellite> satList,HashMap<String, double[]> rxPCO,SimpleMatrix R,SimpleMatrix H,SimpleMatrix priorP,long currentTime,boolean doTest,double priorVarOfUnitW,int n,String[] obsvCodeList,boolean outlierAnalyze)
 	{
 		
 			int _n = testedSatList.size();
@@ -290,12 +313,19 @@ public class EKF {
 				_n = n - _n;
 			}
 			satCountMap.put(currentTime, (long) _n);
-			satListMap.put(currentTime, testedSatList);
+			if(outlierAnalyze)
+			{
+				satListMap.put(currentTime, satList);
+			}
+			else
+			{
+				satListMap.put(currentTime, testedSatList);
+			}
 			measNoiseMap.put(currentTime, measNoise);
 		
 	}
 	
-	void performTesting(SimpleMatrix R,SimpleMatrix H,int n,int m,ArrayList<Satellite> satList,ArrayList<Satellite> testedSatList,double[][] z,double[][] ze) throws Exception
+	Object[] performTesting(SimpleMatrix R,SimpleMatrix H,int n,int m,ArrayList<Satellite> satList,ArrayList<Satellite> testedSatList,double[][] z,double[][] ze) throws Exception
 	{
 			// Pre-fit residual/innovation
 			SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
@@ -364,8 +394,8 @@ public class EKF {
 				csd = new ChiSquaredDistribution(_n-1);
 				globalPVal = 1 - csd.cumulativeProbability(globalTq);
 			}
-			
-			
+			return new Object[] {R,H,z,ze};
+				
 	}
 	
 	
@@ -431,6 +461,7 @@ public class EKF {
 	public TreeMap<Long, double[]> getMeasNoiseMap() {
 		return measNoiseMap;
 	}
+	
 	
 	
 

@@ -54,7 +54,7 @@ public class MainApp {
 			ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
 			String sinex_path = base_url + year + "_" + doy + "\\igs21P21554.SNX";
 			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C" }, 4, 1, 0, true, true, 4, true, true, false);
+					new String[] { "G1C","E1C" }, 4, 1, 0, true, true, 4, true, true, true);
 			break;
 
 		}

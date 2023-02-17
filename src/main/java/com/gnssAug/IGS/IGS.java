@@ -85,13 +85,13 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\LROC00FRA_R_20211190000_01D_30S_MO.crx\\LROC00FRA_R_20211190000_01D_30S_MO.rnx";
+					+ "\\ALBH00CAN_R_20211190000_01D_30S_MO.crx\\ALBH00CAN_R_20211190000_01D_30S_MO.rnx";
 
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
 			//String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test3";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -230,6 +230,7 @@ public class IGS {
 				timeList.add(tRxMilli);
 			}
 			if (estimatorType == 3 || estimatorType == 4) {
+				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,outlierAnalyze,
 						obsvCodeList);
@@ -238,6 +239,9 @@ public class IGS {
 					satResMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 					satResMap.get(Measurement.Pseudorange).put("EKF", new HashMap<String, ArrayList<SatResidual>>());
+					satInnMap.put(Measurement.Pseudorange,
+							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
+					satInnMap.get(Measurement.Pseudorange).put("EKF", new HashMap<String, ArrayList<SatResidual>>());
 					satCountMap.put(Measurement.Pseudorange, new TreeMap<String, ArrayList<Long>>());
 					Cxx_hat_map.put(State.Position, new HashMap<String, ArrayList<SimpleMatrix>>());
 					postVarOfUnitWeightMap.put(Measurement.Pseudorange, new HashMap<String, ArrayList<Double>>());
@@ -270,11 +274,33 @@ public class IGS {
 						postVarOfUnitWeightMap.get(Measurement.Pseudorange)
 								.computeIfAbsent("EKF", k -> new ArrayList<Double>())
 								.add(ekf.getPostVarOfUnitWMap().get(time));
+						
+						// For innovation vector
+						satList = satMap.get(time);
+						double[] innovation = ekf.getInnovationMap().get(time);
+						m = satList.size();
+						if(m!=innovation.length)
+						{
+							throw new Exception("Fatal Error while mapping innovation sequence");
+						}
+						for (int j = 0; j < m; j++) {
+							Satellite sat = satList.get(j);
+							satInnMap.get(Measurement.Pseudorange).get("EKF")
+									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+											k -> new ArrayList<SatResidual>())
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j], sat.isOutlier()));
+
+						}
+						
+						
 					}
 				}
+				if (doAnalyze) {
+					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze,true);
+					}
 			}
 			if (estimatorType == 4) {
-				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap);
+				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap,outlierAnalyze);
 			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();

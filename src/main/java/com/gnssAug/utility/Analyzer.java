@@ -87,7 +87,7 @@ public class Analyzer {
 	public static void processIGS(TreeMap<Long, ArrayList<com.gnssAug.Rinex.models.Satellite>> satMap, double[] rxARP,
 			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap,
 			HashMap<String, ArrayList<double[]>> estVelMap,
-			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap) throws Exception {
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
 //		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
 //		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
@@ -175,24 +175,30 @@ public class Analyzer {
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
+		
+			if(outlierAnalyze) {
+			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+					satResMap.get(Measurement.Doppler).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);}
+
+		
+		}
 
 //			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
-/*
-			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
-					satResMap.get(Measurement.Pseudorange).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
-
-			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
-					satResMap.get(Measurement.Doppler).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);*/
+		if(outlierAnalyze) {
+		chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+				satResMap.get(Measurement.Pseudorange).get(estType));
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
 		}
+
+				
 
 		// GraphPlotter.graphIMU(imuMap);
 

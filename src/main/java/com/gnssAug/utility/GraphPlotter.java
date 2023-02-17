@@ -31,23 +31,24 @@ public class GraphPlotter extends ApplicationFrame {
 			boolean outlierAnalyze) {
 
 		super(name);
+		name = name.split(":")[1];
 		ArrayList<JFreeChart> charts = new ArrayList<JFreeChart>();
 		if (isSatRes) {
 
 			if (flag) {
-				charts.add(ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
-						"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
+				charts.add(ChartFactory.createScatterPlot(name, "GPS-time",
+						name+"(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
 				if (outlierAnalyze) {
-					charts.add(ChartFactory.createScatterPlot("Satellite-Residual", "GPS-time",
-							"Satellite-Residual(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
+					charts.add(ChartFactory.createScatterPlot(name, "GPS-time",
+							name+"(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
 				}
 			} else {
-				charts.add(ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
-						"Elevation-Angle(in degrees)", "Satellite-Residual(in m or m/s)",
+				charts.add(ChartFactory.createScatterPlot(name+" vs Elevation Angle",
+						"Elevation-Angle(in degrees)", name+"(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, false)));
 				if (outlierAnalyze) {
-					charts.add(ChartFactory.createScatterPlot("Satellite-Residual vs Elevation Angle",
-							"Elevation-Angle(in degrees)", "Satellite-Residual(in m or m/s)",
+					charts.add(ChartFactory.createScatterPlot(name+" vs Elevation Angle",
+							"Elevation-Angle(in degrees)", name+"(in m or m/s)",
 							createDatasetSatRes(satResMap, isSatRes, flag, true)));
 				}
 			}
@@ -474,6 +475,12 @@ public class GraphPlotter extends ApplicationFrame {
 	public static void graphSatRes(
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
 			boolean outlierAnaylze) {
+		graphSatRes(satResMap, outlierAnaylze,false);
+		
+	}
+	public static void graphSatRes(
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
+			boolean outlierAnaylze,boolean isInnov) {
 
 		for (Measurement key : satResMap.keySet()) {
 			HashMap<String, HashMap<String, ArrayList<SatResidual>>> subSatResMap = satResMap.get(key);
@@ -483,16 +490,21 @@ public class GraphPlotter extends ApplicationFrame {
 			} else {
 				type = "Doppler";
 			}
+			String name ="Satellite-Residual" ;
+			if(isInnov)
+			{
+				name = "Satellite-Innovation" ;
+			}
 			for (String subKey : subSatResMap.keySet()) {
 
 				// For Satellite Residuals
 				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey),
-						type + " " + subKey + ": Satellite-Residual", true, true, outlierAnaylze);
+						type + " " + subKey + ": "+name, true, true, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
-				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": Satellite-Residual", true,
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": "+name, true,
 						false, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
