@@ -85,13 +85,13 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\ALBH00CAN_R_20211190000_01D_30S_MO.crx\\ALBH00CAN_R_20211190000_01D_30S_MO.rnx";
+					+ "\\HOLB00CAN_R_20211190000_01D_30S_MO.crx\\HOLB00CAN_R_20211190000_01D_30S_MO.rnx";
 
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
 			//String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\HOLB_GPS";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
