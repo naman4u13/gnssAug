@@ -38,12 +38,14 @@ public class EKF {
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
 	final private static double pseudorange_priorVarOfUnitW = 0.181;
+
 	public EKF() {
 		kfObj = new KFconfig();
 	}
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
-			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest,boolean outlierAnalyze, String[] obsvCodeList) throws Exception {
+			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList)
+			throws Exception {
 
 		int m = obsvCodeList.length;
 		int n = 3 + (2 * m);
@@ -74,12 +76,13 @@ public class EKF {
 			measNoiseMap = new TreeMap<Long, double[]>();
 		}
 		// Begin iteration or recursion
-		return iterate(SatMap, rxPCO, timeList, doAnalyze, doTest,outlierAnalyze, obsvCodeList);
+		return iterate(SatMap, rxPCO, timeList, doAnalyze, doTest, outlierAnalyze, obsvCodeList);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
-			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest,boolean outlierAnalyze, String[] obsvCodeList) throws Exception {
+			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList)
+			throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = obsvCodeList.length;
 		int x_size = 3 + (2 * m);
@@ -90,7 +93,7 @@ public class EKF {
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
 			// Perform Predict and Update
-			runFilter2(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest,outlierAnalyze, obsvCodeList );
+			runFilter(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest, outlierAnalyze, obsvCodeList);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
@@ -127,7 +130,8 @@ public class EKF {
 
 	// Innovation Based Testing
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, HashMap<String, double[]> rxPCO,
-			long currentTime, boolean doAnalyze, boolean doTest,boolean outlierAnalyze, String[] obsvCodeList) throws Exception {
+			long currentTime, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList)
+			throws Exception {
 
 		// Satellite count
 		int n = satList.size();
@@ -138,8 +142,6 @@ public class EKF {
 		// Assign Q and F matrix
 		kfObj.configIGS(deltaT, m);
 		kfObj.predict();
-		
-		boolean isWeighted = false;
 		SimpleMatrix x = kfObj.getState();
 		final double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double[] rxClkOff = new double[m];// in meters
@@ -161,7 +163,7 @@ public class EKF {
 		double[][] _R = new double[n][n];
 		innovation = new double[n];
 		temp_innovation = new double[n];
-		
+
 		for (int i = 0; i < n; i++) {
 
 			Satellite sat = satList.get(i);
@@ -180,78 +182,56 @@ public class EKF {
 			innovation[i] = z[i][0] - ze[i][0];
 		}
 		double priorVarOfUnitW = pseudorange_priorVarOfUnitW;
-		if (isWeighted) {
-			double[][] weight = Weight.computeCovInvMat(satList);
-			SimpleMatrix Cyy = null;
-			priorVarOfUnitW = 0.03;
-			double[][] cov = new double[n][n];
-			double max = Double.MIN_VALUE;
-			for (int i = 0; i < n; i++) {
-				max = Math.max(weight[i][i], max);
-			}
-			for (int i = 0; i < n; i++) {
-				weight[i][i] = weight[i][i] / max;
-			}
 
-			for (int i = 0; i < n; i++) {
-				cov[i][i] = priorVarOfUnitW / weight[i][i];
-			}
-			Cyy = new SimpleMatrix(cov);
-			for (int i = 0; i < n; i++) {
-				_R[i][i] = Cyy.get(i, i);
-			}
-		} else {
-			for (int i = 0; i < n; i++) {
-				_R[i][i] = priorVarOfUnitW;
-			}
+		for (int i = 0; i < n; i++) {
+			_R[i][i] = priorVarOfUnitW;
 		}
+
 		SimpleMatrix R = new SimpleMatrix(_R);
-		
+
+		// Plotting test statistic
 		SimpleMatrix P = kfObj.getCovariance();
 		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
 		SimpleMatrix Cvv_inv = Cvv.invert();
 		SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
 		for (int i = 0; i < n; i++) {
-			SimpleMatrix cv = new SimpleMatrix(n,1);
+			SimpleMatrix cv = new SimpleMatrix(n, 1);
 			cv.set(i, 1);
-			double w = cv.transpose().mult(Cvv_inv).mult(v).get(0)/Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
+			double w = cv.transpose().mult(Cvv_inv).mult(v).get(0)
+					/ Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
 			temp_innovation[i] = w;
 		}
-		
-		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);	
-		if(doTest&&!outlierAnalyze)
-		{
+
+		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
+		if (doTest && !outlierAnalyze) {
 			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
 			R = (SimpleMatrix) params[0];
 			H = (SimpleMatrix) params[1];
-			z =  (double[][]) params[2];
+			z = (double[][]) params[2];
 			ze = (double[][]) params[3];
 		}
 		kfObj.update(z, R, ze, H);
-		if(doAnalyze)
-		{
-			performAnalysis(testedSatList,satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,obsvCodeList,outlierAnalyze);
+		if (doAnalyze) {
+			performAnalysis(testedSatList, satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,
+					obsvCodeList, outlierAnalyze);
 		}
-		if(outlierAnalyze)
-		{
+		if (outlierAnalyze) {
 			kfObj.setState_ProcessCov(priorX, priorP);
 			kfObj.predict();
 			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
 			R = (SimpleMatrix) params[0];
 			H = (SimpleMatrix) params[1];
-			z =  (double[][]) params[2];
+			z = (double[][]) params[2];
 			ze = (double[][]) params[3];
 			kfObj.update(z, R, ze, H);
 		}
-		
-		
-		
+
 	}
-	
-	
+
 	// Residual Based Testing
 	private void runFilter2(double deltaT, ArrayList<Satellite> satList, HashMap<String, double[]> rxPCO,
-			long currentTime, boolean doAnalyze, boolean doTest,boolean outlierAnalyze, String[] obsvCodeList) throws Exception {
+			long currentTime, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList)
+			throws Exception {
 
 		// Satellite count
 		int n = satList.size();
@@ -262,10 +242,8 @@ public class EKF {
 		// Assign Q and F matrix
 		kfObj.configIGS(deltaT, m);
 		kfObj.predict();
-		
-		boolean isWeighted = false;
 		SimpleMatrix x = kfObj.getState();
-		final double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
+		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double[] rxClkOff = new double[m];// in meters
 		for (int i = 0; i < m; i++) {
 			rxClkOff[i] = x.get(i + 3);
@@ -276,7 +254,6 @@ public class EKF {
 		 * with respect to x
 		 */
 		SimpleMatrix H = getJacobian(satList, estPos, obsvCodeList);
-
 		// Measurement vector
 		double[][] z = new double[n][1];
 		// Estimated Measurement vector
@@ -285,13 +262,16 @@ public class EKF {
 		double[][] _R = new double[n][n];
 		innovation = new double[n];
 		temp_innovation = new double[n];
-		
+
 		for (int i = 0; i < n; i++) {
 
 			Satellite sat = satList.get(i);
 			String obsvCode = sat.getObsvCode();
 			double[] pco = rxPCO.get(obsvCode);
-			double[] rxAPC = IntStream.range(0, 3).mapToDouble(j -> estPos[j] + pco[j]).toArray();
+			double[] rxAPC = new double[3];
+			for (int j = 0; j < 3; j++) {
+				rxAPC[j] = estPos[j] + pco[j];
+			}
 			z[i][0] = sat.getPseudorange();
 			ze[i][0] = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> rxAPC[j] - sat.getSatEci()[j]).map(j -> j * j)
 					.reduce(0, (j, k) -> j + k));
@@ -304,278 +284,229 @@ public class EKF {
 			innovation[i] = z[i][0] - ze[i][0];
 		}
 		double priorVarOfUnitW = pseudorange_priorVarOfUnitW;
-		if (isWeighted) {
-			double[][] weight = Weight.computeCovInvMat(satList);
-			SimpleMatrix Cyy = null;
-			priorVarOfUnitW = 0.03;
-			double[][] cov = new double[n][n];
-			double max = Double.MIN_VALUE;
-			for (int i = 0; i < n; i++) {
-				max = Math.max(weight[i][i], max);
-			}
-			for (int i = 0; i < n; i++) {
-				weight[i][i] = weight[i][i] / max;
-			}
-
-			for (int i = 0; i < n; i++) {
-				cov[i][i] = priorVarOfUnitW / weight[i][i];
-			}
-			Cyy = new SimpleMatrix(cov);
-			for (int i = 0; i < n; i++) {
-				_R[i][i] = Cyy.get(i, i);
-			}
-		} else {
-			for (int i = 0; i < n; i++) {
-				_R[i][i] = priorVarOfUnitW;
-			}
+		for (int i = 0; i < n; i++) {
+			_R[i][i] = priorVarOfUnitW;
 		}
 		SimpleMatrix R = new SimpleMatrix(_R);
-		SimpleMatrix P = kfObj.getCovariance();
-		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-		SimpleMatrix Cvv_inv = Cvv.invert();
-		SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
-		
-		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);	
+		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
 		kfObj.update(z, R, ze, H);
+		
+		// Plotting test Statistic
+		Object[] temp_z_ze_res = get_z_ze_res(testedSatList, rxPCO, obsvCodeList);
+		ze = (double[][]) temp_z_ze_res[1];
+		SimpleMatrix K = kfObj.getKalmanGain();
+		SimpleMatrix HK = H.mult(K);
+		SimpleMatrix I_HK = SimpleMatrix.identity(HK.numRows()).minus(HK);
+		SimpleMatrix Cee_post_hat = I_HK.mult(R);
 		for (int i = 0; i < n; i++) {
-			double w =(z[i][0]-ze[i][0]) / Math.sqrt(R.get(i, i));
+			double w = (z[i][0] - ze[i][0]) / Math.sqrt(Cee_post_hat.get(i, i));
 			temp_innovation[i] = w;
 		}
-		if(doAnalyze&&outlierAnalyze)
-		{
-			performAnalysis(testedSatList,satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,obsvCodeList,outlierAnalyze);
+		
+		
+		if (doAnalyze && outlierAnalyze) {
+			performAnalysis(testedSatList, satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,
+					obsvCodeList, outlierAnalyze);
 		}
-		if(doTest)
-		{
+		if (doTest) {
 			int index = -1;
 			do {
-			 int _n = testedSatList.size();
-			 double[] residual = new double[_n];
-			 for(int i =0;i<_n;i++)
-			 {
-				 residual[i] = z[i][0] - ze[i][0];
-			 }
-			 index = performTesting2(residual, R, H, _n);
-			 if(index!=-1)
-			 {
-					satList.get(satList.indexOf(testedSatList.remove(index))).setOutlier(true);	
-					SimpleMatrix R_ = new SimpleMatrix(_n-1, _n-1);
-					double[][] z_ = new double[_n-1][1];
-					double[][] ze_ = new double[_n-1][1];
-					SimpleMatrix H_ = new SimpleMatrix(_n-1, 3 + (2 * m));
-					int j =0;
+				Object[] z_ze_res = get_z_ze_res(testedSatList, rxPCO, obsvCodeList);
+				z = (double[][]) z_ze_res[0];
+				ze = (double[][]) z_ze_res[1];
+				double[] residual = (double[]) z_ze_res[2];
+				index = performTesting2(residual, R, H);
+				if (index != -1) {
+					int _n = testedSatList.size();
+					satList.get(satList.indexOf(testedSatList.remove(index))).setOutlier(true);
+					SimpleMatrix R_ = new SimpleMatrix(_n - 1, _n - 1);
+					SimpleMatrix H_ = new SimpleMatrix(_n - 1, 3 + (2 * m));
+					int j = 0;
 					for (int i = 0; i < _n; i++) {
-						if (i!=index) {
+						if (i != index) {
 							R_.set(j, j, R.get(i, i));
-							z_[j][0] = z[i][0];
-							ze_[j][0] = ze[i][0];
 							for (int k = 0; k < 3 + (2 * m); k++) {
-								H_.set(j, k, H.get(i, k));							
+								H_.set(j, k, H.get(i, k));
 							}
 							j++;
 						}
 					}
 					R = new SimpleMatrix(R_);
 					H = new SimpleMatrix(H_);
-					z = new double[_n-1][1];
-					ze = new double[_n-1][1];
-					for (int i = 0; i < _n-1; i++) {
-						z[i] = z_[i];
-						ze[i] = ze_[i];
-					}
 					kfObj.setState_ProcessCov(priorX, priorP);
 					kfObj.predict();
+					z_ze_res = get_z_ze_res(testedSatList, rxPCO, obsvCodeList);
+					z = (double[][]) z_ze_res[0];
+					ze = (double[][]) z_ze_res[1];
 					kfObj.update(z, R, ze, H);
-			 }
-			}while(index!=-1);
+				}
+			} while (index != -1);
 		}
-		if(doAnalyze&&!outlierAnalyze)
-		{
-			performAnalysis(testedSatList,satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,obsvCodeList,outlierAnalyze);
-		}	
-		
+		if (doAnalyze && !outlierAnalyze) {
+			performAnalysis(testedSatList, satList, rxPCO, R, H, priorP, currentTime, doTest, priorVarOfUnitW, n,
+					obsvCodeList, outlierAnalyze);
+		}
+
 	}
 
-	private void performAnalysis(ArrayList<Satellite> testedSatList,ArrayList<Satellite> satList,HashMap<String, double[]> rxPCO,SimpleMatrix R,SimpleMatrix H,SimpleMatrix priorP,long currentTime,boolean doTest,double priorVarOfUnitW,int n,String[] obsvCodeList,boolean outlierAnalyze)
-	{
-		
-			int _n = testedSatList.size();
-			int m = obsvCodeList.length;
-			double[] residual = new double[_n];
-			double[] measNoise = new double[_n];
-			SimpleMatrix x = kfObj.getState();
-			final double[] _estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-			double[] rxClkOff = new double[m];// in meters
-			for (int i = 0; i < m; i++) {
-				rxClkOff[i] = x.get(i + 3);
-			}
-			double[][] ze = new double[_n][1];
-			double[][] z = new double[_n][1];
-			for (int i = 0; i < _n; i++) {
+	private void performAnalysis(ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
+			HashMap<String, double[]> rxPCO, SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,
+			boolean doTest, double priorVarOfUnitW, int n, String[] obsvCodeList, boolean outlierAnalyze) {
 
-				Satellite sat = testedSatList.get(i);
-				String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
-				double[] pco = rxPCO.get(obsvCode);
-				double[] rxAPC = IntStream.range(0, 3).mapToDouble(j -> _estPos[j] + pco[j]).toArray();
-				z[i][0] = sat.getPseudorange();
-				ze[i][0] = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> rxAPC[j] - sat.getSatEci()[j])
-						.map(j -> j * j).reduce(0, (j, k) -> j + k));
-				for (int j = 0; j < m; j++) {
-					if (obsvCode.equals(obsvCodeList[j])) {
-						ze[i][0] += rxClkOff[j];
-					}
-				}
-				residual[i] = z[i][0] - ze[i][0];
-				
-			}
-			// Post-fit residual
-			SimpleMatrix e_post_hat = new SimpleMatrix(_n, 1, true, residual);
-			SimpleMatrix Cyy_inv = R.invert();
+		int _n = testedSatList.size();
+		int m = obsvCodeList.length;
+		double[] measNoise = new double[_n];
+		SimpleMatrix x = kfObj.getState();
+		final double[] _estPos = new double[] { x.get(0), x.get(1), x.get(2) };
+		double[] rxClkOff = new double[m];// in meters
+		for (int i = 0; i < m; i++) {
+			rxClkOff[i] = x.get(i + 3);
+		}
+		double[] residual = (double[]) get_z_ze_res(testedSatList, rxPCO, obsvCodeList)[2];
+		// Post-fit residual
+		SimpleMatrix e_post_hat = new SimpleMatrix(_n, 1, true, residual);
+		SimpleMatrix Cyy_inv = R.invert();
 
-			// Compute Redundancies
-			SimpleMatrix K = kfObj.getKalmanGain();
-			SimpleMatrix HK = H.mult(K);
-			SimpleMatrix phi = kfObj.getPhi();
-			SimpleMatrix Cvv = kfObj.getCvv();
-			SimpleMatrix HtCvvInvH = H.transpose().mult(Cvv.invert()).mult(H);
-			SimpleMatrix Q = kfObj.getQ();
-			double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
-			double rW = Q.mult(HtCvvInvH).trace();
-			double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
-			double rSum = rX + rW + rZ;
-			if (_n - rSum > 0.01) {
-				System.err.println("FATAL ERROR: Redundancy sum is wrong");
-			}
-			double postVarOfUnitW = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0) * priorVarOfUnitW / rZ;
-			redundancyList.add(new double[] { _n, rSum, rX, rW, rZ });
-			postVarOfUnitWMap.put(currentTime, postVarOfUnitW);
-			residualMap.put(currentTime, residual);
-			if (doTest == true) {
-				_n = n - _n;
-			}
-			satCountMap.put(currentTime, (long) _n);
-			if(outlierAnalyze)
-			{
-				satListMap.put(currentTime, satList);
-			}
-			else
-			{
-				satListMap.put(currentTime, testedSatList);
-			}
-			measNoiseMap.put(currentTime, measNoise);
-		
+		// Compute Redundancies
+		SimpleMatrix K = kfObj.getKalmanGain();
+		SimpleMatrix HK = H.mult(K);
+		SimpleMatrix phi = kfObj.getPhi();
+		SimpleMatrix Cvv = kfObj.getCvv();
+		SimpleMatrix HtCvvInvH = H.transpose().mult(Cvv.invert()).mult(H);
+		SimpleMatrix Q = kfObj.getQ();
+		double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
+		double rW = Q.mult(HtCvvInvH).trace();
+		double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
+		double rSum = rX + rW + rZ;
+		if (_n - rSum > 0.01) {
+			System.err.println("FATAL ERROR: Redundancy sum is wrong");
+		}
+		double postVarOfUnitW = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0) * priorVarOfUnitW / rZ;
+		redundancyList.add(new double[] { _n, rSum, rX, rW, rZ });
+		postVarOfUnitWMap.put(currentTime, postVarOfUnitW);
+		residualMap.put(currentTime, residual);
+		if (doTest == true) {
+			_n = n - _n;
+		}
+		satCountMap.put(currentTime, (long) _n);
+		if (outlierAnalyze) {
+			satListMap.put(currentTime, satList);
+		} else {
+			satListMap.put(currentTime, testedSatList);
+		}
+		measNoiseMap.put(currentTime, measNoise);
+
 	}
-	
-	Object[] performTesting(SimpleMatrix R,SimpleMatrix H,int n,int m,ArrayList<Satellite> satList,ArrayList<Satellite> testedSatList,double[][] z,double[][] ze) throws Exception
-	{
-			// Pre-fit residual/innovation
-			SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
-			SimpleMatrix P = kfObj.getCovariance();
-			SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-			SimpleMatrix Cvv_inv = Cvv.invert();
-			double globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
-			ChiSquaredDistribution csd = new ChiSquaredDistribution(n);
-			double alpha = 0.01;
-			if (globalTq == 0) {
-				throw new Exception("Error: T stat is zero");
-			}
-			// Detection
-			double globalPVal = 1 - csd.cumulativeProbability(globalTq);
-			int _n = testedSatList.size();
-			while (globalPVal < alpha&&_n>(n/2)) {
-				
-				double max_w = Double.MIN_VALUE;
-				int index = -1;
-				for(int i =0;i<_n;i++)
-				{
-					SimpleMatrix cv = new SimpleMatrix(_n,1);
-					cv.set(i, 1);
-					double w = Math.abs(cv.transpose().mult(Cvv_inv).mult(v).get(0))/Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
-					if (w > max_w) {
-						max_w = w;
-						index = i;
-					}
-					
-				}
-				satList.get(satList.indexOf(testedSatList.remove(index))).setOutlier(true);
-				_n = testedSatList.size();
-				SimpleMatrix R_ = new SimpleMatrix(_n, _n);
-				double[][] z_ = new double[_n][1];
-				double[][] ze_ = new double[_n][1];
-				SimpleMatrix H_ = new SimpleMatrix(_n, 3 + (2 * m));
-				SimpleMatrix v_ = new SimpleMatrix(_n,1);
-				int j =0;
-				for (int i = 0; i < _n+1; i++) {
-					if (i!=index) {
-						R_.set(j, j, R.get(i, i));
-						v_.set(j, v.get(i));
-						z_[j][0] = z[i][0];
-						ze_[j][0] = ze[i][0];
-						for (int k = 0; k < 3 + (2 * m); k++) {
-							H_.set(j, k, H.get(i, k));							
-						}
-						j++;
-					}
-				}
-				R = new SimpleMatrix(R_);
-				H = new SimpleMatrix(H_);
-				z = new double[_n][1];
-				ze = new double[_n][1];
-				v = new SimpleMatrix(v_);
-				for (int i = 0; i < _n; i++) {
-					z[i] = z_[i];
-					ze[i] = ze_[i];
-				}
-				Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-				Cvv_inv = Cvv.invert();
-				globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
-				if (globalTq == 0) {
-					throw new Exception("Error: T stat is zero");
-				}
-				csd = new ChiSquaredDistribution(_n-1);
-				globalPVal = 1 - csd.cumulativeProbability(globalTq);
-			}
-			return new Object[] {R,H,z,ze};
-				
-	}
-	
-	
-	// Residual Based Testing
-	int performTesting2(double[] residual, SimpleMatrix R,SimpleMatrix H,int n) throws Exception
-	{
-			
-			// Post-fit residual
-			SimpleMatrix e_post_hat = new SimpleMatrix(n, 1, true, residual);
-			SimpleMatrix Cyy_inv = R.invert();
-			// Compute Redundancies
-			SimpleMatrix K = kfObj.getKalmanGain();
-			SimpleMatrix HK = H.mult(K);
-			double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
-			double globalTq  = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0);
-			double alpha = 0.01;
-			if (globalTq == 0) {
-				throw new Exception("Error: T stat is zero");
-			}
-			ChiSquaredDistribution csd = new ChiSquaredDistribution(rZ);
-			// Detection
-			double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+
+	Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
+			ArrayList<Satellite> testedSatList, double[][] z, double[][] ze) throws Exception {
+		// Pre-fit residual/innovation
+		SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
+		SimpleMatrix P = kfObj.getCovariance();
+		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
+		SimpleMatrix Cvv_inv = Cvv.invert();
+		double globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
+		ChiSquaredDistribution csd = new ChiSquaredDistribution(n);
+		double alpha = 0.01;
+		if (globalTq == 0) {
+			throw new Exception("Error: T stat is zero");
+		}
+		// Detection
+		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+		int _n = testedSatList.size();
+		while (globalPVal < alpha && _n > (n / 2)) {
+
+			double max_w = Double.MIN_VALUE;
 			int index = -1;
-			if(globalPVal < alpha) {
-				double max_w = Double.MIN_VALUE;
-				for(int i =0;i<n;i++)
-				{
-					double w =Math.abs(e_post_hat.get(i) / Math.sqrt(R.get(i, i)));
-					if (w > max_w) {
-						max_w = w;
-						index = i;
+			for (int i = 0; i < _n; i++) {
+				SimpleMatrix cv = new SimpleMatrix(_n, 1);
+				cv.set(i, 1);
+				double w = Math.abs(cv.transpose().mult(Cvv_inv).mult(v).get(0))
+						/ Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
+				if (w > max_w) {
+					max_w = w;
+					index = i;
+				}
+
+			}
+			satList.get(satList.indexOf(testedSatList.remove(index))).setOutlier(true);
+			_n = testedSatList.size();
+			SimpleMatrix R_ = new SimpleMatrix(_n, _n);
+			double[][] z_ = new double[_n][1];
+			double[][] ze_ = new double[_n][1];
+			SimpleMatrix H_ = new SimpleMatrix(_n, 3 + (2 * m));
+			SimpleMatrix v_ = new SimpleMatrix(_n, 1);
+			int j = 0;
+			for (int i = 0; i < _n + 1; i++) {
+				if (i != index) {
+					R_.set(j, j, R.get(i, i));
+					v_.set(j, v.get(i));
+					z_[j][0] = z[i][0];
+					ze_[j][0] = ze[i][0];
+					for (int k = 0; k < 3 + (2 * m); k++) {
+						H_.set(j, k, H.get(i, k));
 					}
+					j++;
 				}
 			}
-			return index;
-				
+			R = new SimpleMatrix(R_);
+			H = new SimpleMatrix(H_);
+			z = new double[_n][1];
+			ze = new double[_n][1];
+			v = new SimpleMatrix(v_);
+			for (int i = 0; i < _n; i++) {
+				z[i] = z_[i];
+				ze[i] = ze_[i];
+			}
+			Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
+			Cvv_inv = Cvv.invert();
+			globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
+			if (globalTq == 0) {
+				throw new Exception("Error: T stat is zero");
+			}
+			csd = new ChiSquaredDistribution(_n - 1);
+			globalPVal = 1 - csd.cumulativeProbability(globalTq);
+		}
+		return new Object[] { R, H, z, ze };
+
 	}
-	
-	
+
+	// Residual Based Testing
+	int performTesting2(double[] residual, SimpleMatrix R, SimpleMatrix H) throws Exception {
+
+		int n = residual.length;
+		// Post-fit residual
+		SimpleMatrix e_post_hat = new SimpleMatrix(n, 1, true, residual);
+		SimpleMatrix Cyy_inv = R.invert();
+		// Compute Redundancies
+		SimpleMatrix K = kfObj.getKalmanGain();
+		SimpleMatrix HK = H.mult(K);
+		SimpleMatrix I_HK = SimpleMatrix.identity(HK.numRows()).minus(HK);
+		double rZ = I_HK.trace();
+
+		double globalTq = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0);
+		double alpha = 0.01;
+		if (globalTq == 0) {
+			throw new Exception("Error: T stat is zero");
+		}
+		ChiSquaredDistribution csd = new ChiSquaredDistribution(rZ);
+		// Detection
+		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+		int index = -1;
+		if (globalPVal < alpha) {
+			double max_w = Double.MIN_VALUE;
+			SimpleMatrix Cee_post_hat = I_HK.mult(R);
+			for (int i = 0; i < n; i++) {
+				double w = Math.abs(e_post_hat.get(i) / Math.sqrt(Cee_post_hat.get(i, i)));
+				if (w > max_w) {
+					max_w = w;
+					index = i;
+				}
+			}
+		}
+		return index;
+
+	}
 
 	private SimpleMatrix getJacobian(ArrayList<Satellite> satList, double[] estECEF, String[] obsvCodeList) {
 		int m = obsvCodeList.length;
@@ -605,6 +536,42 @@ public class EKF {
 
 		return new SimpleMatrix(H);
 
+	}
+
+	private Object[] get_z_ze_res(ArrayList<Satellite> satList, HashMap<String, double[]> rxPCO,
+			String[] obsvCodeList) {
+		int n = satList.size();
+		int m = obsvCodeList.length;
+		double[][] z = new double[n][1];
+		double[][] ze = new double[n][1];
+		double[] residual = new double[n];
+		SimpleMatrix x = kfObj.getState();
+		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
+		double[] rxClkOff = new double[m];// in meters
+		for (int i = 0; i < m; i++) {
+			rxClkOff[i] = x.get(i + 3);
+		}
+		for (int i = 0; i < n; i++) {
+
+			Satellite sat = satList.get(i);
+			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+			double[] pco = rxPCO.get(obsvCode);
+			double[] rxAPC = new double[3];
+			for (int j = 0; j < 3; j++) {
+				rxAPC[j] = estPos[j] + pco[j];
+			}
+			z[i][0] = sat.getPseudorange();
+			ze[i][0] = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> rxAPC[j] - sat.getSatEci()[j]).map(j -> j * j)
+					.reduce(0, (j, k) -> j + k));
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					ze[i][0] += rxClkOff[j];
+				}
+			}
+			residual[i] = z[i][0] - ze[i][0];
+		}
+
+		return new Object[] { z, ze, residual };
 	}
 
 	public TreeMap<Long, double[]> getInnovationMap() {
@@ -638,8 +605,5 @@ public class EKF {
 	public TreeMap<Long, double[]> getMeasNoiseMap() {
 		return measNoiseMap;
 	}
-	
-	
-	
 
 }
