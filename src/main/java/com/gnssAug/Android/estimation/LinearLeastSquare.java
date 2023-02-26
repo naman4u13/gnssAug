@@ -27,42 +27,50 @@ public class LinearLeastSquare {
 
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW = 3.9;
-	final private static double doppler_priorVarOfUnitW = 0.01;
+	final private static double pseudorange_priorVarOfUnitW = 401;
+	final private static double doppler_priorVarOfUnitW = 4;
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
-		return process(satList, isWLS, false, false, Measurement.Pseudorange, null, useIGS);
+		return process(satList, isWLS, false, false,false, Measurement.Pseudorange, null, useIGS);
 	}
 
-	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,boolean outlierAnalyze,
 			boolean useIGS) throws Exception {
-		return process(satList, isWLS, doAnalyze, doTest, Measurement.Pseudorange, null, useIGS);
+		return process(satList, isWLS, doAnalyze, doTest,outlierAnalyze, Measurement.Pseudorange, null, useIGS);
 	}
 
 	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, double[] refPos, boolean useIGS)
 			throws Exception {
-		return process(satList, isWLS, false, false, Measurement.Doppler, refPos, useIGS);
+		return process(satList, isWLS, false, false,false, Measurement.Doppler, refPos, useIGS);
 	}
 
-	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,boolean outlierAnalyze,
 			double[] refPos, boolean useIGS) throws Exception {
-		return process(satList, isWLS, doAnalyze, doTest, Measurement.Doppler, refPos, useIGS);
+		return process(satList, isWLS, doAnalyze, doTest,outlierAnalyze, Measurement.Doppler, refPos, useIGS);
 	}
-
-	private static double[] process(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
-			Measurement type, double[] refPos, boolean useIGS) throws Exception {
+	
+	public static double[] process(ArrayList<Satellite> satList, boolean isWLS,
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Measurement type, double[] refPos,boolean useIGS)
+			throws Exception {
 		// Satellite count
 		int n = satList.size();
 		int DIA_type = 2;
 		// Weight matrix
 		double[][] weight = new double[n][n];
-		boolean useAndroidW = true;
+		boolean useAndroidW = false;
+		for (int i = 0; i < n; i++) {
+			satList.get(i).setOutlier(false);
+		}
+		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
 
-		ArrayList<Satellite> testedSatList = satList;
 		double scale = 1;
 		if (type == Measurement.Doppler) {
 			scale = 100;
 		}
+		/*
+		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
+		 * be based on elevation angle otherwise identity matrix will assigned for LS
+		 */
 		/*
 		 * If 'isWLS' flag is true, the estimation method is WLS and weight matrix will
 		 * be based on elevation angle otherwise identity matrix will assigned for LS
@@ -87,37 +95,49 @@ public class LinearLeastSquare {
 			}
 		}
 		String[] obsvCodeList = useIGS ? (String[]) findObsvCodeSet(satList) : null;
+		
 		double[] estState = estimate(satList, weight, null, refPos, type, useIGS, obsvCodeList);
 		if (doAnalyze) {
 			switch (DIA_type) {
 			case 1:
 				HashSet<Integer> indexSet = qualityControl(weight, estState, satList, useAndroidW, doTest, type, refPos,
 						useIGS, obsvCodeList);
+
 				if (!indexSet.isEmpty()) {
-					double[][] _weight = weight;
 					testedSatList = new ArrayList<Satellite>();
 					int j = 0;
 					int _n = n - indexSet.size();
-					_weight = new double[_n][_n];
+					double[][] _weight = new double[_n][_n];
+
 					for (int i = 0; i < n; i++) {
 						Satellite sat = satList.get(i);
 						if (!indexSet.contains(i)) {
+							sat.setOutlier(false);
 							testedSatList.add(sat);
 							_weight[j][j] = weight[i][i];
 							j++;
+
+						} else {
+							sat.setOutlier(true);
 						}
 					}
 					obsvCodeList = useIGS ? (String[]) findObsvCodeSet(testedSatList) : null;
 					estState = estimate(testedSatList, _weight, null, refPos, type, useIGS, obsvCodeList);
-					qualityControl(_weight, estState, testedSatList, useAndroidW, false, type, refPos, useIGS,
-							obsvCodeList);
+					if (!outlierAnalyze) {
+						qualityControl(_weight, estState, testedSatList, useAndroidW, false, type, refPos, useIGS,
+								obsvCodeList);
+					}
 				}
 				break;
 			case 2:
+				if (outlierAnalyze) {
+					qualityControl(weight, estState, satList, useAndroidW, false, type, refPos,
+							useIGS, obsvCodeList);
 
-				testedSatList = new ArrayList<Satellite>(satList);
+				}
 				double[][] _weight = weight;
 				if (doTest) {
+
 					int index = 0;
 					int _n = n;
 					while (index != -1) {
@@ -125,7 +145,8 @@ public class LinearLeastSquare {
 						index = qualityControl2(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS,
 								obsvCodeList);
 						if (index != -1) {
-							testedSatList.remove(index);
+							Satellite sat = testedSatList.remove(index);
+							satList.get(satList.indexOf(sat)).setOutlier(true);
 							_n = _n - 1;
 							int j = 0;
 							double[][] _tempweight = new double[_n][_n];
@@ -136,19 +157,26 @@ public class LinearLeastSquare {
 								}
 							}
 							_weight = _tempweight;
-							obsvCodeList = useIGS ? (String[]) findObsvCodeSet(testedSatList) : null;
+							obsvCodeList = findObsvCodeSet(testedSatList);
+
 							estState = estimate(testedSatList, _weight, null, refPos, type, useIGS, obsvCodeList);
 						}
 					}
 				}
-				qualityControl(_weight, estState, testedSatList, useAndroidW, false, type, refPos, useIGS,
-						obsvCodeList);
+				if (!outlierAnalyze) {
+					qualityControl(_weight, estState, testedSatList, useAndroidW, false, type, refPos, useIGS,
+							obsvCodeList);
+				}
 				break;
 			}
-
 		}
-		testedSatListMap.put(type, testedSatList);
+		if (outlierAnalyze) {
+			testedSatListMap.put(type, satList);
+		} else {
+			testedSatListMap.put(type, testedSatList);
+		}
 		return estState;
+
 	}
 
 	private static HashSet<Integer> qualityControl(double[][] weight, double[] estState, ArrayList<Satellite> satList,
@@ -280,18 +308,12 @@ public class LinearLeastSquare {
 						double Tq = Matrix.getNorm(P_C_.mult(e_hat), Cyy);
 						double pVal = 1 - csd.cumulativeProbability(Tq);
 						if (pVal < pVal_min) {
-//							if (_indexSet.size() > indexSet.size()) {
-//								System.out.print("");
-//							}
 							pVal_min = pVal;
 							fd_test_max = Tq / i;
 							indexSet = new HashSet<Integer>(_indexSet);
 						} else if (pVal == 0 && pVal_min == 0) {
 							double fd_test = Tq / i;
 							if (fd_test > fd_test_max) {
-//								if (_indexSet.size() > indexSet.size()) {
-//									System.out.print("");
-//								}
 								fd_test_max = fd_test;
 								indexSet = new HashSet<Integer>(_indexSet);
 							}
@@ -421,8 +443,11 @@ public class LinearLeastSquare {
 			if (globalPVal < alpha) {
 				// Identification
 				double max_w = Double.MIN_VALUE;
+				SimpleMatrix H = new SimpleMatrix(h);
+				SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+				SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
 				for (int j = 0; j < n; j++) {
-					double w = Math.abs(e_hat.get(j) / Math.sqrt(Cyy.get(j, j)));
+					double w = Math.abs(e_hat.get(j) / Math.sqrt(Cee_hat.get(j, j)));
 					if (w > max_w) {
 						max_w = w;
 						index = j;
@@ -525,10 +550,8 @@ public class LinearLeastSquare {
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector
-				IntStream.range(0, 3).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
-				for (int i = 0; i < m; i++) {
-					estEcefClk[3 + i] += DeltaX.get(3 + i, 0);
-				}
+				IntStream.range(0, 3+m).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
+				
 
 				// Recomputing error - norm of deltaX vector
 				error = Math.sqrt(IntStream.range(0, 3).mapToDouble(i -> Math.pow(DeltaX.get(i, 0), 2)).reduce(0,

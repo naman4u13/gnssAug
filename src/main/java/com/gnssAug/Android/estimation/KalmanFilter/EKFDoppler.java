@@ -72,7 +72,7 @@ public class EKFDoppler {
 	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
 			throws Exception {
 
-		double[] vel = LinearLeastSquare.getEstVel(satList, true, true, false,
+		double[] vel = LinearLeastSquare.getEstVel(satList, true, true, false,false,
 				new double[] { X.get(0), X.get(1), X.get(2), X.get(3) }, useIGS);
 		for (int i = 0; i < 4; i++) {
 			X.set(i, X.get(i) + vel[i] * deltaT);

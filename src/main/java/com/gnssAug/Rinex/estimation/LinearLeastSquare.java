@@ -20,8 +20,8 @@ import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
-	final private static double pseudorange_priorVarOfUnitW = 0.146;
-	final private static double doppler_priorVarOfUnitW = 6.90e-4;
+	final private static double pseudorange_priorVarOfUnitW = 0.113;
+	final private static double doppler_priorVarOfUnitW = 6.246e-4;
 	private static HashMap<Measurement, double[]> residualMap = new HashMap<Measurement, double[]>();
 	private static HashMap<Measurement, Double> postVarOfUnitWMap = new HashMap<Measurement, Double>();
 	private static HashMap<Measurement, SimpleMatrix> Cxx_hat_Map = new HashMap<Measurement, SimpleMatrix>();
@@ -49,7 +49,7 @@ public class LinearLeastSquare {
 			throws Exception {
 		// Satellite count
 		int n = satList.size();
-		int DIA_type = 1;
+		int DIA_type = 2;
 		// Weight matrix
 		double[][] weight = new double[n][n];
 		for (int i = 0; i < n; i++) {
@@ -498,12 +498,7 @@ public class LinearLeastSquare {
 				SimpleMatrix Ht = H.transpose();
 				SimpleMatrix W = new SimpleMatrix(weight);
 				SimpleMatrix HtWHinv = null;
-				try {
-					HtWHinv = (Ht.mult(W).mult(H)).invert();
-				} catch (Exception e) {
-					// TODO: handle exception
-					System.err.println(e);
-				}
+				HtWHinv = (Ht.mult(W).mult(H)).invert();
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector

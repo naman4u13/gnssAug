@@ -37,7 +37,7 @@ public class EKF {
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
-	final private static double pseudorange_priorVarOfUnitW = 0.181;
+	final private static double pseudorange_priorVarOfUnitW = 0.113;
 
 	public EKF() {
 		kfObj = new KFconfig();
@@ -93,7 +93,7 @@ public class EKF {
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
 			// Perform Predict and Update
-			runFilter(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest, outlierAnalyze, obsvCodeList);
+			runFilter2(deltaT, satList, rxPCO, currentTime, doAnalyze, doTest, outlierAnalyze, obsvCodeList);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();

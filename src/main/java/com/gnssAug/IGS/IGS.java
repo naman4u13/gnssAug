@@ -85,7 +85,7 @@ public class IGS {
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\ALBH00CAN_R_20211190000_01D_30S_MO.crx\\ALBH00CAN_R_20211190000_01D_30S_MO.rnx";
+					+ "\\LROC00FRA_R_20211190000_01D_30S_MO.crx\\LROC00FRA_R_20211190000_01D_30S_MO.rnx";
 
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 

@@ -895,7 +895,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 			for (int i = 0; i < data.size(); i++) {
 				double val = data.get(i);
-				if (val == 0 || val == -1) {
+				if (val == 0 || val == -1||val>1500) {
 					continue;
 				}
 				sum += val;

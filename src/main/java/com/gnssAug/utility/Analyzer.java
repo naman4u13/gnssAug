@@ -21,33 +21,47 @@ public class Analyzer {
 	public static void processAndroid(TreeMap<Long, ArrayList<Satellite>> SatMap,
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap, ArrayList<double[]> truePosEcef,
 			TreeMap<Long, double[]> trueVelEcef, HashMap<String, ArrayList<double[]>> estPosMap,
-			HashMap<String, ArrayList<double[]>> estVelMap) throws Exception {
+			HashMap<String, ArrayList<double[]>> estVelMap,HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
 
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
-		rangeMap.put("RxClkOff(offset of 100 added)", new TreeMap<Integer, Double>());
-		dopplerMap.put("RxClkDrift(offset of 25 added)", new TreeMap<Integer, Double>());
+
 		if (truePosEcef.size() != SatMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
+		String estType = "LS";
 		HashMap<String, double[]> firstVal = new HashMap<String, double[]>();
 		long time0 = SatMap.firstKey();
 		int i = 0;
 		for (Long time : SatMap.keySet()) {
 			double[] truePos = truePosEcef.get(i);
 			i++;
+			// true velocity list does not contain value for first and last epoch
 			if (!trueVelEcef.containsKey(time)) {
 				continue;
 			}
-			double rxClkOff = estPosMap.get("WLS").get(i)[3];
-			double rxClkDrift = estVelMap.get("WLS").get(i)[3];
+			ArrayList<Satellite> satList = SatMap.get(time);
+			String[] obsvCodeList = findObsvCodeSetAndroid(satList);
+			int m = obsvCodeList.length;
+			double[] rxClkOff = new double[m];
+			double[] rxClkDrift = new double[m];
+
 			double[] trueVel = trueVelEcef.get(time);
 			int timeDiff = (int) ((time - time0) / 1e3);
-			rangeMap.get("RxClkOff(offset of 100 added)").put(timeDiff, 100 + rxClkOff);
-			dopplerMap.get("RxClkDrift(offset of 25 added)").put(timeDiff, 25 + rxClkDrift);
-			ArrayList<Satellite> satList = SatMap.get(time);
-			for (Satellite sat : satList) {
 
+			for (int j = 0; j < m; j++) {
+				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
+				rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
+						k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
+
+				rxClkDrift[j] = estVelMap.get(estType).get(i)[j + 3];
+				dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
+						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+
+			}
+
+			for (Satellite sat : satList) {
+				String obsvCode = sat.getObsvCode();
 				double[] satPos = sat.getSatEci();
 				double[] satVel = sat.getSatVel();
 				double trueRange = MathUtil.getEuclidean(truePos, satPos);
@@ -55,10 +69,19 @@ public class Analyzer {
 						.toArray();
 				double[] relVel = IntStream.range(0, 3).mapToDouble(j -> satVel[j] - trueVel[j]).toArray();
 				double trueRangeRate = IntStream.range(0, 3).mapToDouble(j -> unitLos[j] * relVel[j]).sum();
-				double rangeRate = sat.getRangeRate() - rxClkDrift;
-				double range = sat.getPseudorange() - rxClkOff;
+				double range = sat.getPseudorange();
+				double rangeRate = sat.getRangeRate();
+				for (int k = 0; k < m; k++) {
+					if (obsvCode.equals(obsvCodeList[k])) {
+						range -= rxClkOff[k];
+						rangeRate -= rxClkDrift[k];
+					}
+				}
+				
+				
+				
 				int svid = sat.getSvid();
-				double sigma_noise = sat.getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9;
+				
 
 				String code = sat.getObsvCode().charAt(0) + "";
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
@@ -79,6 +102,43 @@ public class Analyzer {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
+		
+		if(outlierAnalyze) {
+			// Creating a temp doppler sat res because true velocity list does not contain value for first and last epoch
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+			long end = SatMap.lastKey()-time0;
+			
+			for(Measurement type:satResMap.keySet())
+			{
+				tempSatResMap.put(type, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
+				for(String est_type:satResMap.get(type).keySet())
+				{
+					tempSatResMap.get(type).put(est_type, new HashMap<String, ArrayList<SatResidual>>());
+					for(String svid:satResMap.get(type).get(est_type).keySet())
+					{
+						ArrayList<SatResidual> data = satResMap.get(type).get(est_type).get(svid);
+						ArrayList<SatResidual> new_data = new ArrayList<SatResidual>();
+						for(int j=0;j<data.size();j++)
+						{
+							
+							new_data.add(data.get(j));
+						}
+						tempSatResMap.get(type).get(est_type).put(svid, new_data);
+						
+					}
+				}
+			}
+			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+					tempSatResMap.get(Measurement.Doppler).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+					satResMap.get(Measurement.Pseudorange).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		}
 
 		// GraphPlotter.graphIMU(imuMap);
 
@@ -87,7 +147,8 @@ public class Analyzer {
 	public static void processIGS(TreeMap<Long, ArrayList<com.gnssAug.Rinex.models.Satellite>> satMap, double[] rxARP,
 			HashMap<String, double[]> rxPCO, HashMap<String, ArrayList<double[]>> estPosMap,
 			HashMap<String, ArrayList<double[]>> estVelMap,
-			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
+			boolean outlierAnalyze) throws Exception {
 //		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
 //		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
@@ -175,30 +236,28 @@ public class Analyzer {
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
-		
-			if(outlierAnalyze) {
-			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
-					satResMap.get(Measurement.Doppler).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);}
 
-		
+			if (outlierAnalyze) {
+				chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+						satResMap.get(Measurement.Doppler).get(estType));
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+			}
+
 		}
 
 //			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
-		if(outlierAnalyze) {
-		chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
-				satResMap.get(Measurement.Pseudorange).get(estType));
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+		if (outlierAnalyze) {
+			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+					satResMap.get(Measurement.Pseudorange).get(estType));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
 		}
-
-				
 
 		// GraphPlotter.graphIMU(imuMap);
 
@@ -264,6 +323,15 @@ public class Analyzer {
 	}
 
 	private static String[] findObsvCodeSet(ArrayList<com.gnssAug.Rinex.models.Satellite> satList) {
+		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
+		for (int i = 0; i < satList.size(); i++) {
+			obsvCodeSet.add(satList.get(i).getObsvCode());
+		}
+		return obsvCodeSet.toArray(new String[0]);
+
+	}
+
+	private static String[] findObsvCodeSetAndroid(ArrayList<Satellite> satList) {
 		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
 		for (int i = 0; i < satList.size(); i++) {
 			obsvCodeSet.add(satList.get(i).getObsvCode());
