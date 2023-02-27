@@ -50,13 +50,20 @@ public class Analyzer {
 			int timeDiff = (int) ((time - time0) / 1e3);
 
 			for (int j = 0; j < m; j++) {
-				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
+				double[] arr = estPosMap.get(estType).get(i);
+				if((j+3)<arr.length)
+				{
+				rxClkOff[j] = arr[j + 3];
 				rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
 						k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
-
-				rxClkDrift[j] = estVelMap.get(estType).get(i)[j + 3];
+				}
+				arr = estPosMap.get(estType).get(i);
+				if((j+3)<arr.length)
+				{
+				rxClkDrift[j] = arr[j + 3];
 				dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
 						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+				}
 
 			}
 
@@ -77,16 +84,10 @@ public class Analyzer {
 						rangeRate -= rxClkDrift[k];
 					}
 				}
-				
-				
-				
 				int svid = sat.getSvid();
-				
-
 				String code = sat.getObsvCode().charAt(0) + "";
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
 						(range - trueRange));
-
 				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
 						(rangeRate - trueRangeRate));
 			}
@@ -106,7 +107,7 @@ public class Analyzer {
 		if(outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain value for first and last epoch
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-			long end = SatMap.lastKey()-time0;
+			long end = (long) ((SatMap.lastKey()-time0)/1e3);
 			
 			for(Measurement type:satResMap.keySet())
 			{
@@ -120,8 +121,9 @@ public class Analyzer {
 						ArrayList<SatResidual> new_data = new ArrayList<SatResidual>();
 						for(int j=0;j<data.size();j++)
 						{
-							
+							if(data.get(j).getT()>0&&data.get(j).getT()<end) {
 							new_data.add(data.get(j));
+							}
 						}
 						tempSatResMap.get(type).get(est_type).put(svid, new_data);
 						
@@ -134,7 +136,7 @@ public class Analyzer {
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
-					satResMap.get(Measurement.Pseudorange).get(estType));
+					tempSatResMap.get(Measurement.Pseudorange).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);

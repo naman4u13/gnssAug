@@ -27,8 +27,8 @@ public class LinearLeastSquare {
 
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW = 401;
-	final private static double doppler_priorVarOfUnitW = 4;
+	final private static double pseudorange_priorVarOfUnitW = 410;
+	final private static double doppler_priorVarOfUnitW = 2.26;
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
 		return process(satList, isWLS, false, false,false, Measurement.Pseudorange, null, useIGS);
@@ -275,7 +275,11 @@ public class LinearLeastSquare {
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
-
+		SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+		SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
+		for (int i = 0; i < n; i++) {
+			residual[i] = e_hat.get(i) / Math.sqrt(Cee_hat.get(i, i));
+		}
 		if (doTest && n > (3 + m + 1)) {
 			ChiSquaredDistribution csd = new ChiSquaredDistribution(n - l);
 			double alpha = 0.01;
@@ -299,7 +303,7 @@ public class LinearLeastSquare {
 							C.set(combination[j], j, 1);
 							_indexSet.add(combination[j]);
 						}
-						SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+						//SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
 						SimpleMatrix C_ = P_H_perpendicular.mult(C);
 						SimpleMatrix P_C_ = null;
 

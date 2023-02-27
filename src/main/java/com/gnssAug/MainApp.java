@@ -19,7 +19,7 @@ public class MainApp {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 
-			String basePath = "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\Pixel4";
+			String basePath = "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
 			//"C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-28-US-MTV-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 

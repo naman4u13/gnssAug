@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
@@ -81,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-SJC-2\\test";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_LS";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -441,6 +442,38 @@ public class Android {
 //				System.out.println(" 3d Error - " + velErrList[3].get(q95));
 //				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
+			}
+			
+			System.out.println("\n\nPost Variance of Unit Weight Calculations");
+			for(Measurement meas:postVarOfUnitWeightMap.keySet())
+			{
+				System.out.println(meas.toString());
+				for(String est_type:postVarOfUnitWeightMap.get(meas).keySet())
+				{
+					System.out.println(est_type);
+					ArrayList<Double> data = new ArrayList<Double>(postVarOfUnitWeightMap.get(meas).get(est_type));
+					double sum = 0;
+					int count = 0;
+					for (int i = 0; i < data.size(); i++) {
+						double val = data.get(i);
+						if (val == 0 || val == -1) {
+							continue;
+						}
+						sum += val;
+						count++;
+						
+					}
+					Collections.sort(data);
+					double avg = sum / count;
+					int q50 = (int) (count * 0.50);
+					double median = data.get(q50);
+					int _q75 = (int) (count * 0.75);
+					double q75 = data.get(_q75);
+					System.out.println("MEAN : " +avg);
+					System.out.println("MEDIAN : " +median);
+					System.out.println("Q75 : " +q75);
+					
+				}
 			}
 			long t0 = (long) (timeList.get(0) * 1e-3);
 			long ctr = 0;

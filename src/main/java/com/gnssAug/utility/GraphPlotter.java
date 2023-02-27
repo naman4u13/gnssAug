@@ -895,7 +895,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 			for (int i = 0; i < data.size(); i++) {
 				double val = data.get(i);
-				if (val == 0 || val == -1||val>1500) {
+				if (val == 0 || val == -1) {
 					continue;
 				}
 				sum += val;
@@ -904,15 +904,26 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			Collections.sort(data);
 
-			double avg = sum / count;
+			double _mean = ((int)((sum / count)*1e4))/1e4;
+			int q50 = (int) (count * 0.5);
+			double _Q50 = ((int)((data.get(q50)*1e4)))/1e4;
+			int q75 = (int) (count * 0.75);
+			double _Q75 = ((int)((data.get(q75)*1e4)))/1e4;
 			// avg = Math.round(avg * 1000) / 1000;
-			final XYSeries mean = new XYSeries(key + " Mean Posteriori Variance of Unit Weight: " + avg);
+			final XYSeries mean = new XYSeries(key + " Mean Post Var of Unit W: " + _mean);
+			final XYSeries Q50 = new XYSeries(key + " Median Post Var of Unit W: " + _Q50);
+			final XYSeries Q75 = new XYSeries(key + " Q75 Post Var of Unit W: " + _Q75);
 			for (int i = 0; i < data.size(); i++) {
 				long time = timeList.get(i);
-				mean.add(time, avg);
+				mean.add(time, _mean);
+				Q50.add(time, _Q50);
+				Q75.add(time, _Q75);
 			}
 			dataset.addSeries(series);
 			dataset.addSeries(mean);
+			dataset.addSeries(Q50);
+			dataset.addSeries(Q75);
+
 
 		}
 		return dataset;
