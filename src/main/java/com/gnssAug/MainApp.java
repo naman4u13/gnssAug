@@ -13,13 +13,13 @@ public class MainApp {
 	public static void main(String[] args) {
 
 		Instant start = Instant.now();
-		String base_url = "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\Google Decimeter Challenge\\input_files\\";
+		String base_url = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google Decimeter Challenge\\input_files\\";
 		//"C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		switch (1) {
 		case 1:
 			String[] obsvCodeList = new String[] { "G1C", "E1C" };
 
-			String basePath = "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
+			String basePath = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
 			//"C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-28-US-MTV-1\\Pixel5";
 			String[] strList = basePath.split("\\\\");
 
@@ -39,8 +39,8 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0, 1, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, true,true);
+			Android.posEstimate(true, 0, 0,2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, true, true, true,false);
 			break;
 
 		case 2:

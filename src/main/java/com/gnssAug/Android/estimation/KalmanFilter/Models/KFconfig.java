@@ -112,11 +112,12 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
-	public void configDoppler(double deltaT, SimpleMatrix Cxx_dot_hat) {
-		double[][] phi = new double[4][4];
-
-		SimpleMatrix _Q = Cxx_dot_hat.scale(deltaT);
-		IntStream.range(0, 4).forEach(i -> phi[i][i] = 1);
+	public void configDoppler(double deltaT, SimpleMatrix Cxx_dot_hat,int m) {
+		int n = 3+m;
+		double[][] phi = new double[n][n];
+		SimpleMatrix _Q = new SimpleMatrix(n,n);
+		_Q.insertIntoThis(0, 0, Cxx_dot_hat.scale(deltaT*deltaT/2));
+		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);
 	}

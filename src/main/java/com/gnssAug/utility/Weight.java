@@ -3,6 +3,8 @@ package com.gnssAug.utility;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
 
+import org.ejml.simple.SimpleMatrix;
+
 import com.gnssAug.Android.models.Satellite;
 
 public class Weight {
@@ -31,6 +33,28 @@ public class Weight {
 		return covInvMat;
 	}
 
+	public static SimpleMatrix getNormCyy(ArrayList<Satellite> satList,double priorVarOfUnitW)
+	{
+		int n = satList.size();
+		double[][] weight = Weight.computeCovInvMat2(satList);
+		SimpleMatrix Cyy = null;
+		priorVarOfUnitW = 0.03;
+		double[][] cov = new double[n][n];
+		double max = Double.MIN_VALUE;
+		for (int i = 0; i < n; i++) {
+			max = Math.max(weight[i][i], max);
+		}
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / max;
+		}
+
+		for (int i = 0; i < n; i++) {
+			cov[i][i] = priorVarOfUnitW / weight[i][i];
+		}
+		Cyy = new SimpleMatrix(cov);
+		return Cyy;
+	}
+	
 	public static double[][] normalize(double[][] W) {
 
 		int n = W.length;

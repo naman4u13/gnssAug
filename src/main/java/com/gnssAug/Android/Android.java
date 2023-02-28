@@ -82,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_LS";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-MTV-1\\Pixel4_GPS_GAL_WLS_baarda";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -133,7 +133,9 @@ public class Android {
 				int m = obsvCodeList.length;
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
+					
 					continue;
+					
 				}
 				double[] refUserEcef = new double[3];
 				try {
@@ -152,7 +154,9 @@ public class Android {
 
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
+					
 					continue;
+					
 				}
 				double[] estEcefClk = null;
 				
@@ -293,7 +297,7 @@ public class Android {
 
 			if (estimatorType == 6) {
 				EKFDoppler ekf = new EKFDoppler();
-				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList, useIGS);
+				TreeMap<Long, double[]> estStateMap = ekf.process(SatMap, timeList, useIGS,obsvCodeList);
 				int n = timeList.size();
 				estPosMap.put("EKF - Doppler", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {
@@ -303,7 +307,7 @@ public class Android {
 				}
 			}
 
-			if (estimatorType == 1) {
+			if (estimatorType == 2) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);

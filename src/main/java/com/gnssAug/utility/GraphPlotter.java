@@ -797,11 +797,16 @@ public class GraphPlotter extends ApplicationFrame {
 			if (outlierMap.containsKey(key)) {
 				ArrayList<SatResidual> outlierList = outlierMap.get(key);
 
-				if (data.size() != outlierList.size()) {
-					throw new Exception("Error while Analysing data in GraphPlotter");
-				}
+//				if (data.size() != outlierList.size()) {
+//					throw new Exception("Error while Analysing data in GraphPlotter");
+//				}
 				int i = 0;
 				for (int x : data.keySet()) {
+					while(Math.abs(outlierList.get(i).getT()-x)>0.2)
+					{
+						i++;
+						
+					}
 					double y = data.get(x);
 					SatResidual satRes = outlierList.get(i);
 					i++;

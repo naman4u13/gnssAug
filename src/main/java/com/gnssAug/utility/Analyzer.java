@@ -29,7 +29,7 @@ public class Analyzer {
 		if (truePosEcef.size() != SatMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
-		String estType = "LS";
+		String estType = "WLS";
 		HashMap<String, double[]> firstVal = new HashMap<String, double[]>();
 		long time0 = SatMap.firstKey();
 		int i = 0;
@@ -106,7 +106,7 @@ public class Analyzer {
 		
 		if(outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain value for first and last epoch
-			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+			/*HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 			long end = (long) ((SatMap.lastKey()-time0)/1e3);
 			
 			for(Measurement type:satResMap.keySet())
@@ -129,14 +129,14 @@ public class Analyzer {
 						
 					}
 				}
-			}
+			}*/
 			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
-					tempSatResMap.get(Measurement.Doppler).get(estType));
+					satResMap.get(Measurement.Doppler).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
-					tempSatResMap.get(Measurement.Pseudorange).get(estType));
+					satResMap.get(Measurement.Pseudorange).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
