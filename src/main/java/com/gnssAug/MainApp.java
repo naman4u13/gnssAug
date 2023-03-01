@@ -40,7 +40,7 @@ public class MainApp {
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
 			Android.posEstimate(true, 0, 0,2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, true,false);
+					clock_path, orbit_path, ionex_path, true, true, true,true);
 			break;
 
 		case 2:

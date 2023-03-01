@@ -357,11 +357,6 @@ public class EKF {
 		int m = obsvCodeList.length;
 		double[] measNoise = new double[_n];
 		SimpleMatrix x = kfObj.getState();
-		final double[] _estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-		double[] rxClkOff = new double[m];// in meters
-		for (int i = 0; i < m; i++) {
-			rxClkOff[i] = x.get(i + 3);
-		}
 		double[] residual = (double[]) get_z_ze_res(testedSatList, rxPCO, obsvCodeList)[2];
 		// Post-fit residual
 		SimpleMatrix e_post_hat = new SimpleMatrix(_n, 1, true, residual);
@@ -398,7 +393,7 @@ public class EKF {
 
 	}
 
-	Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
+	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
 			ArrayList<Satellite> testedSatList, double[][] z, double[][] ze) throws Exception {
 		// Pre-fit residual/innovation
 		SimpleMatrix v = new SimpleMatrix(n, 1, true, innovation);
@@ -472,7 +467,7 @@ public class EKF {
 	}
 
 	// Residual Based Testing
-	int performTesting2(double[] residual, SimpleMatrix R, SimpleMatrix H) throws Exception {
+	private int performTesting2(double[] residual, SimpleMatrix R, SimpleMatrix H) throws Exception {
 
 		int n = residual.length;
 		// Post-fit residual

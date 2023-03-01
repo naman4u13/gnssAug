@@ -18,29 +18,34 @@ import com.gnssAug.Rinex.models.SatResidual;
 public class Analyzer {
 	private final static double SpeedofLight = 299792458;
 
-	public static void processAndroid(TreeMap<Long, ArrayList<Satellite>> SatMap,
+	public static void processAndroid(TreeMap<Long, ArrayList<Satellite>> satMap,
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap, ArrayList<double[]> truePosEcef,
-			TreeMap<Long, double[]> trueVelEcef, HashMap<String, ArrayList<double[]>> estPosMap,
-			HashMap<String, ArrayList<double[]>> estVelMap,HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
+			TreeMap<Long, double[]> trueVelEcef, TreeMap<String, ArrayList<double[]>> estPosMap,
+			TreeMap<String, ArrayList<double[]>> estVelMap,HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
 
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 
-		if (truePosEcef.size() != SatMap.size()) {
+		if (truePosEcef.size() != satMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
-		String estType = "WLS";
-		HashMap<String, double[]> firstVal = new HashMap<String, double[]>();
-		long time0 = SatMap.firstKey();
+		String estType = estPosMap.firstKey();
+		if(estType.equals("EKF - Doppler"))
+		{
+			estPosMap.get(estType).remove(0);
+			satMap.remove(satMap.firstKey());
+			truePosEcef.remove(0);
+		}
+		long time0 = satMap.firstKey();
 		int i = 0;
-		for (Long time : SatMap.keySet()) {
+		for (Long time : satMap.keySet()) {
 			double[] truePos = truePosEcef.get(i);
 			i++;
 			// true velocity list does not contain value for first and last epoch
 			if (!trueVelEcef.containsKey(time)) {
 				continue;
 			}
-			ArrayList<Satellite> satList = SatMap.get(time);
+			ArrayList<Satellite> satList = satMap.get(time);
 			String[] obsvCodeList = findObsvCodeSetAndroid(satList);
 			int m = obsvCodeList.length;
 			double[] rxClkOff = new double[m];
