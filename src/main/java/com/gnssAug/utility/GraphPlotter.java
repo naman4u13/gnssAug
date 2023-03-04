@@ -36,20 +36,19 @@ public class GraphPlotter extends ApplicationFrame {
 		if (isSatRes) {
 
 			if (flag) {
-				charts.add(ChartFactory.createScatterPlot(name, "GPS-time",
-						name+"(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
-				if (outlierAnalyze) {
-					charts.add(ChartFactory.createScatterPlot(name, "GPS-time",
-							name+"(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
-				}
-			} else {
-				charts.add(ChartFactory.createScatterPlot(name+" vs Elevation Angle",
-						"Elevation-Angle(in degrees)", name+"(in m or m/s)",
+				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, false)));
 				if (outlierAnalyze) {
-					charts.add(ChartFactory.createScatterPlot(name+" vs Elevation Angle",
-							"Elevation-Angle(in degrees)", name+"(in m or m/s)",
+					charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
 							createDatasetSatRes(satResMap, isSatRes, flag, true)));
+				}
+			} else {
+				charts.add(ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
+						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
+				if (outlierAnalyze) {
+					charts.add(
+							ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
+									name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
 				}
 			}
 		} else {
@@ -475,12 +474,13 @@ public class GraphPlotter extends ApplicationFrame {
 	public static void graphSatRes(
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
 			boolean outlierAnaylze) {
-		graphSatRes(satResMap, outlierAnaylze,false);
-		
+		graphSatRes(satResMap, outlierAnaylze, false);
+
 	}
+
 	public static void graphSatRes(
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
-			boolean outlierAnaylze,boolean isInnov) {
+			boolean outlierAnaylze, boolean isInnov) {
 
 		for (Measurement key : satResMap.keySet()) {
 			HashMap<String, HashMap<String, ArrayList<SatResidual>>> subSatResMap = satResMap.get(key);
@@ -490,22 +490,21 @@ public class GraphPlotter extends ApplicationFrame {
 			} else {
 				type = "Doppler";
 			}
-			String name ="Satellite-Residual" ;
-			if(isInnov)
-			{
-				name = "Satellite-Innovation" ;
+			String name = "Satellite-Residual";
+			if (isInnov) {
+				name = "Satellite-Innovation";
 			}
 			for (String subKey : subSatResMap.keySet()) {
 
 				// For Satellite Residuals
-				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey),
-						type + " " + subKey + ": "+name, true, true, outlierAnaylze);
+				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true,
+						true, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
-				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": "+name, true,
-						false, outlierAnaylze);
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, false,
+						outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
@@ -802,10 +801,9 @@ public class GraphPlotter extends ApplicationFrame {
 //				}
 				int i = 0;
 				for (int x : data.keySet()) {
-					while(Math.abs(outlierList.get(i).getT()-x)>0.2)
-					{
+					while (Math.abs(outlierList.get(i).getT() - x) > 0.5) {
 						i++;
-						
+
 					}
 					double y = data.get(x);
 					SatResidual satRes = outlierList.get(i);
@@ -909,11 +907,11 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			Collections.sort(data);
 
-			double _mean = ((int)((sum / count)*1e4))/1e4;
+			double _mean = ((int) ((sum / count) * 1e4)) / 1e4;
 			int q50 = (int) (count * 0.5);
-			double _Q50 = ((int)((data.get(q50)*1e4)))/1e4;
+			double _Q50 = ((int) ((data.get(q50) * 1e4))) / 1e4;
 			int q75 = (int) (count * 0.75);
-			double _Q75 = ((int)((data.get(q75)*1e4)))/1e4;
+			double _Q75 = ((int) ((data.get(q75) * 1e4))) / 1e4;
 			// avg = Math.round(avg * 1000) / 1000;
 			final XYSeries mean = new XYSeries(key + " Mean Post Var of Unit W: " + _mean);
 			final XYSeries Q50 = new XYSeries(key + " Median Post Var of Unit W: " + _Q50);
@@ -928,7 +926,6 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(mean);
 			dataset.addSeries(Q50);
 			dataset.addSeries(Q75);
-
 
 		}
 		return dataset;

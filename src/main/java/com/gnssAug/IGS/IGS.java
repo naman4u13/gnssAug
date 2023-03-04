@@ -80,8 +80,8 @@ public class IGS {
 			Antenna antenna = null;
 			IONEX ionex = null;
 
-			String base_path = "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
-			//"C:\\Users\\Naman\\Desktop\\rinex_parse_files\\input_files";
+			String base_path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
+
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
@@ -90,8 +90,8 @@ public class IGS {
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
-			//String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
+			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -232,8 +232,8 @@ public class IGS {
 			if (estimatorType == 3 || estimatorType == 4) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,outlierAnalyze,
-						obsvCodeList);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
+						outlierAnalyze, obsvCodeList);
 				int n = timeList.size();
 				if (doAnalyze) {
 					satResMap.put(Measurement.Pseudorange,
@@ -258,13 +258,14 @@ public class IGS {
 						double[] residual = ekf.getResidualMap().get(time);
 						int m = satList.size();
 						long tRx = time / 1000;
-						//double[] measNoise = ekf.getMeasNoiseMap().get(time);
+						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satResMap.get(Measurement.Pseudorange).get("EKF")
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j], sat.isOutlier()));
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
+											sat.isOutlier()));
 
 						}
 						satCountMap.get(Measurement.Pseudorange).computeIfAbsent("EKF", k -> new ArrayList<Long>())
@@ -274,13 +275,12 @@ public class IGS {
 						postVarOfUnitWeightMap.get(Measurement.Pseudorange)
 								.computeIfAbsent("EKF", k -> new ArrayList<Double>())
 								.add(ekf.getPostVarOfUnitWMap().get(time));
-						
+
 						// For innovation vector
 						satList = satMap.get(time);
 						double[] innovation = ekf.getInnovationMap().get(time);
 						m = satList.size();
-						if(m!=innovation.length)
-						{
+						if (m != innovation.length) {
 							throw new Exception("Fatal Error while mapping innovation sequence");
 						}
 						for (int j = 0; j < m; j++) {
@@ -288,19 +288,19 @@ public class IGS {
 							satInnMap.get(Measurement.Pseudorange).get("EKF")
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j], sat.isOutlier()));
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
+											sat.isOutlier()));
 
 						}
-						
-						
+
 					}
 				}
 				if (doAnalyze) {
-					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze,true);
-					}
+					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
+				}
 			}
-			if (estimatorType == 4) {
-				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap,outlierAnalyze);
+			if (estimatorType == 1) {
+				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap, outlierAnalyze);
 			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
@@ -506,9 +506,14 @@ public class IGS {
 		final double spin = 7.2921151467E-5;
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
+		File orekitData = new File(
+				"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master");
+		/*
+		 * File orekitData = new File(
+		 * "C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master"
+		 * );
+		 */
 
-		File orekitData = new File("C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master");
-				//\"C:\\\\Users\\\\Naman\\\\Desktop\\\\rinex_parse_files\\\\orekit\\\\orekit-data-master\\\\orekit-data-master\");
 		DataProvidersManager manager = DataProvidersManager.getInstance();
 		manager.addProvider(new DirectoryCrawler(orekitData));
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);

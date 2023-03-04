@@ -59,8 +59,8 @@ public class Android {
 
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
-			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze,
-			boolean doTest,boolean outlierAnalyze) {
+			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -82,7 +82,8 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-MTV-1\\test";
+			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
+			// "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-MTV-1\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -133,13 +134,13 @@ public class Android {
 				int m = obsvCodeList.length;
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
-					
+
 					continue;
-					
+
 				}
 				double[] refUserEcef = new double[3];
 				try {
-					refUserEcef = LinearLeastSquare.getEstPos(satList, false,  useIGS);
+					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception
 					e.printStackTrace();
@@ -154,12 +155,12 @@ public class Android {
 
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
-					
+
 					continue;
-					
+
 				}
 				double[] estEcefClk = null;
-				
+
 				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3) {
 					int[] arr = new int[] { estimatorType };
 					if (estimatorType == 3) {
@@ -177,10 +178,12 @@ public class Android {
 						double[] estVel = null;
 						for (Measurement type : new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }) {
 							if (type == Measurement.Pseudorange) {
-								estEcefClk = LinearLeastSquare.getEstPos(satList, isWLS, doAnalyze, doTest,outlierAnalyze, useIGS);
+								estEcefClk = LinearLeastSquare.getEstPos(satList, isWLS, doAnalyze, doTest,
+										outlierAnalyze, useIGS);
 								estPosMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estEcefClk);
 							} else {
-								estVel = LinearLeastSquare.getEstVel(satList, isWLS, doAnalyze, doTest,outlierAnalyze, estEcefClk, useIGS);
+								estVel = LinearLeastSquare.getEstVel(satList, isWLS, doAnalyze, doTest, outlierAnalyze,
+										estEcefClk, useIGS);
 								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 							}
 							if (doAnalyze) {
@@ -297,17 +300,20 @@ public class Android {
 
 			if (estimatorType == 6) {
 				EKFDoppler ekf = new EKFDoppler();
-				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze);
+				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
+						doTest, outlierAnalyze);
 				int n = timeList.size();
 				estPosMap.put("EKF - Doppler", new ArrayList<double[]>());
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				if (doAnalyze) {
 					satResMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-					satResMap.get(Measurement.Pseudorange).put("EKF - Doppler", new HashMap<String, ArrayList<SatResidual>>());
+					satResMap.get(Measurement.Pseudorange).put("EKF - Doppler",
+							new HashMap<String, ArrayList<SatResidual>>());
 					satInnMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-					satInnMap.get(Measurement.Pseudorange).put("EKF - Doppler", new HashMap<String, ArrayList<SatResidual>>());
+					satInnMap.get(Measurement.Pseudorange).put("EKF - Doppler",
+							new HashMap<String, ArrayList<SatResidual>>());
 					satCountMap.put(Measurement.Pseudorange, new TreeMap<String, ArrayList<Long>>());
 					Cxx_hat_map.put(State.Position, new HashMap<String, ArrayList<SimpleMatrix>>());
 					postVarOfUnitWeightMap.put(Measurement.Pseudorange, new HashMap<String, ArrayList<Double>>());
@@ -318,8 +324,7 @@ public class Android {
 					long time = timeList.get(i);
 					double[] estPos = estStateMap.get(time);
 					estPosMap.get("EKF - Doppler").add(estPos);
-					if(estPos.equals(null))
-					{
+					if (estPos == null) {
 						continue;
 					}
 					if (doAnalyze) {
@@ -327,29 +332,31 @@ public class Android {
 						double[] residual = ekf.getResidualMap().get(time);
 						int m = satList.size();
 						long tRx = time / 1000;
-						//double[] measNoise = ekf.getMeasNoiseMap().get(time);
+						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satResMap.get(Measurement.Pseudorange).get("EKF - Doppler")
 									.computeIfAbsent(sat.getObsvCode().substring(0, 2),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j], sat.isOutlier()));
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
+											sat.isOutlier()));
 
 						}
-						satCountMap.get(Measurement.Pseudorange).computeIfAbsent("EKF - Doppler", k -> new ArrayList<Long>())
+						satCountMap.get(Measurement.Pseudorange)
+								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
-						Cxx_hat_map.get(State.Position).computeIfAbsent("EKF - Doppler", k -> new ArrayList<SimpleMatrix>())
+						Cxx_hat_map.get(State.Position)
+								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<SimpleMatrix>())
 								.add(ekf.getErrCovMap().get(time));
 						postVarOfUnitWeightMap.get(Measurement.Pseudorange)
 								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<Double>())
 								.add(ekf.getPostVarOfUnitWMap().get(time));
-						
+
 						// For innovation vector
 						satList = satMap.get(time);
 						double[] innovation = ekf.getInnovationMap().get(time);
 						m = satList.size();
-						if(m!=innovation.length)
-						{
+						if (m != innovation.length) {
 							throw new Exception("Fatal Error while mapping innovation sequence");
 						}
 						for (int j = 0; j < m; j++) {
@@ -357,21 +364,21 @@ public class Android {
 							satInnMap.get(Measurement.Pseudorange).get("EKF - Doppler")
 									.computeIfAbsent(sat.getObsvCode().substring(0, 2),
 											k -> new ArrayList<SatResidual>())
-									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j], sat.isOutlier()));
+									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
+											sat.isOutlier()));
 
 						}
-						
-						
+
 					}
 				}
 			}
 
-			if (estimatorType == 2) {
-				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
+			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);
-				
-				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap, outlierAnalyze);
+			if (doAnalyze) {
+				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
+						outlierAnalyze);
 			}
 
 			// Calculate Accuracy Metrics
@@ -506,13 +513,11 @@ public class Android {
 //				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
-			
+
 			System.out.println("\n\nPost Variance of Unit Weight Calculations");
-			for(Measurement meas:postVarOfUnitWeightMap.keySet())
-			{
+			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
 				System.out.println(meas.toString());
-				for(String est_type:postVarOfUnitWeightMap.get(meas).keySet())
-				{
+				for (String est_type : postVarOfUnitWeightMap.get(meas).keySet()) {
 					System.out.println(est_type);
 					ArrayList<Double> data = new ArrayList<Double>(postVarOfUnitWeightMap.get(meas).get(est_type));
 					double sum = 0;
@@ -524,7 +529,7 @@ public class Android {
 						}
 						sum += val;
 						count++;
-						
+
 					}
 					Collections.sort(data);
 					double avg = sum / count;
@@ -532,10 +537,10 @@ public class Android {
 					double median = data.get(q50);
 					int _q75 = (int) (count * 0.75);
 					double q75 = data.get(_q75);
-					System.out.println("MEAN : " +avg);
-					System.out.println("MEDIAN : " +median);
-					System.out.println("Q75 : " +q75);
-					
+					System.out.println("MEAN : " + avg);
+					System.out.println("MEDIAN : " + median);
+					System.out.println("Q75 : " + q75);
+
 				}
 			}
 			long t0 = (long) (timeList.get(0) * 1e-3);
@@ -563,7 +568,8 @@ public class Android {
 			if (doAnalyze) {
 				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				//GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
+				// GraphPlotter.graphDOP(dopMap,
+				// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList);
 			}
 
@@ -617,7 +623,8 @@ public class Android {
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
 
-		File orekitData =  new File("C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master");
+		File orekitData = new File(
+				"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master");
 		DataProvidersManager manager = DataProvidersManager.getInstance();
 		manager.addProvider(new DirectoryCrawler(orekitData));
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);

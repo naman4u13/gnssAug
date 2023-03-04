@@ -21,7 +21,9 @@ public class Analyzer {
 	public static void processAndroid(TreeMap<Long, ArrayList<Satellite>> satMap,
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap, ArrayList<double[]> truePosEcef,
 			TreeMap<Long, double[]> trueVelEcef, TreeMap<String, ArrayList<double[]>> estPosMap,
-			TreeMap<String, ArrayList<double[]>> estVelMap,HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,boolean outlierAnalyze) throws Exception {
+			TreeMap<String, ArrayList<double[]>> estVelMap,
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
+			boolean outlierAnalyze) throws Exception {
 
 		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
@@ -30,8 +32,7 @@ public class Analyzer {
 			throw new Exception("Error in Analyzer processing");
 		}
 		String estType = estPosMap.firstKey();
-		if(estType.equals("EKF - Doppler"))
-		{
+		if (estType.equals("EKF - Doppler")) {
 			estPosMap.get(estType).remove(0);
 			satMap.remove(satMap.firstKey());
 			truePosEcef.remove(0);
@@ -52,22 +53,21 @@ public class Analyzer {
 			double[] rxClkDrift = new double[m];
 
 			double[] trueVel = trueVelEcef.get(time);
-			int timeDiff = (int) ((time - time0) / 1e3);
-
+			int timeDiff = (int) Math.round((time - time0) / 1e3);
 			for (int j = 0; j < m; j++) {
 				double[] arr = estPosMap.get(estType).get(i);
-				if((j+3)<arr.length)
-				{
-				rxClkOff[j] = arr[j + 3];
-				rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
-						k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
+				if ((j + 3) < arr.length) {
+					rxClkOff[j] = arr[j + 3];
+					rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
+							k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
 				}
-				arr = estPosMap.get(estType).get(i);
-				if((j+3)<arr.length)
-				{
-				rxClkDrift[j] = arr[j + 3];
-				dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
-						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+				if (!estType.equals("EKF - Doppler")) {
+					arr = estVelMap.get(estType).get(i);
+					if ((j + 3) < arr.length) {
+						rxClkDrift[j] = arr[j + 3];
+						dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
+								k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+					}
 				}
 
 			}
@@ -108,33 +108,29 @@ public class Analyzer {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		
-		if(outlierAnalyze) {
-			// Creating a temp doppler sat res because true velocity list does not contain value for first and last epoch
-			/*HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-			long end = (long) ((SatMap.lastKey()-time0)/1e3);
-			
-			for(Measurement type:satResMap.keySet())
-			{
-				tempSatResMap.put(type, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-				for(String est_type:satResMap.get(type).keySet())
-				{
-					tempSatResMap.get(type).put(est_type, new HashMap<String, ArrayList<SatResidual>>());
-					for(String svid:satResMap.get(type).get(est_type).keySet())
-					{
-						ArrayList<SatResidual> data = satResMap.get(type).get(est_type).get(svid);
-						ArrayList<SatResidual> new_data = new ArrayList<SatResidual>();
-						for(int j=0;j<data.size();j++)
-						{
-							if(data.get(j).getT()>0&&data.get(j).getT()<end) {
-							new_data.add(data.get(j));
-							}
-						}
-						tempSatResMap.get(type).get(est_type).put(svid, new_data);
-						
-					}
-				}
-			}*/
+
+		if (outlierAnalyze) {
+			// Creating a temp doppler sat res because true velocity list does not contain
+			// value for first and last epoch
+			/*
+			 * HashMap<Measurement, HashMap<String, HashMap<String,
+			 * ArrayList<SatResidual>>>> tempSatResMap = new HashMap<Measurement,
+			 * HashMap<String, HashMap<String, ArrayList<SatResidual>>>>(); long end =
+			 * (long) ((SatMap.lastKey()-time0)/1e3);
+			 * 
+			 * for(Measurement type:satResMap.keySet()) { tempSatResMap.put(type, new
+			 * HashMap<String, HashMap<String, ArrayList<SatResidual>>>()); for(String
+			 * est_type:satResMap.get(type).keySet()) {
+			 * tempSatResMap.get(type).put(est_type, new HashMap<String,
+			 * ArrayList<SatResidual>>()); for(String
+			 * svid:satResMap.get(type).get(est_type).keySet()) { ArrayList<SatResidual>
+			 * data = satResMap.get(type).get(est_type).get(svid); ArrayList<SatResidual>
+			 * new_data = new ArrayList<SatResidual>(); for(int j=0;j<data.size();j++) {
+			 * if(data.get(j).getT()>0&&data.get(j).getT()<end) { new_data.add(data.get(j));
+			 * } } tempSatResMap.get(type).get(est_type).put(svid, new_data);
+			 * 
+			 * } } }
+			 */
 			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
 					satResMap.get(Measurement.Doppler).get(estType));
 			chart.pack();
@@ -162,7 +158,7 @@ public class Analyzer {
 		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
 		long time0 = satMap.firstKey();
 		double alpha = 0.01;
-		String estType = "EKF";
+		String estType = "LS";
 		int i = 0;
 		if (estType.equals("EKF")) {
 			satMap.remove(satMap.firstKey());

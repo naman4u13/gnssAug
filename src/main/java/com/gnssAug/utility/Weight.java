@@ -33,12 +33,11 @@ public class Weight {
 		return covInvMat;
 	}
 
-	public static SimpleMatrix getNormCyy(ArrayList<Satellite> satList,double priorVarOfUnitW)
-	{
+	public static SimpleMatrix getNormCyy(ArrayList<Satellite> satList, double priorVarOfUnitW) {
 		int n = satList.size();
 		double[][] weight = Weight.computeCovInvMat2(satList);
 		SimpleMatrix Cyy = null;
-		priorVarOfUnitW = 0.03;
+
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;
 		for (int i = 0; i < n; i++) {
@@ -54,7 +53,7 @@ public class Weight {
 		Cyy = new SimpleMatrix(cov);
 		return Cyy;
 	}
-	
+
 	public static double[][] normalize(double[][] W) {
 
 		int n = W.length;

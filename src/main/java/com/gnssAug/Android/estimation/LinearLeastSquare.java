@@ -27,31 +27,30 @@ public class LinearLeastSquare {
 
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW = 8.7785;
-	final private static double doppler_priorVarOfUnitW = 0.059;
+	final private static double pseudorange_priorVarOfUnitW = 87.459;
+	final private static double doppler_priorVarOfUnitW = 8.80;
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
-		return process(satList, isWLS, false, false,false, Measurement.Pseudorange, null, useIGS);
+		return process(satList, isWLS, false, false, false, Measurement.Pseudorange, null, useIGS);
 	}
 
-	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,boolean outlierAnalyze,
-			boolean useIGS) throws Exception {
-		return process(satList, isWLS, doAnalyze, doTest,outlierAnalyze, Measurement.Pseudorange, null, useIGS);
+	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze, boolean useIGS) throws Exception {
+		return process(satList, isWLS, doAnalyze, doTest, outlierAnalyze, Measurement.Pseudorange, null, useIGS);
 	}
 
 	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, double[] refPos, boolean useIGS)
 			throws Exception {
-		return process(satList, isWLS, false, false,false, Measurement.Doppler, refPos, useIGS);
+		return process(satList, isWLS, false, false, false, Measurement.Doppler, refPos, useIGS);
 	}
 
-	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,boolean outlierAnalyze,
-			double[] refPos, boolean useIGS) throws Exception {
-		return process(satList, isWLS, doAnalyze, doTest,outlierAnalyze, Measurement.Doppler, refPos, useIGS);
+	public static double[] getEstVel(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze, double[] refPos, boolean useIGS) throws Exception {
+		return process(satList, isWLS, doAnalyze, doTest, outlierAnalyze, Measurement.Doppler, refPos, useIGS);
 	}
-	
-	public static double[] process(ArrayList<Satellite> satList, boolean isWLS,
-			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Measurement type, double[] refPos,boolean useIGS)
-			throws Exception {
+
+	public static double[] process(ArrayList<Satellite> satList, boolean isWLS, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze, Measurement type, double[] refPos, boolean useIGS) throws Exception {
 		// Satellite count
 		int n = satList.size();
 		int DIA_type = 2;
@@ -95,7 +94,7 @@ public class LinearLeastSquare {
 			}
 		}
 		String[] obsvCodeList = useIGS ? (String[]) findObsvCodeSet(satList) : null;
-		
+
 		double[] estState = estimate(satList, weight, null, refPos, type, useIGS, obsvCodeList);
 		if (doAnalyze) {
 			switch (DIA_type) {
@@ -131,8 +130,7 @@ public class LinearLeastSquare {
 				break;
 			case 2:
 				if (outlierAnalyze) {
-					qualityControl(weight, estState, satList, useAndroidW, false, type, refPos,
-							useIGS, obsvCodeList);
+					qualityControl(weight, estState, satList, useAndroidW, false, type, refPos, useIGS, obsvCodeList);
 
 				}
 				double[][] _weight = weight;
@@ -303,7 +301,8 @@ public class LinearLeastSquare {
 							C.set(combination[j], j, 1);
 							_indexSet.add(combination[j]);
 						}
-						//SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
+						// SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H,
+						// Cyy_inv);
 						SimpleMatrix C_ = P_H_perpendicular.mult(C);
 						SimpleMatrix P_C_ = null;
 
@@ -554,8 +553,7 @@ public class LinearLeastSquare {
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector
-				IntStream.range(0, 3+m).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
-				
+				IntStream.range(0, 3 + m).forEach(i -> estEcefClk[i] = estEcefClk[i] + DeltaX.get(i, 0));
 
 				// Recomputing error - norm of deltaX vector
 				error = Math.sqrt(IntStream.range(0, 3).mapToDouble(i -> Math.pow(DeltaX.get(i, 0), 2)).reduce(0,

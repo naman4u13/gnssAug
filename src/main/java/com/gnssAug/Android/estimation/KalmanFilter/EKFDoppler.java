@@ -1,7 +1,6 @@
 package com.gnssAug.Android.estimation.KalmanFilter;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
@@ -20,10 +19,10 @@ import com.gnssAug.utility.Weight;
 
 public class EKFDoppler {
 
-	private final double pseudorange_priorVarOfUnitW =7.4662;
+	private final double pseudorange_priorVarOfUnitW = 7.4662;
 	private final double SpeedofLight = 299792458;
 	private KFconfig kfObj;
-	
+
 	private double[] innovation;
 	private double[] temp_innovation;
 	private TreeMap<Long, double[]> innovationMap;
@@ -42,7 +41,8 @@ public class EKFDoppler {
 	}
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
-			boolean useIGS, String[] obsvCodeList,boolean doAnalyze,boolean doTest, boolean outlierAnalyze) throws Exception {
+			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze)
+			throws Exception {
 
 		int m = obsvCodeList.length;
 		int n = 3 + m;
@@ -55,11 +55,11 @@ public class EKFDoppler {
 		 * variance
 		 */
 		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, useIGS);
-		IntStream.range(0, 3 + m).forEach(i -> _X[i][0] = intialECEF[i]);
+		IntStream.range(0, n).forEach(i -> _X[i][0] = intialECEF[i]);
 
 		// Total State
 		SimpleMatrix X = new SimpleMatrix(_X);
-		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 100);
+		IntStream.range(0, n).forEach(i -> P[i][i] = 100);
 		// Error State intialized as zero
 		double[][] x = new double[n][1];
 		kfObj.setState_ProcessCov(x, P);
@@ -78,10 +78,11 @@ public class EKFDoppler {
 	}
 
 	TreeMap<Long, double[]> iterate(SimpleMatrix X, TreeMap<Long, ArrayList<Satellite>> SatMap,
-			ArrayList<Long> timeList, boolean useIGS, String[] obsvCodeList,boolean doAnalyze,boolean doTest, boolean outlierAnalyze) throws Exception {
+			ArrayList<Long> timeList, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = obsvCodeList.length;
-		int x_size = 3 +  m;
+		int x_size = 3 + m;
 		long time = timeList.get(0);
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
@@ -100,7 +101,7 @@ public class EKFDoppler {
 				SimpleMatrix R = new SimpleMatrix(x_size, x_size);
 				R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estState)));
 				IntStream.range(3, x_size).forEach(j -> R.set(j, j, 1));
-				
+
 				SimpleMatrix errCov = R.mult(P).mult(R.transpose());
 				errCovMap.put(currentTime, errCov);
 				innovationMap.put(currentTime, temp_innovation);
@@ -127,8 +128,8 @@ public class EKFDoppler {
 		}
 	}
 
-	private void runFilter(SimpleMatrix X, long currentTime,double deltaT, ArrayList<Satellite> satList, String[] obsvCodeList,boolean doAnalyze,boolean doTest, boolean outlierAnalyze)
-			throws Exception {
+	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
+			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze) throws Exception {
 
 		boolean isWeighted = true;
 		boolean useAndroidW = false;
@@ -153,7 +154,7 @@ public class EKFDoppler {
 		 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
 		 * with respect to x
 		 */
-		double[][] _H = new double[n][3+m];
+		double[][] _H = new double[n][3 + m];
 		// Measurement vector
 		double[][] z = new double[n][1];
 		// Estimated Measurement vector
@@ -215,7 +216,7 @@ public class EKFDoppler {
 			z = (double[][]) params[2];
 			ze = (double[][]) params[3];
 		}
-		
+
 		kfObj.update(z, R, ze, H);
 		SimpleMatrix x = kfObj.getState();
 		for (int i = 0; i < 3 + m; i++) {
@@ -223,10 +224,11 @@ public class EKFDoppler {
 			x.set(i, 0);
 		}
 		if (doAnalyze) {
-			performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime, priorVarOfUnitW, n, obsvCodeList, doTest, outlierAnalyze);
+			performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime, priorVarOfUnitW, n, obsvCodeList,
+					doTest, outlierAnalyze);
 		}
 		if (outlierAnalyze) {
-			kfObj.setState_ProcessCov(new SimpleMatrix(3+m,1), priorP);
+			kfObj.setState_ProcessCov(new SimpleMatrix(3 + m, 1), priorP);
 			X = new SimpleMatrix(priorX);
 			kfObj.predict();
 			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
@@ -241,17 +243,15 @@ public class EKFDoppler {
 			}
 		}
 
-		
-		
 	}
-	
-	private void performAnalysis(SimpleMatrix X,ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList, SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,
-			 double priorVarOfUnitW, int n, String[] obsvCodeList,boolean doTest, boolean outlierAnalyze) {
+
+	private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
+			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime, double priorVarOfUnitW, int n,
+			String[] obsvCodeList, boolean doTest, boolean outlierAnalyze) {
 
 		int _n = testedSatList.size();
-		int m = obsvCodeList.length;
 		double[] measNoise = new double[_n];
-		double[] residual = (double[]) get_z_ze_res(X,testedSatList, obsvCodeList)[2];
+		double[] residual = (double[]) get_z_ze_res(X, testedSatList, obsvCodeList)[2];
 		// Post-fit residual
 		SimpleMatrix e_post_hat = new SimpleMatrix(_n, 1, true, residual);
 		SimpleMatrix Cyy_inv = R.invert();
@@ -286,7 +286,7 @@ public class EKFDoppler {
 		measNoiseMap.put(currentTime, measNoise);
 
 	}
-	
+
 	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
 			ArrayList<Satellite> testedSatList, double[][] z, double[][] ze) throws Exception {
 		// Pre-fit residual/innovation
@@ -359,8 +359,8 @@ public class EKFDoppler {
 		return new Object[] { R, H, z, ze };
 
 	}
-	
-	private Object[] get_z_ze_res(SimpleMatrix X,ArrayList<Satellite> satList,String[] obsvCodeList) {
+
+	private Object[] get_z_ze_res(SimpleMatrix X, ArrayList<Satellite> satList, String[] obsvCodeList) {
 		int n = satList.size();
 		int m = obsvCodeList.length;
 		double[][] z = new double[n][1];
@@ -374,14 +374,14 @@ public class EKFDoppler {
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
 			String obsvCode = sat.getObsvCode();
-			double approxPR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> estPos[j] - sat.getSatEci()[j]).map(j -> j * j)
-					.reduce(0, (j, k) -> j + k));
+			double approxPR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> estPos[j] - sat.getSatEci()[j])
+					.map(j -> j * j).reduce(0, (j, k) -> j + k));
 			for (int j = 0; j < m; j++) {
 				if (obsvCode.equals(obsvCodeList[j])) {
 					approxPR += rxClkOff[j];
 				}
 			}
-			z[i][0] = sat.getPseudorange()-approxPR;
+			z[i][0] = sat.getPseudorange() - approxPR;
 			residual[i] = z[i][0] - ze[i][0];
 		}
 
