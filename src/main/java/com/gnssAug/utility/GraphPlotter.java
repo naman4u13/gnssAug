@@ -1,5 +1,7 @@
 package com.gnssAug.utility;
 
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,11 +11,14 @@ import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
+import javax.swing.JFrame;
+
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.ejml.simple.SimpleMatrix;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.ui.ApplicationFrame;
 import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
@@ -573,6 +578,32 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.setVisible(true);
 	}
 
+	public static void graphTrajectory(TreeMap<String, ArrayList<double[]>> trajectoryPosMap,
+			TreeMap<String, ArrayList<double[]>> trajectoryVelMap, int n) throws IOException {
+		graphTrajectoryProcess(trajectoryPosMap, n, "Position(in m)");
+		graphTrajectoryProcess(trajectoryVelMap, n, "Velocity(in m/s)");
+	}
+
+	public static void graphTrajectoryProcess(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n, String name)
+			throws IOException {
+		JFrame frame = new JFrame(name + " Trajectory");
+		frame.setLayout(new FlowLayout());
+
+		JFreeChart barChart1 = ChartFactory.createScatterPlot("Horizontal " + name, "East", "North",
+				createDataset2DTraj(trajectoryMap, n), PlotOrientation.VERTICAL, true, true, false);
+
+		frame.getContentPane().add(new ChartPanel(barChart1), BorderLayout.NORTH);
+
+		JFreeChart barChart2 = ChartFactory.createXYLineChart("Vertical", "Up", "Time(in sec)",
+				createDatasetVerticalTraj(trajectoryMap, n), PlotOrientation.VERTICAL, true, true, false);
+
+		frame.getContentPane().add(new ChartPanel(barChart2), BorderLayout.CENTER);
+
+		frame.pack();
+
+		frame.setVisible(true);
+	}
+
 	public static void graphSatCount(HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap,
 			ArrayList<Long> timeList) throws IOException {
 
@@ -1105,4 +1136,59 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
+	private static XYDataset createDataset2DTraj(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		int j = 0;
+		while (trajectoryMap.get("True").get(j)[0] == -999) {
+			j++;
+		}
+		double[] start = trajectoryMap.get("True").get(j);
+		j = n - 1;
+		while (trajectoryMap.get("True").get(j)[0] == -999) {
+			j--;
+		}
+		double[] end = trajectoryMap.get("True").get(j);
+		final XYSeries s = new XYSeries("START");
+		final XYSeries e = new XYSeries("END");
+		s.add(start[0], start[1]);
+		e.add(end[0], end[1]);
+		dataset.addSeries(s);
+		dataset.addSeries(e);
+		for (String key : trajectoryMap.keySet()) {
+			final XYSeries series = new XYSeries(key);
+			ArrayList<double[]> trajectory = trajectoryMap.get(key);
+			for (int i = 0; i < n; i++) {
+				double[] data = trajectory.get(i);
+				if ((data[0] != -999) && (data[1] != -999) && (data[2] != -999)) {
+					series.add(data[0], data[1]);
+				}
+			}
+
+			dataset.addSeries(series);
+		}
+
+		return dataset;
+
+	}
+
+	private static XYDataset createDatasetVerticalTraj(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		for (String key : trajectoryMap.keySet()) {
+			final XYSeries series = new XYSeries(key);
+			ArrayList<double[]> trajectory = trajectoryMap.get(key);
+			for (int i = 0; i < n; i++) {
+				double[] data = trajectory.get(i);
+				if ((data[0] != -999) && (data[1] != -999) && (data[2] != -999)) {
+					series.add(i, data[2]);
+				} else {
+					series.add(i, null);
+				}
+			}
+
+			dataset.addSeries(series);
+		}
+		return dataset;
+
+	}
 }

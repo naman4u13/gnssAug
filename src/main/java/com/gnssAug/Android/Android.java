@@ -53,7 +53,6 @@ import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
-import com.gnssAug.utility.Trajectory;
 
 public class Android {
 	private static Geoid geoid = null;
@@ -545,14 +544,16 @@ public class Android {
 				for (String key : estVelMap.keySet()) {
 					double[] estVel = estVelMap.get(key).get(i);
 					if (estVel != null) {
-						trajectoryVelMap.get(key).add(estVel);
+
+						trajectoryVelMap.get(key).add(LatLonUtil.ecef2enu(estVel, trueEcefList.get(i), false));
 					} else {
 						trajectoryVelMap.get(key).add(new double[] { -999, -999, -999 });
 					}
 
 				}
 			}
-			Trajectory.createCSV(trajectoryPosMap, trajectoryVelMap, path, trueEcefList.size());
+			// Trajectory.createCSV(trajectoryPosMap, trajectoryVelMap, path,
+			// trueEcefList.size());
 
 			System.out.println("\n\nPost Variance of Unit Weight Calculations");
 			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
@@ -611,9 +612,7 @@ public class Android {
 				// GraphPlotter.graphDOP(dopMap,
 				// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList);
-
-				File trajectory_output = new File(path + "trajectory.txt");
-
+				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 			}
 
 		} catch (
