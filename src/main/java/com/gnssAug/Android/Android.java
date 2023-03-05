@@ -53,6 +53,7 @@ import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
+import com.gnssAug.utility.Trajectory;
 
 public class Android {
 	private static Geoid geoid = null;
@@ -336,7 +337,7 @@ public class Android {
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satResMap.get(Measurement.Pseudorange).get("EKF - Doppler")
-									.computeIfAbsent(sat.getObsvCode().substring(0, 2),
+									.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
 											sat.isOutlier()));
@@ -362,7 +363,7 @@ public class Android {
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satInnMap.get(Measurement.Pseudorange).get("EKF - Doppler")
-									.computeIfAbsent(sat.getObsvCode().substring(0, 2),
+									.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
 											sat.isOutlier()));
@@ -370,6 +371,9 @@ public class Android {
 						}
 
 					}
+				}
+				if (doAnalyze) {
+					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
 
@@ -384,10 +388,13 @@ public class Android {
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
-
+			TreeMap<String, ArrayList<double[]>> trajectoryPosMap = new TreeMap<String, ArrayList<double[]>>();
+			TreeMap<String, ArrayList<double[]>> trajectoryVelMap = new TreeMap<String, ArrayList<double[]>>();
+			trajectoryPosMap.put("True", new ArrayList<double[]>());
+			trajectoryVelMap.put("True", new ArrayList<double[]>());
 			for (String key : estPosMap.keySet()) {
 				ArrayList<Double>[] posErrList = new ArrayList[6];
-
+				trajectoryPosMap.put(key, new ArrayList<double[]>());
 				IntStream.range(0, 6).forEach(i -> posErrList[i] = new ArrayList<Double>());
 
 				ArrayList<double[]> estPosList = estPosMap.get(key);
@@ -406,6 +413,7 @@ public class Android {
 					}
 					double[] enu = LatLonUtil.ecef2enu(estEcef, trueEcefList.get(i), true);
 					double[] estLLH = LatLonUtil.ecef2lla(estEcef);
+
 					// Great Circle Distance
 					double gcErr = LatLonUtil.getHaversineDistance(estLLH, trueLLHlist.get(i));
 					enuPosList.add(enu);
@@ -421,6 +429,7 @@ public class Android {
 					posErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 					// Haversine Distance
 					posErrList[5].add(gcErr);
+
 				}
 
 				GraphPosMap.put(key, enuPosList);
@@ -451,6 +460,7 @@ public class Android {
 
 			}
 			for (String key : estVelMap.keySet()) {
+				trajectoryVelMap.put(key, new ArrayList<double[]>());
 				ArrayList<Double>[] velErrList = new ArrayList[6];
 				ArrayList<double[]> estVelList = null;
 				ArrayList<double[]> enuVelList = null;
@@ -514,6 +524,36 @@ public class Android {
 
 			}
 
+			for (int i = 0; i < trueEcefList.size(); i++) {
+				long time = timeList.get(i);
+				double[] trueVel = new double[] { -999, -999, -999 };
+				if (trueVelEcef.containsKey(time)) {
+					trueVel = LatLonUtil.ecef2enu(trueVelEcef.get(time), trueEcefList.get(i), false);
+				}
+				trajectoryVelMap.get("True").add(trueVel);
+				double[] trueTrajPos = LatLonUtil.ecef2enu(trueEcefList.get(i), trueEcefList.get(0), true);
+				trajectoryPosMap.get("True").add(trueTrajPos);
+				for (String key : estPosMap.keySet()) {
+					double[] estPos = estPosMap.get(key).get(i);
+					if (estPos != null) {
+						trajectoryPosMap.get(key).add(LatLonUtil.ecef2enu(estPos, trueEcefList.get(0), true));
+					} else {
+						trajectoryPosMap.get(key).add(new double[] { -999, -999, -999 });
+					}
+
+				}
+				for (String key : estVelMap.keySet()) {
+					double[] estVel = estVelMap.get(key).get(i);
+					if (estVel != null) {
+						trajectoryVelMap.get(key).add(estVel);
+					} else {
+						trajectoryVelMap.get(key).add(new double[] { -999, -999, -999 });
+					}
+
+				}
+			}
+			Trajectory.createCSV(trajectoryPosMap, trajectoryVelMap, path, trueEcefList.size());
+
 			System.out.println("\n\nPost Variance of Unit Weight Calculations");
 			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
 				System.out.println(meas.toString());
@@ -571,6 +611,9 @@ public class Android {
 				// GraphPlotter.graphDOP(dopMap,
 				// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList);
+
+				File trajectory_output = new File(path + "trajectory.txt");
+
 			}
 
 		} catch (
