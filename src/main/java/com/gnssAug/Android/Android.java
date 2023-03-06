@@ -596,6 +596,7 @@ public class Android {
 					System.out.println("t-t0:" + (t - t0) + " i:" + i + " ctr:" + ctr);
 				}
 			}
+			GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 			// Plot Error Graphs
 			if (Cxx_hat_map.isEmpty()) {
 				GraphPlotter.graphENU(GraphPosMap, timeList, true);
@@ -612,7 +613,7 @@ public class Android {
 				// GraphPlotter.graphDOP(dopMap,
 				// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList);
-				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
+
 			}
 
 		} catch (

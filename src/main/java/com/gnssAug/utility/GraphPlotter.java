@@ -1,7 +1,5 @@
 package com.gnssAug.utility;
 
-import java.awt.BorderLayout;
-import java.awt.FlowLayout;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,14 +9,11 @@ import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
-import javax.swing.JFrame;
-
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.ejml.simple.SimpleMatrix;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.ui.ApplicationFrame;
 import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
@@ -75,6 +70,27 @@ public class GraphPlotter extends ApplicationFrame {
 			// 1000, 600);
 			setContentPane(chartPanel);
 		}
+
+	}
+
+	public GraphPlotter(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n, String name, boolean isHorizontal) {
+		super(name + " Trajectory");
+		JFreeChart chart;
+
+		if (isHorizontal) {
+			chart = ChartFactory.createScatterPlot("Horizontal " + name, "East", "North",
+					createDataset2DTraj(trajectoryMap, n));
+		} else {
+			chart = ChartFactory.createXYLineChart("Vertical", "Time(in sec)", "Up",
+					createDatasetVerticalTraj(trajectoryMap, n));
+		}
+
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
 
 	}
 
@@ -580,28 +596,24 @@ public class GraphPlotter extends ApplicationFrame {
 
 	public static void graphTrajectory(TreeMap<String, ArrayList<double[]>> trajectoryPosMap,
 			TreeMap<String, ArrayList<double[]>> trajectoryVelMap, int n) throws IOException {
-		graphTrajectoryProcess(trajectoryPosMap, n, "Position(in m)");
-		graphTrajectoryProcess(trajectoryVelMap, n, "Velocity(in m/s)");
-	}
 
-	public static void graphTrajectoryProcess(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n, String name)
-			throws IOException {
-		JFrame frame = new JFrame(name + " Trajectory");
-		frame.setLayout(new FlowLayout());
+		GraphPlotter chart = new GraphPlotter(trajectoryPosMap, n, "Position(in m)", true);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(trajectoryPosMap, n, "Position(in m)", false);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", true);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", false);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
 
-		JFreeChart barChart1 = ChartFactory.createScatterPlot("Horizontal " + name, "East", "North",
-				createDataset2DTraj(trajectoryMap, n), PlotOrientation.VERTICAL, true, true, false);
-
-		frame.getContentPane().add(new ChartPanel(barChart1), BorderLayout.NORTH);
-
-		JFreeChart barChart2 = ChartFactory.createXYLineChart("Vertical", "Up", "Time(in sec)",
-				createDatasetVerticalTraj(trajectoryMap, n), PlotOrientation.VERTICAL, true, true, false);
-
-		frame.getContentPane().add(new ChartPanel(barChart2), BorderLayout.CENTER);
-
-		frame.pack();
-
-		frame.setVisible(true);
 	}
 
 	public static void graphSatCount(HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap,
