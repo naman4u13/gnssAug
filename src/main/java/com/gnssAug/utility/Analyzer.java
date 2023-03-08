@@ -58,15 +58,15 @@ public class Analyzer {
 				double[] arr = estPosMap.get(estType).get(i);
 				if ((j + 3) < arr.length) {
 					rxClkOff[j] = arr[j + 3];
-					rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
-							k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
+//					rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
+//							k -> new TreeMap<Integer, Double>()).put(timeDiff, 100 + rxClkOff[j]);
 				}
 				if (!estType.equals("EKF - Doppler")) {
 					arr = estVelMap.get(estType).get(i);
 					if ((j + 3) < arr.length) {
 						rxClkDrift[j] = arr[j + 3];
-						dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
-								k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+//						dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
+//								k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
 					}
 				}
 

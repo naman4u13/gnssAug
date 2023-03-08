@@ -90,7 +90,7 @@ public class EKFDoppler {
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
 			predictTotalState(X, satList, deltaT, useIGS);
-			runFilter(X, currentTime, deltaT, satList, obsvCodeList, doAnalyze, doTest, outlierAnalyze);
+			runFilter(X, currentTime, deltaT, satList, obsvCodeList, doAnalyze, doTest, outlierAnalyze,useIGS);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
 			IntStream.range(0, x_size).forEach(j -> estState[j] = X.get(j));
@@ -104,7 +104,7 @@ public class EKFDoppler {
 
 				SimpleMatrix errCov = R.mult(P).mult(R.transpose());
 				errCovMap.put(currentTime, errCov);
-				innovationMap.put(currentTime, temp_innovation);
+				innovationMap.put(currentTime, innovation);
 			}
 			if (!MatrixFeatures_DDRM.isPositiveSemidefinite(P.getMatrix())) {
 				throw new Exception("PositiveDefinite test Failed");
@@ -129,14 +129,14 @@ public class EKFDoppler {
 	}
 
 	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
-			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze) throws Exception {
+			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,boolean useIGS) throws Exception {
 
 		boolean isWeighted = true;
 		boolean useAndroidW = false;
 		// Satellite count
 		int n = satList.size();
 		int m = obsvCodeList.length;
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler);
+		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat_updated(Measurement.Doppler,"ECEF");
 		// Last update VC-matrix
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 		SimpleMatrix priorX = new SimpleMatrix(X);
@@ -170,8 +170,11 @@ public class EKFDoppler {
 					_R[i][i] = Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
 				}
 			} else {
-				SimpleMatrix Cyy = Weight.getNormCyy(satList, priorVarOfUnitW);
+				LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
+				SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
 				_R = Matrix.matrix2Array(Cyy);
+//				SimpleMatrix Cyy = Weight.getNormCyy(satList, priorVarOfUnitW);
+//				_R = Matrix.matrix2Array(Cyy);
 			}
 		} else {
 			for (int i = 0; i < n; i++) {
@@ -224,7 +227,7 @@ public class EKFDoppler {
 			x.set(i, 0);
 		}
 		if (doAnalyze) {
-			performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime, priorVarOfUnitW, n, obsvCodeList,
+			performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime,  n, obsvCodeList,
 					doTest, outlierAnalyze);
 		}
 		if (outlierAnalyze) {
@@ -246,7 +249,7 @@ public class EKFDoppler {
 	}
 
 	private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
-			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime, double priorVarOfUnitW, int n,
+			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,  int n,
 			String[] obsvCodeList, boolean doTest, boolean outlierAnalyze) {
 
 		int _n = testedSatList.size();
@@ -270,7 +273,7 @@ public class EKFDoppler {
 		if (_n - rSum > 0.01) {
 			System.err.println("FATAL ERROR: Redundancy sum is wrong");
 		}
-		double postVarOfUnitW = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0) * priorVarOfUnitW / rZ;
+		double postVarOfUnitW = e_post_hat.transpose().mult(Cyy_inv).mult(e_post_hat).get(0) / rZ;
 		redundancyList.add(new double[] { _n, rSum, rX, rW, rZ });
 		postVarOfUnitWMap.put(currentTime, postVarOfUnitW);
 		residualMap.put(currentTime, residual);

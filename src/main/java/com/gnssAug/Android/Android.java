@@ -82,8 +82,8 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
-			// "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\Android\\2021-04-29-US-MTV-1\\test";
+			String path =  "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-MTV-1\\test";
+			//"C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -189,6 +189,7 @@ public class Android {
 							if (doAnalyze) {
 
 								double[] residual = LinearLeastSquare.getResidual(type);
+								SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(type);
 								satResMap
 										.computeIfAbsent(type,
 												k -> new HashMap<String, HashMap<String, ArrayList<SatResidual>>>())
@@ -201,7 +202,7 @@ public class Android {
 											.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
 													k -> new ArrayList<SatResidual>())
 											.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
-													sat.isOutlier()));
+													sat.isOutlier(),Math.sqrt(Cyy.get(j,j))));
 
 								}
 								if (doTest) {
@@ -216,7 +217,7 @@ public class Android {
 								State state = (type != Measurement.Pseudorange) ? State.Velocity : State.Position;
 								Cxx_hat_map.computeIfAbsent(state, k -> new HashMap<String, ArrayList<SimpleMatrix>>())
 										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
-										.add(LinearLeastSquare.getCxx_hat(type));
+										.add(LinearLeastSquare.getCxx_hat_updated(type,"ENU"));
 							}
 							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
 									.add(LinearLeastSquare.getDop());
@@ -666,8 +667,8 @@ public class Android {
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
 
-		File orekitData = new File(
-				"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master");
+		File orekitData = new File("C:\\Users\\naman.agarwal\\Documents\\GNSS\\orekit\\orekit-data-master\\orekit-data-master");
+		//"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master"
 		DataProvidersManager manager = DataProvidersManager.getInstance();
 		manager.addProvider(new DirectoryCrawler(orekitData));
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);

@@ -37,29 +37,22 @@ public class GraphPlotter extends ApplicationFrame {
 
 			if (flag) {
 				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
-						createDatasetSatRes(satResMap, isSatRes, flag, false)));
-				if (outlierAnalyze) {
-					charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
-							createDatasetSatRes(satResMap, isSatRes, flag, true)));
-				}
+						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
+				
 			} else {
 				charts.add(ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
-						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
-				if (outlierAnalyze) {
-					charts.add(
-							ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
-									name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, true)));
-				}
+						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
+				
 			}
 		} else {
 
 			if (flag) {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
-						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, false)));
+						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 			} else {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
 						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m or m/s)",
-						createDatasetSatRes(satResMap, isSatRes, flag, false)));
+						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 			}
 		}
 		for (JFreeChart chart : charts) {
@@ -531,15 +524,15 @@ public class GraphPlotter extends ApplicationFrame {
 				chart.setVisible(true);
 
 				// For Satellite measurement noise std dev
-				/*
-				 * chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
-				 * ": Satellite-Measurement Noise Std Dev", false, true); chart.pack();
-				 * RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
-				 * 
-				 * chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
-				 * ": Satellite-Measurement Noise Std Dev", false, false); chart.pack();
-				 * RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
-				 */
+				
+				 chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
+				 ": Satellite-Measurement Noise Std Dev", false, true,outlierAnaylze); chart.pack();
+				 RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
+				 
+				 chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
+				 ": Satellite-Measurement Noise Std Dev", false, false,outlierAnaylze); chart.pack();
+				 RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
+				
 			}
 		}
 
@@ -1078,7 +1071,7 @@ public class GraphPlotter extends ApplicationFrame {
 			boolean flag, boolean outlierAnalyze) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		if (outlierAnalyze && isSatRes) {
+		if (outlierAnalyze) {
 			final XYSeries inlier = new XYSeries("inlier");
 			final XYSeries outlier = new XYSeries("outlier");
 			for (String key : dataMap.keySet()) {
@@ -1096,8 +1089,12 @@ public class GraphPlotter extends ApplicationFrame {
 						double elevAngle = Math.toDegrees(satData.getElevAngle());
 						x = elevAngle;
 					}
-					double data = satData.getResidual();
-
+					double data;
+					if (isSatRes) {
+						data = satData.getResidual();
+					} else {
+						data = satData.getNoiseStdDev();
+					}
 					if (satData.isOutlier()) {
 						outlier.add(x, data);
 					} else {
@@ -1135,7 +1132,7 @@ public class GraphPlotter extends ApplicationFrame {
 					if (isSatRes) {
 						data = satData.getResidual();
 					} else {
-						data = satData.getNoise();
+						data = satData.getNoiseStdDev();
 					}
 					series.add(x, data);
 
