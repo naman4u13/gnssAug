@@ -582,9 +582,11 @@ public class Android {
 					System.out.println("MEAN : " + avg);
 					System.out.println("MEDIAN : " + median);
 					System.out.println("Q75 : " + q75);
-
+					
 				}
 			}
+			
+			
 			long t0 = (long) (timeList.get(0) * 1e-3);
 			long ctr = 0;
 			System.out.println();

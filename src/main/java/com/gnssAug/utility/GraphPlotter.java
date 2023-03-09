@@ -773,6 +773,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
+		ArrayList<Double> dataSeries = new ArrayList<Double>();
 		for (String key : map.keySet()) {
 			String name = key;
 			final XYSeries series = new XYSeries(name);
@@ -780,9 +781,21 @@ public class GraphPlotter extends ApplicationFrame {
 			for (int x : data.keySet()) {
 				double y = data.get(x);
 				series.add(x, y);
+				dataSeries.add(Math.abs(y));
 			}
 			dataset.addSeries(series);
 		}
+		
+		double avg = dataSeries.stream().mapToDouble(i->i).average().orElse(0);
+		Collections.sort(dataSeries);
+		int n = dataSeries.size();
+		double q50 = dataSeries.get((int)(n*0.5));
+		double q75 = dataSeries.get((int)(n*0.75));
+		double q95 = dataSeries.get((int)(n*0.95));
+		dataset.addSeries(new XYSeries("Average: "+avg));
+		dataset.addSeries(new XYSeries("Q50: "+q50));
+		dataset.addSeries(new XYSeries("Q75: "+q75));
+		dataset.addSeries(new XYSeries("Q95: "+q95));
 		return dataset;
 	}
 
@@ -1107,7 +1120,8 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(outlier);
 			dataset.addSeries(inlier);
 		} else {
-
+			
+			ArrayList<Double> dataSeries = new ArrayList<Double>();
 			for (String key : dataMap.keySet()) {
 				final XYSeries series = new XYSeries(key);
 				ArrayList<SatResidual> dataList = dataMap.get(key);
@@ -1135,11 +1149,21 @@ public class GraphPlotter extends ApplicationFrame {
 						data = satData.getNoiseStdDev();
 					}
 					series.add(x, data);
-
+					dataSeries.add(data);
 				}
 
 				dataset.addSeries(series);
 			}
+			double avg = dataSeries.stream().mapToDouble(i->i).average().orElse(0);
+			Collections.sort(dataSeries);
+			int n = dataSeries.size();
+			double q50 = dataSeries.get((int)(n*0.5));
+			double q75 = dataSeries.get((int)(n*0.75));
+			double q95 = dataSeries.get((int)(n*0.95));
+			dataset.addSeries(new XYSeries("Average: "+avg));
+			dataset.addSeries(new XYSeries("Q50: "+q50));
+			dataset.addSeries(new XYSeries("Q75: "+q75));
+			dataset.addSeries(new XYSeries("Q95: "+q95));
 		}
 
 		return dataset;

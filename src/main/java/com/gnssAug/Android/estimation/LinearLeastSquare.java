@@ -256,11 +256,19 @@ public class LinearLeastSquare {
 			Cyy_updated.set(i,i,Math.pow(e_hat.get(i), 2) / redunMatrix.get(i, i));
 			sum +=redunMatrix.get(i, i);
 		}
+//		if(type==Measurement.Doppler)
+//		{
+//			Cyy_updated = Cyy_updated.scale(25);
+//		}
+//		else
+//		{
+//			Cyy_updated = Cyy_updated.scale(4);
+//		}
+		
 		SimpleMatrix Cxx_hat_updated = (Ht.mult(Cyy_updated.invert()).mult(H)).invert();
 //		for (int i = 0; i < n; i++) {
 //			residual[i] = e_hat.get(i) / Math.sqrt(Cee_hat.get(i, i));
 //		}
-
 		
 		if(Math.abs(sum-(n-(3+m)))>0.1)
 		{

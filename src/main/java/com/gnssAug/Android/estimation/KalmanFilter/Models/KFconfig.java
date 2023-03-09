@@ -112,11 +112,28 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
-	public void configDoppler(double deltaT, SimpleMatrix Cxx_dot_hat,int m) {
+	public void configDoppler(double deltaT, SimpleMatrix Cxx_dot_hat,int m,SimpleMatrix X) {
 		int n = 3+m;
+		
+		//Extra noise
+		double[] qENU = new double[] { 0, 0, 0, 400,400  };
+		SimpleMatrix omega = new SimpleMatrix(n, n);
+		for(int i=0;i<n;i++)
+		{
+			omega.set(i,i,qENU[i]);
+		}
+		SimpleMatrix R = new SimpleMatrix(n, n);
+		R.insertIntoThis(0,0,LatLonUtil.getEnu2EcefRotMat(new double[] {X.get(0),X.get(1),X.get(2)}));
+		for(int i=3;i<n;i++)
+		{
+			R.set(i, i, 1);
+		}
+		omega = R.mult(omega).mult(R.transpose());
+		
+		
 		double[][] phi = new double[n][n];
 		SimpleMatrix _Q = new SimpleMatrix(n,n);
-		_Q.insertIntoThis(0, 0, Cxx_dot_hat.scale(deltaT*deltaT/2));
+		_Q.insertIntoThis(0, 0, (Cxx_dot_hat.plus(omega)).scale(deltaT*deltaT/2));
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);

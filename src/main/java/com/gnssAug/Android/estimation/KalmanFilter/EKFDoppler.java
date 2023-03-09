@@ -87,9 +87,10 @@ public class EKFDoppler {
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			long currentTime = timeList.get(i);
-			ArrayList<Satellite> satList = SatMap.get(currentTime);
+			ArrayList<Satellite> satList = SatMap.get(time);
 			double deltaT = (currentTime - time) / 1e3;
 			predictTotalState(X, satList, deltaT, useIGS);
+			satList = SatMap.get(currentTime);
 			runFilter(X, currentTime, deltaT, satList, obsvCodeList, doAnalyze, doTest, outlierAnalyze,useIGS);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
@@ -117,6 +118,7 @@ public class EKFDoppler {
 	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
 			throws Exception {
 
+		
 		double[] vel = LinearLeastSquare.getEstVel(satList, true, true, false, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 //		for(int i=3;i<vel.length;i++)
@@ -141,7 +143,7 @@ public class EKFDoppler {
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 		SimpleMatrix priorX = new SimpleMatrix(X);
 		// Assign Q and F matrix
-		kfObj.configDoppler(deltaT, Cxx_dot_hat, m);
+		kfObj.configDoppler(deltaT, Cxx_dot_hat, m,X);
 		kfObj.predict();
 
 		double[] estPos = new double[] { X.get(0), X.get(1), X.get(2) };
@@ -326,7 +328,7 @@ public class EKFDoppler {
 			SimpleMatrix R_ = new SimpleMatrix(_n, _n);
 			double[][] z_ = new double[_n][1];
 			double[][] ze_ = new double[_n][1];
-			SimpleMatrix H_ = new SimpleMatrix(_n, 3 + (2 * m));
+			SimpleMatrix H_ = new SimpleMatrix(_n, 3 + m);
 			SimpleMatrix v_ = new SimpleMatrix(_n, 1);
 			int j = 0;
 			for (int i = 0; i < _n + 1; i++) {
@@ -335,7 +337,7 @@ public class EKFDoppler {
 					v_.set(j, v.get(i));
 					z_[j][0] = z[i][0];
 					ze_[j][0] = ze[i][0];
-					for (int k = 0; k < 3 + (2 * m); k++) {
+					for (int k = 0; k < 3 +  m; k++) {
 						H_.set(j, k, H.get(i, k));
 					}
 					j++;
