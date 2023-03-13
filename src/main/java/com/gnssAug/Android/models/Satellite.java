@@ -14,6 +14,9 @@ public class Satellite extends GNSSLog {
 	private double rangeRate;
 	// Experimental param, used for outlier testing
 	private boolean isOutlier;
+	// Experimental param, true range of satellite
+	private double trueRange;
+	
 
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate) {
 		super(log);
@@ -80,6 +83,14 @@ public class Satellite extends GNSSLog {
 
 	public void setOutlier(boolean isOutlier) {
 		this.isOutlier = isOutlier;
+	}
+	
+	public double getTrueRange() {
+		return trueRange;
+	}
+
+	public void setTrueRange(double trueRange) {
+		this.trueRange = trueRange;
 	}
 
 }

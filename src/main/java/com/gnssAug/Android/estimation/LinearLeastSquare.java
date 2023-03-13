@@ -30,8 +30,8 @@ public class LinearLeastSquare {
 	
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW = 7.557;
-	final private static double doppler_priorVarOfUnitW = 0.0238;
+	final private static double pseudorange_priorVarOfUnitW = 6.2972;
+	final private static double doppler_priorVarOfUnitW = 0.0347;
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
 		return process(satList, isWLS, false, false, false, Measurement.Pseudorange, null, useIGS);

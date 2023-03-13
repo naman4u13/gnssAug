@@ -88,18 +88,18 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 	
-	public GraphPlotter(String title,String type, TreeMap<Long,Satellite> satMap) throws IOException {
+	public GraphPlotter(String title,String type, TreeMap<Long,Satellite> satMap) throws Exception {
 		super(title +" "+ type);
 		// TODO Auto-generated constructor stub
 		final JFreeChart chart;
 		if(type.equals("Observables"))
 		{
-		chart = ChartFactory.createScatterPlot(title +" "+ type, "GPS-time",
+		chart = ChartFactory.createXYLineChart(title +" "+ type, "GPS-time",
 				type, createDatasetObservable(satMap));
 		}
 		else
 		{
-			chart = ChartFactory.createScatterPlot(title +" "+ type, "GPS-time",
+			chart = ChartFactory.createXYLineChart(title +" "+ type, "GPS-time",
 					type, createDatasetDeltaRange(satMap));
 		}
 		final ChartPanel chartPanel = new ChartPanel(chart);
@@ -648,19 +648,28 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 	
-	public static void graphDeltaRange(TreeMap<Long, ArrayList<Satellite>> satMap) throws IOException
+	public static void graphDeltaRange(TreeMap<Long, ArrayList<Satellite>> satMap,ArrayList<double[]> truePosEcef) throws Exception
 	{
+		if (truePosEcef.size() != satMap.size()) {
+			throw new Exception("Error in DeltaRange Plotting");
+		}
 		HashMap<String,TreeMap<Long, Satellite>> satListMap = new HashMap<String,TreeMap<Long, Satellite>>();
 		long time0 = satMap.firstKey();
+		int i = 0;
 		for(long time:satMap.keySet())
 		{
+			double[] truePos = truePosEcef.get(i);
 			long t = (long) ((time-time0)*(1e-3));
 			ArrayList<Satellite> satList = satMap.get(time);
 			for(Satellite sat:satList)
 			{
+				double[] satPos = sat.getSatEci();
+				double trueRange = MathUtil.getEuclidean(truePos, satPos);
+				sat.setTrueRange(trueRange);
 				String id = sat.getObsvCode().charAt(0)+"" +sat.getSvid();
 				satListMap.computeIfAbsent(id, k->new TreeMap<Long, Satellite>()).put(t, sat);
 			}
+			i++;
 		}
 		
 		for(String id:satListMap.keySet())
@@ -1005,20 +1014,24 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 	
-	private XYDataset createDatasetDeltaRange(TreeMap<Long,Satellite> satMap) {
-		XYSeriesCollection dataset = new XYSeriesCollection();
+	private XYDataset createDatasetDeltaRange(TreeMap<Long,Satellite> satMap) throws Exception {
 		
+		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries pr_dr_series = new XYSeries("PR Derived DeltaRange");
 		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived");
 		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived");
-		
+		final XYSeries true_dr_series = new XYSeries("True DeltaRange");
+		int i =0;
 		long t_prev = -999;
 		double pr_prev = 0;
 		double prRate_prev = 0;
 		double phase_prev = 0;
+		double trueRange_prev = 0;
 		for(Long t:satMap.keySet())
 		{
+			
 			Satellite sat = satMap.get(t);
+			double trueRange =sat.getTrueRange();
 			double pr = sat.getPseudorange();
 			double prRate = sat.getPseudorangeRateMetersPerSecond();
 			double phase = sat.getAccumulatedDeltaRangeMeters();
@@ -1027,28 +1040,31 @@ public class GraphPlotter extends ApplicationFrame {
 				pr_dr_series.add(t, null);
 				prRate_dr_series.add(t, null);
 				phase_dr_series.add(t,null);
-				
+				true_dr_series.add(t,null);
 			}
 			else
 			{
-				
-				double range_pr = pr-pr_prev;
-				double range_prRate = (prRate+prRate_prev)*(t-t_prev)/2;
-				double range_phase = phase-phase_prev;
-				pr_dr_series.add(t, (Double)range_pr);
-				prRate_dr_series.add(t, (Double)range_prRate);
-				phase_dr_series.add(t, (Double)range_phase);
+				double pr_dr = pr-pr_prev;
+				double prRate_dr = (prRate+prRate_prev)*(t-t_prev)/2;
+				double phase_dr = phase-phase_prev;
+				double true_dr = trueRange - trueRange_prev;
+				pr_dr_series.add(t, (Double)pr_dr);
+				prRate_dr_series.add(t, (Double)prRate_dr);
+				phase_dr_series.add(t, (Double)phase_dr);
+				true_dr_series.add(t,(Double)true_dr);
 				
 			}
 			t_prev = t;
 			pr_prev = pr;
 			prRate_prev = prRate;
 			phase_prev = phase;
-			
+			trueRange_prev = trueRange;
+			i++;
 		}
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		dataset.addSeries(phase_dr_series);
+		//dataset.addSeries(phase_dr_series);
+		dataset.addSeries(true_dr_series);
 		
 		return dataset;
 
@@ -1073,10 +1089,7 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			pr_series.add(t, (Double)(pr-pr0));
 			prRate_series.add(t, (Double)(prRate-prRate0));
-			
 			t0 = t;
-			
-			
 		}
 		dataset.addSeries(pr_series);
 		dataset.addSeries(prRate_series);

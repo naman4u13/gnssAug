@@ -60,7 +60,7 @@ public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
 			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze) {
+			boolean outlierAnalyze, boolean mapDeltaRanges) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -82,8 +82,8 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path =  "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-MTV-1\\test";
-			//"C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test";
+			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
@@ -202,7 +202,7 @@ public class Android {
 											.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
 													k -> new ArrayList<SatResidual>())
 											.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
-													sat.isOutlier(),Math.sqrt(Cyy.get(j,j))));
+													sat.isOutlier(), Math.sqrt(Cyy.get(j, j))));
 
 								}
 								if (doTest) {
@@ -217,7 +217,7 @@ public class Android {
 								State state = (type != Measurement.Pseudorange) ? State.Velocity : State.Position;
 								Cxx_hat_map.computeIfAbsent(state, k -> new HashMap<String, ArrayList<SimpleMatrix>>())
 										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
-										.add(LinearLeastSquare.getCxx_hat_updated(type,"ENU"));
+										.add(LinearLeastSquare.getCxx_hat_updated(type, "ENU"));
 							}
 							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
 									.add(LinearLeastSquare.getDop());
@@ -582,11 +582,10 @@ public class Android {
 					System.out.println("MEAN : " + avg);
 					System.out.println("MEDIAN : " + median);
 					System.out.println("Q75 : " + q75);
-					
+
 				}
 			}
-			
-			
+
 			long t0 = (long) (timeList.get(0) * 1e-3);
 			long ctr = 0;
 			System.out.println();
@@ -599,26 +598,27 @@ public class Android {
 					System.out.println("t-t0:" + (t - t0) + " i:" + i + " ctr:" + ctr);
 				}
 			}
-			GraphPlotter.graphDeltaRange(satMap);
-			/*GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
-			// Plot Error Graphs
-			if (Cxx_hat_map.isEmpty()) {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true);
-				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			if (mapDeltaRanges) {
+				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 			} else {
-				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
-				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
-			}
-//			// Plot Error Graphs
-//			//
-			if (doAnalyze) {
-				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
-				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				// GraphPlotter.graphDOP(dopMap,
-				// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
-				GraphPlotter.graphSatCount(satCountMap, timeList);
+				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
+				// Plot Error Graphs
+				if (Cxx_hat_map.isEmpty()) {
+					GraphPlotter.graphENU(GraphPosMap, timeList, true);
+					GraphPlotter.graphENU(GraphVelMap, timeList, false);
+				} else {
+					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
+					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
+				}
+				if (doAnalyze) {
+					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
+					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+					// GraphPlotter.graphDOP(dopMap,
+					// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
+					GraphPlotter.graphSatCount(satCountMap, timeList);
 
-			}*/
+				}
+			}
 
 		} catch (
 
@@ -670,8 +670,9 @@ public class Android {
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
 
-		File orekitData = new File("C:\\Users\\naman.agarwal\\Documents\\GNSS\\orekit\\orekit-data-master\\orekit-data-master");
-		//"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master"
+		File orekitData = new File(
+				"C:\\Users\\naman.agarwal\\Documents\\GNSS\\orekit\\orekit-data-master\\orekit-data-master");
+		// "C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master"
 		DataProvidersManager manager = DataProvidersManager.getInstance();
 		manager.addProvider(new DirectoryCrawler(orekitData));
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);

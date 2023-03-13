@@ -19,7 +19,7 @@ import com.gnssAug.utility.Weight;
 
 public class EKFDoppler {
 
-	private final double pseudorange_priorVarOfUnitW = 7.4662;
+
 	private final double SpeedofLight = 299792458;
 	private KFconfig kfObj;
 
@@ -129,7 +129,8 @@ public class EKFDoppler {
 			X.set(i, X.get(i) + (vel[i] * deltaT));
 		}
 	}
-
+	
+	// Innovation Based Testing
 	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
 			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,boolean useIGS) throws Exception {
 
@@ -165,7 +166,7 @@ public class EKFDoppler {
 		double[][] _R = new double[n][n];
 		innovation = new double[n];
 		temp_innovation = new double[n];
-		double priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+		
 		if (isWeighted) {
 			if (useAndroidW) {
 				for (int i = 0; i < n; i++) {
@@ -180,7 +181,7 @@ public class EKFDoppler {
 			}
 		} else {
 			for (int i = 0; i < n; i++) {
-				_R[i][i] = priorVarOfUnitW;
+				//_R[i][i] = priorVarOfUnitW;
 			}
 		}
 		/*
@@ -249,6 +250,103 @@ public class EKFDoppler {
 		}
 
 	}
+	
+	// Residual Based Testing
+		private void runFilter2(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
+				String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,boolean useIGS) throws Exception {
+
+			boolean isWeighted = true;
+			boolean useAndroidW = false;
+			// Satellite count
+			int n = satList.size();
+			int m = obsvCodeList.length;
+			SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat_updated(Measurement.Doppler,"ECEF");
+			// Last update VC-matrix
+			SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
+			SimpleMatrix priorX = new SimpleMatrix(X);
+			// Assign Q and F matrix
+			kfObj.configDoppler(deltaT, Cxx_dot_hat, m,X);
+			kfObj.predict();
+
+			double[] estPos = new double[] { X.get(0), X.get(1), X.get(2) };
+			double[] rxClkOff = new double[m];// in meters
+			for (int i = 0; i < m; i++) {
+				rxClkOff[i] = X.get(i + 3);
+			}
+
+			/*
+			 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
+			 * with respect to x
+			 */
+			double[][] _H = new double[n][3 + m];
+			// Measurement vector
+			double[][] z = new double[n][1];
+			// Estimated Measurement vector
+			double[][] ze = new double[n][1];
+			// Measurement Noise
+			double[][] _R = new double[n][n];
+			innovation = new double[n];
+			temp_innovation = new double[n];
+			
+			if (isWeighted) {
+				if (useAndroidW) {
+					for (int i = 0; i < n; i++) {
+						_R[i][i] = Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
+					}
+				} else {
+					LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
+					SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
+					_R = Matrix.matrix2Array(Cyy);
+//					SimpleMatrix Cyy = Weight.getNormCyy(satList, priorVarOfUnitW);
+//					_R = Matrix.matrix2Array(Cyy);
+				}
+			} else {
+				for (int i = 0; i < n; i++) {
+					//_R[i][i] = priorVarOfUnitW;
+				}
+			}
+			/*
+			 * Notice measurement 'z' is difference b/w PR and estimated PR, because it's a
+			 * complimentary filter predicted error state is zero and therefore Hx = 0 or
+			 * estimated measurement(ze) is zero
+			 */
+			for (int i = 0; i < n; i++) {
+				Satellite sat = satList.get(i);
+				// Its not really a ECI, therefore don't get confused
+				String obsvCode = sat.getObsvCode();
+				double[] satEcef = sat.getSatEci();
+				double PR = sat.getPseudorange();
+				double[] LOS = IntStream.range(0, 3).mapToDouble(j -> satEcef[j] - estPos[j]).toArray();
+				// Approx Geometric Range
+				double approxGR = Vector.mod(LOS);
+				// Approx Pseudorange Range
+				double approxPR = approxGR;
+				for (int j = 0; j < m; j++) {
+					if (obsvCode.equals(obsvCodeList[j])) {
+						approxPR += rxClkOff[j];
+						_H[i][3 + j] = 1;
+					}
+				}
+
+				z[i][0] = PR - approxPR;
+				final int _i = i;
+				IntStream.range(0, 3).forEach(j -> _H[_i][j] = -LOS[j] / approxGR);
+				innovation[i] = z[i][0] - ze[i][0];
+			}
+			SimpleMatrix R = new SimpleMatrix(_R);
+			SimpleMatrix H = new SimpleMatrix(_H);
+			ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
+			
+			kfObj.update(z, R, ze, H);
+			if (doAnalyze && outlierAnalyze) {
+				performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime,  n, obsvCodeList,
+						doTest, outlierAnalyze);
+			}
+			
+			
+			
+
+		}
 
 	private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
 			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,  int n,
