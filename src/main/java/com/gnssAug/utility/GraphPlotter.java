@@ -1061,10 +1061,11 @@ public class GraphPlotter extends ApplicationFrame {
 			trueRange_prev = trueRange;
 			i++;
 		}
+		dataset.addSeries(true_dr_series);
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		//dataset.addSeries(phase_dr_series);
-		dataset.addSeries(true_dr_series);
+		dataset.addSeries(phase_dr_series);
+		
 		
 		return dataset;
 
@@ -1075,6 +1076,7 @@ public class GraphPlotter extends ApplicationFrame {
 		final XYSeries pr_series = new XYSeries("Pseudorange");
 		final XYSeries prRate_series = new XYSeries("Pseudorange Rate(Doppler)");
 		double t0 = satMap.firstEntry().getKey();
+		double tr0 = satMap.firstEntry().getValue().getTrueRange();
 		double pr0 = satMap.firstEntry().getValue().getPseudorange();
 		double prRate0 = satMap.firstEntry().getValue().getPseudorangeRateMetersPerSecond();
 		for(Long t:satMap.keySet())
@@ -1082,13 +1084,14 @@ public class GraphPlotter extends ApplicationFrame {
 			Satellite sat = satMap.get(t);
 			double pr = sat.getPseudorange();
 			double prRate = sat.getPseudorangeRateMetersPerSecond();
+			double tr = sat.getTrueRange();
 			if((t-t0)>1.1)
 			{
 				pr_series.add(t0+1, null);
 				prRate_series.add(t0+1, null);
 			}
-			pr_series.add(t, (Double)(pr-pr0));
-			prRate_series.add(t, (Double)(prRate-prRate0));
+			pr_series.add(t, (Double)(pr));
+			prRate_series.add(t, (Double)(prRate));
 			t0 = t;
 		}
 		dataset.addSeries(pr_series);

@@ -24,7 +24,7 @@ public class EKF {
 
 	private final double SpeedofLight = 299792458;
 	private KFconfig kfObj;
-	private double prObsNoiseVar;
+	
 	private double[] innovation;
 	private double[] temp_innovation;
 	private TreeMap<Long, double[]> innovationMap;

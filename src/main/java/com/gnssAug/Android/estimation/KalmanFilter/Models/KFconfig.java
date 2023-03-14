@@ -19,7 +19,7 @@ public class KFconfig extends KF {
 	private final double sf = ClockAllanVar.TCXO_low_quality.sf;
 	private final double sg = ClockAllanVar.TCXO_low_quality.sg;
 
-	public void config(double deltaT, Flag flag) throws Exception {
+	public void config(double deltaT, Flag flag,int m) throws Exception {
 
 		/*
 		 * The process noise for position vector will be initialized in ENU frame and
@@ -29,29 +29,26 @@ public class KFconfig extends KF {
 		double[] ecef = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 
 		if (flag == Flag.POSITION) {
-
-			double[][] phi = new double[5][5];
-			double[][] _Q = new double[5][5];
-			IntStream.range(0, 5).forEach(i -> phi[i][i] = 1);
-			phi[3][4] = deltaT;
+			int n = 3+(2*m);
+			double[][] phi = new double[n][n];
+			double[][] _Q = new double[n][n];
+			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
 //			double[] qENU = new double[] { 12, 12, 0.2 };
 			double[] qENU = new double[] { 16, 16, 4 };
 			// qECEF_std can have negative element
 			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i]);
-			_Q[3][3] = ((sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3));
-			_Q[3][4] = (sg * Math.pow(deltaT, 2)) / 2;
-			_Q[4][3] = (sg * Math.pow(deltaT, 2)) / 2;
-			_Q[4][4] = sg * deltaT;
-			SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
-			SimpleMatrix R = new SimpleMatrix(5, 5);
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					R.set(i, j, _R.get(i, j));
-				}
+			SimpleMatrix R = new SimpleMatrix(n, n);
+			R.insertIntoThis(0, 0, LatLonUtil.getEnu2EcefRotMat(ecef));
+			for (int i = 3; i < 3 + m; i++) {
+				_Q[i][i] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
+				_Q[i][i + m] = (sg * Math.pow(deltaT, 2)) / 2;
+				_Q[i + m][i] = (sg * Math.pow(deltaT, 2)) / 2;
+				_Q[i + m][i + m] = sg * deltaT;
+				phi[i][i + m] = deltaT;
+				R.set(i,i,1);
+				R.set(i+m,i+m,1);
 			}
-			R.set(3, 3, 1);
-			R.set(4, 4, 1);
 			SimpleMatrix Q = new SimpleMatrix(_Q);
 			Q = R.mult(Q).mult(R.transpose());
 			if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
@@ -61,38 +58,45 @@ public class KFconfig extends KF {
 			super.configure(phi, Q);
 
 		} else if (flag == Flag.VELOCITY) {
-			double[][] F = new double[8][8];
-			double[][] _Q = new double[8][8];
-			IntStream.range(0, 8).forEach(i -> F[i][i] = 1);
-			IntStream.range(0, 4).forEach(i -> F[i][i + 4] = deltaT);
+			int n = 6+(2*m);
+			double[][] phi = new double[n][n];
+			double[][] _Q = new double[n][n];
+			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 			// double[] qENU_std = new double[] { 8, 12, 2 };
 
 			double[] qENU = new double[] { 0.25, 0.25, 0.1 };
-			double[] q = new double[] { qENU[0], qENU[1], qENU[2], sg };
-			for (int i = 0; i < 4; i++) {
+			double[] q = new double[3+m];
+			IntStream.range(0, 3).forEach(i->q[i] = qENU[i]);
+			IntStream.range(3, 3+m).forEach(i->q[i] = sg);
+		
+			for (int i = 0; i < 3+m; i++) {
 				_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
-				_Q[i][i + 4] = q[i] * Math.pow(deltaT, 2) / 2;
-				_Q[i + 4][i] = q[i] * Math.pow(deltaT, 2) / 2;
-				_Q[i + 4][i + 4] = q[i] * deltaT;
+				_Q[i][i + 3 + m] = q[i] * Math.pow(deltaT, 2) / 2;
+				_Q[i + 3 + m][i] = q[i] * Math.pow(deltaT, 2) / 2;
+				_Q[i + 3 + m][i + 3 + m] = q[i] * deltaT;
+				phi[i][i + 3 + m] = deltaT;
 			}
-			_Q[3][3] += (sf * deltaT);
+			IntStream.range(3, 3+m).forEach(i->_Q[i][i] += (sf * deltaT));
+			
 			SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
-			SimpleMatrix R = new SimpleMatrix(8, 8);
+			SimpleMatrix R = new SimpleMatrix(n, n);
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
 					R.set(i, j, _R.get(i, j));
-					R.set(i + 4, j + 4, _R.get(i, j));
+					R.set(i + 3 + m, j + 3 + m, _R.get(i, j));
 				}
 			}
-			R.set(3, 3, 1);
-			R.set(7, 7, 1);
+			for (int i = 0; i < m; i++) {
+				R.set(3+i,3+i,1);
+				R.set(6+m+i,6+m+i,1);
+			}
 			SimpleMatrix Q = new SimpleMatrix(_Q);
 			Q = R.mult(Q).mult(R.transpose());
 			if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 
 				throw new Exception("PositiveDefinite test Failed");
 			}
-			super.configure(F, Q);
+			super.configure(phi, Q);
 
 		}
 	}

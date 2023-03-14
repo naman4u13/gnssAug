@@ -64,9 +64,9 @@ public class Analyzer {
 				if (!estType.equals("EKF - Doppler")) {
 					arr = estVelMap.get(estType).get(i);
 					if ((j + 3) < arr.length) {
-						rxClkDrift[j] = arr[j + 3];
+					rxClkDrift[j] = arr[j + 3];
 //						dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
-//								k -> new TreeMap<Integer, Double>()).put(timeDiff,rxClkDrift[j]);
+//							k -> new TreeMap<Integer, Double>()).put(timeDiff,rxClkDrift[j]);
 					}
 				}
 			}
