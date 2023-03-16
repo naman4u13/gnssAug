@@ -281,4 +281,78 @@ public class EKF {
 		return H;
 
 	}
+	
+	/*private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
+			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,  int n,
+			String[] obsvCodeList, boolean doTest, boolean outlierAnalyze,Flag flag) {
+
+		int _n = testedSatList.size();
+		double[] residual = (double[]) get_z_ze_res(X, testedSatList, obsvCodeList)[2];
+		double[] pr_res = Arrays.copyOfRange(residual, 0, _n);
+		// Post-fit residual
+		SimpleMatrix e_post_hat_pr = new SimpleMatrix(_n, 1, true, pr_res);
+		SimpleMatrix Cyy_inv_pr = R.extractMatrix(0, _n, 0, _n).invert();
+		if(flag == Flag.VELOCITY) {
+			double[] doppler_res = Arrays.copyOfRange(residual, _n, 2*_n);
+			SimpleMatrix e_post_hat_doppler = new SimpleMatrix(_n, 1, true, doppler_res);
+			SimpleMatrix Cyy_inv_doppler = R.extractMatrix(_n, 2*_n, _n,2*_n).invert();
+			}
+		// Compute Redundancies
+		SimpleMatrix K = kfObj.getKalmanGain();
+		SimpleMatrix HK = H.mult(K);
+		SimpleMatrix phi = kfObj.getPhi();
+		SimpleMatrix Cvv = kfObj.getCvv();
+		SimpleMatrix HtCvvInvH = H.transpose().mult(Cvv.invert()).mult(H);
+		SimpleMatrix Q = kfObj.getQ();
+		double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
+		double rW = Q.mult(HtCvvInvH).trace();
+		double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
+		double rSum = rX + rW + rZ;
+		if (_n - rSum > 0.01) {
+			System.err.println("FATAL ERROR: Redundancy sum is wrong");
+		}
+		double postVarOfUnitW_pr = e_post_hat_pr.transpose().mult(Cyy_inv_pr).mult(e_post_hat_pr).get(0) / rZ;
+		redundancyList.add(new double[] { _n, rSum, rX, rW, rZ });
+		postVarOfUnitWMap.put(currentTime, postVarOfUnitW);
+		residualMap.put(currentTime, residual);
+		if (doTest == true) {
+			_n = n - _n;
+		}
+		satCountMap.put(currentTime, (long) _n);
+		if (outlierAnalyze) {
+			satListMap.put(currentTime, satList);
+		} else {
+			satListMap.put(currentTime, testedSatList);
+		}
+		measNoiseMap.put(currentTime, measNoise);
+
+	}*/
+	
+	private Object[] get_z_ze_res(SimpleMatrix X, ArrayList<Satellite> satList, String[] obsvCodeList) {
+		int n = satList.size();
+		int m = obsvCodeList.length;
+		double[][] z = new double[n][1];
+		double[][] ze = new double[n][1];
+		double[] residual = new double[n];
+		double[] estPos = new double[] { X.get(0), X.get(1), X.get(2) };
+		double[] rxClkOff = new double[m];// in meters
+		for (int i = 0; i < m; i++) {
+			rxClkOff[i] = X.get(i + 3);
+		}
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			String obsvCode = sat.getObsvCode();
+			double approxPR = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> estPos[j] - sat.getSatEci()[j])
+					.map(j -> j * j).reduce(0, (j, k) -> j + k));
+			for (int j = 0; j < m; j++) {
+				if (obsvCode.equals(obsvCodeList[j])) {
+					approxPR += rxClkOff[j];
+				}
+			}
+			z[i][0] = sat.getPseudorange() - approxPR;
+			residual[i] = z[i][0] - ze[i][0];
+		}
+
+		return new Object[] { z, ze, residual };
+	}
 }
