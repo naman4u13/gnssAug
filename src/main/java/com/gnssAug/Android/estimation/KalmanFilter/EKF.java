@@ -14,6 +14,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 
 public class EKF {
@@ -22,12 +23,12 @@ public class EKF {
 	private double[] innovation;
 	private double[] temp_innovation;
 	private TreeMap<Long,HashMap<State,double[]>> innovationMap;
-	private TreeMap<Long, HashMap<State,double[]>> residualMap;
+	private TreeMap<Long, HashMap<Measurement,double[]>> residualMap;
 	private TreeMap<Long, HashMap<State,double[]>> measNoiseMap;
-	private TreeMap<Long, HashMap<State,Double>> postVarOfUnitWMap;
+	private TreeMap<Long, HashMap<Measurement,Double>> postVarOfUnitWMap;
 	// Posteriori Err Cov
 	private TreeMap<Long, HashMap<State,SimpleMatrix>> errCovMap;
-	private ArrayList<double[]> redundancyList;
+	private HashMap<Measurement,ArrayList<double[]>> redundancyMap;
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
@@ -75,9 +76,9 @@ public class EKF {
 		if (doAnalyze) {
 			innovationMap = new TreeMap<Long, HashMap<State,double[]>>();
 			errCovMap = new TreeMap<Long, HashMap<State,SimpleMatrix>>();
-			residualMap = new TreeMap<Long, HashMap<State,double[]>>();
-			postVarOfUnitWMap = new TreeMap<Long, HashMap<State,Double>>();
-			redundancyList = new ArrayList<double[]>();
+			residualMap = new TreeMap<Long, HashMap<Measurement,double[]>>();
+			postVarOfUnitWMap = new TreeMap<Long, HashMap<Measurement,Double>>();
+			redundancyMap = new HashMap<Measurement,ArrayList<double[]>>();
 			satCountMap = new TreeMap<Long, Long>();
 			satListMap = new TreeMap<Long, ArrayList<Satellite>>();
 			measNoiseMap = new TreeMap<Long, HashMap<State,double[]>>();
@@ -282,7 +283,7 @@ public class EKF {
 
 	}
 	
-	/*private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
+	private void performAnalysis(SimpleMatrix X, ArrayList<Satellite> testedSatList, ArrayList<Satellite> satList,
 			SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP, long currentTime,  int n,
 			String[] obsvCodeList, boolean doTest, boolean outlierAnalyze,Flag flag) {
 
@@ -292,11 +293,7 @@ public class EKF {
 		// Post-fit residual
 		SimpleMatrix e_post_hat_pr = new SimpleMatrix(_n, 1, true, pr_res);
 		SimpleMatrix Cyy_inv_pr = R.extractMatrix(0, _n, 0, _n).invert();
-		if(flag == Flag.VELOCITY) {
-			double[] doppler_res = Arrays.copyOfRange(residual, _n, 2*_n);
-			SimpleMatrix e_post_hat_doppler = new SimpleMatrix(_n, 1, true, doppler_res);
-			SimpleMatrix Cyy_inv_doppler = R.extractMatrix(_n, 2*_n, _n,2*_n).invert();
-			}
+		
 		// Compute Redundancies
 		SimpleMatrix K = kfObj.getKalmanGain();
 		SimpleMatrix HK = H.mult(K);
@@ -306,15 +303,31 @@ public class EKF {
 		SimpleMatrix Q = kfObj.getQ();
 		double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
 		double rW = Q.mult(HtCvvInvH).trace();
+		int m = HK.numRows();
+		SimpleMatrix tempMat = SimpleMatrix.identity(m).minus(HK);
+		double rZ_pr = tempMat.extractMatrix(0, m/2, 0, m/2).trace();
+		double rZ_doppler = tempMat.extractMatrix(m/2,m, m/2,m).trace();
 		double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
 		double rSum = rX + rW + rZ;
-		if (_n - rSum > 0.01) {
+		if ((2*_n) - rSum > 0.01) {
 			System.err.println("FATAL ERROR: Redundancy sum is wrong");
 		}
-		double postVarOfUnitW_pr = e_post_hat_pr.transpose().mult(Cyy_inv_pr).mult(e_post_hat_pr).get(0) / rZ;
-		redundancyList.add(new double[] { _n, rSum, rX, rW, rZ });
-		postVarOfUnitWMap.put(currentTime, postVarOfUnitW);
-		residualMap.put(currentTime, residual);
+		double postVarOfUnitW_pr = e_post_hat_pr.transpose().mult(Cyy_inv_pr).mult(e_post_hat_pr).get(0) / rZ_pr;
+		
+		if(flag == Flag.VELOCITY) {
+			double[] doppler_res = Arrays.copyOfRange(residual, _n, 2*_n);
+			SimpleMatrix e_post_hat_doppler = new SimpleMatrix(_n, 1, true, doppler_res);
+			SimpleMatrix Cyy_inv_doppler = R.extractMatrix(_n, 2*_n, _n,2*_n).invert();
+			double postVarOfUnitW_doppler = e_post_hat_doppler.transpose().mult(Cyy_inv_doppler).mult(e_post_hat_doppler).get(0) / rZ_doppler;
+			postVarOfUnitWMap.computeIfAbsent(currentTime, k->new HashMap<Measurement,Double>()).put(Measurement.Doppler, postVarOfUnitW_doppler);
+			residualMap.computeIfAbsent(currentTime,  k->new HashMap<Measurement,double[]>()).put(Measurement.Doppler, doppler_res);
+			}
+		
+		redundancyMap.computeIfAbsent(Measurement.Pseudorange, k->new ArrayList<double[]>()).add(new double[] { _n, rSum-rZ+rZ_pr, rX, rW, rZ_pr });
+		redundancyMap.computeIfAbsent(Measurement.Doppler, k->new ArrayList<double[]>()).add(new double[] { _n, rSum-rZ+rZ_doppler, rX, rW, rZ_doppler });
+		postVarOfUnitWMap.computeIfAbsent(currentTime, k->new HashMap<Measurement,Double>()).put(Measurement.Pseudorange, postVarOfUnitW_pr);
+		residualMap.computeIfAbsent(currentTime,  k->new HashMap<Measurement,double[]>()).put(Measurement.Pseudorange, pr_res);
+		
 		if (doTest == true) {
 			_n = n - _n;
 		}
@@ -324,9 +337,9 @@ public class EKF {
 		} else {
 			satListMap.put(currentTime, testedSatList);
 		}
-		measNoiseMap.put(currentTime, measNoise);
+		
 
-	}*/
+	}
 	
 	private Object[] get_z_ze_res(SimpleMatrix X, ArrayList<Satellite> satList, String[] obsvCodeList) {
 		int n = satList.size();

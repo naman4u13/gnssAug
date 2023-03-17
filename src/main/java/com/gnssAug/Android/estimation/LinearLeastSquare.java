@@ -27,7 +27,7 @@ public class LinearLeastSquare {
 	private static HashMap<Measurement, SimpleMatrix> Cyy_Map = new HashMap<Measurement, SimpleMatrix>();
 	private static HashMap<Measurement, HashMap<String, SimpleMatrix>> Cxx_hat_updated_Map = new HashMap<Measurement, HashMap<String, SimpleMatrix>>();
 	private static HashMap<Measurement, SimpleMatrix> Cyy_updated_Map = new HashMap<Measurement, SimpleMatrix>();
-	
+
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
 	final private static double pseudorange_priorVarOfUnitW = 6.2972;
@@ -134,9 +134,8 @@ public class LinearLeastSquare {
 				}
 			}
 			if (!outlierAnalyze) {
-				analyze(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS,
-						obsvCodeList);
-				
+				analyze(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS, obsvCodeList);
+
 			}
 
 		}
@@ -149,10 +148,9 @@ public class LinearLeastSquare {
 
 	}
 
-	private static void analyze(double[][] weight, double[] estState, ArrayList<Satellite> satList,
-			boolean useAndroidW, Measurement type, double[] refPos, boolean useIGS, String[] obsvCodeList)
-			throws Exception {
-		
+	private static void analyze(double[][] weight, double[] estState, ArrayList<Satellite> satList, boolean useAndroidW,
+			Measurement type, double[] refPos, boolean useIGS, String[] obsvCodeList) throws Exception {
+
 		int n = satList.size();
 		int m = 1;
 		if (useIGS) {
@@ -237,24 +235,44 @@ public class LinearLeastSquare {
 
 		SimpleMatrix e_hat = new SimpleMatrix(n, 1, true, residual);
 		SimpleMatrix Cyy_inv = Cyy.invert();
-		
+
 		double globalTq = e_hat.transpose().mult(Cyy_inv).mult(e_hat).get(0);
 		double postVarOfUnitW = globalTq * priorVarOfUnitW / (n - l);
-		if (n == l) {
-			postVarOfUnitW = -1;
-		}
+
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
 		SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
 		SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
 		SimpleMatrix redunMatrix = Cee_hat.mult(Cyy_inv);
-		// Cyy updated is computed based on the theory of posteriori variance of unit weight
-		SimpleMatrix Cyy_updated = new SimpleMatrix(n,n);
-		double sum = 0;
-		for (int i = 0; i < n; i++) {
-			Cyy_updated.set(i,i,Math.pow(e_hat.get(i), 2) / redunMatrix.get(i, i));
-			sum +=redunMatrix.get(i, i);
+		// Cyy updated is computed based on the theory of posteriori variance of unit
+		// weight
+		SimpleMatrix Cyy_updated = null;
+		SimpleMatrix Cxx_hat_updated = null;
+		if (n == l) {
+			postVarOfUnitW = -1;
+		}
+		if (n <= l + 1) {
+			Cyy_updated = Cyy;
+			Cxx_hat_updated = Cxx_hat;
+		} else {
+			Cyy_updated = new SimpleMatrix(n, n);
+			double sum = 0;
+			for (int i = 0; i < n; i++) {
+				Cyy_updated.set(i, i, Math.pow(e_hat.get(i), 2) / redunMatrix.get(i, i));
+				sum += redunMatrix.get(i, i);
+			}
+			try {
+			Cxx_hat_updated = (Ht.mult(Cyy_updated.invert()).mult(H)).invert();
+			}
+			catch (Exception e) {
+				// TODO: handle exception
+				System.err.println();
+			}
+			
+			if (Math.abs(sum - (n - (3 + m))) > 0.1) {
+				throw new Exception("Error in LS redundancy computation");
+			}
 		}
 //		if(type==Measurement.Doppler)
 //		{
@@ -264,36 +282,31 @@ public class LinearLeastSquare {
 //		{
 //			Cyy_updated = Cyy_updated.scale(4);
 //		}
-		
-		SimpleMatrix Cxx_hat_updated = (Ht.mult(Cyy_updated.invert()).mult(H)).invert();
+
 //		for (int i = 0; i < n; i++) {
 //			residual[i] = e_hat.get(i) / Math.sqrt(Cee_hat.get(i, i));
 //		}
-		
-		if(Math.abs(sum-(n-(3+m)))>0.1)
-		{
-			throw new Exception("Error in LS redundancy computation");
-		}
+
 		// Convert to ENU frame
 		SimpleMatrix R = new SimpleMatrix(l, l);
 		R.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(estState)));
 		for (int i = 0; i < m; i++) {
 			R.set(3 + i, 3 + i, 1);
 		}
-		Cxx_hat_Map.computeIfAbsent(type,k->new HashMap<String,SimpleMatrix>()).put("ECEF",  Cxx_hat);
-		Cxx_hat_updated_Map.computeIfAbsent(type,k->new HashMap<String,SimpleMatrix>()).put("ECEF",  Cxx_hat_updated);
+		Cxx_hat_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ECEF", Cxx_hat);
+		Cxx_hat_updated_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ECEF",
+				Cxx_hat_updated);
 		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
 		Cxx_hat_updated = R.mult(Cxx_hat_updated).mult(R.transpose());
-		Cxx_hat_Map.computeIfAbsent(type,k->new HashMap<String,SimpleMatrix>()).put("ENU",  Cxx_hat);
-		Cxx_hat_updated_Map.computeIfAbsent(type,k->new HashMap<String,SimpleMatrix>()).put("ENU",  Cxx_hat_updated);
+		Cxx_hat_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ENU", Cxx_hat);
+		Cxx_hat_updated_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ENU", Cxx_hat_updated);
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
 		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 		postVarOfUnitWMap.put(type, postVarOfUnitW);
 		residualMap.put(type, residual);
 		Cyy_Map.put(type, Cyy);
 		Cyy_updated_Map.put(type, Cyy_updated);
-		
-		
+
 	}
 
 	// Baarda's Iterative Data Snooping
@@ -500,9 +513,8 @@ public class LinearLeastSquare {
 				SimpleMatrix W = new SimpleMatrix(weight);
 				SimpleMatrix HtWHinv = null;
 				try {
-				HtWHinv = (Ht.mult(W).mult(H)).invert();
-				}
-				catch (Exception e) {
+					HtWHinv = (Ht.mult(W).mult(H)).invert();
+				} catch (Exception e) {
 					// TODO: handle exception
 					System.err.println();
 				}
@@ -607,15 +619,16 @@ public class LinearLeastSquare {
 	public static SimpleMatrix getCyy(Measurement type) {
 		return Cyy_Map.get(type);
 	}
-	
-	public static SimpleMatrix getCxx_hat(Measurement type,String frame) {
+
+	public static SimpleMatrix getCxx_hat(Measurement type, String frame) {
 		return Cxx_hat_Map.get(type).get(frame);
 	}
+
 	public static SimpleMatrix getCyy_updated(Measurement type) {
 		return Cyy_updated_Map.get(type);
 	}
-	
-	public static SimpleMatrix getCxx_hat_updated(Measurement type,String frame) {
+
+	public static SimpleMatrix getCxx_hat_updated(Measurement type, String frame) {
 		return Cxx_hat_updated_Map.get(type).get(frame);
 	}
 
@@ -635,7 +648,5 @@ public class LinearLeastSquare {
 		return obsvCodeSet.toArray(new String[0]);
 
 	}
-
-	
 
 }

@@ -82,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-MTV-1\\test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -256,48 +256,48 @@ public class Android {
 				}
 
 			}
-			if (estimatorType == 5) {
-
-				EKF ekf = new EKF();
-//				 Implement EKF based on receiver’s position and clock offset errors as a
-//				 random walk process
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS);
-//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
-//				 walk process
-				TreeMap<Long, double[]> estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS);
-//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
-//				 walk process along with doppler updates
-				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true,
-						useIGS);
-				int n = timeList.size();
-				for (int i = 0; i < n; i++) {
-					long time = timeList.get(i);
-					double[] estPos = estStateMap_pos.get(time);
-					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estPos);
-					double[] estState = estStateMap_vel.get(time);
-					estPos = null;
-					double[] estVel = null;
-					if (estState != null) {
-						estPos = new double[] { estState[0], estState[1], estState[2] };
-						estVel = new double[] { estState[3], estState[4], estState[5] };
-					}
-					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estPos);
-					estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estVel);
-					estState = estStateMap_vel_doppler.get(time);
-					estPos = null;
-					estVel = null;
-					if (estState != null) {
-						estPos = new double[] { estState[0], estState[1], estState[2] };
-						estVel = new double[] { estState[3], estState[4], estState[5] };
-					}
-					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
-							.add(estPos);
-					estVelMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
-							.add(estVel);
-
-				}
-
-			}
+//			if (estimatorType == 5) {
+//
+//				EKF ekf = new EKF();
+////				 Implement EKF based on receiver’s position and clock offset errors as a
+////				 random walk process
+//				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS);
+////				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+////				 walk process
+//				TreeMap<Long, double[]> estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS);
+////				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+////				 walk process along with doppler updates
+//				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true,
+//						useIGS);
+//				int n = timeList.size();
+//				for (int i = 0; i < n; i++) {
+//					long time = timeList.get(i);
+//					double[] estPos = estStateMap_pos.get(time);
+//					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estPos);
+//					double[] estState = estStateMap_vel.get(time);
+//					estPos = null;
+//					double[] estVel = null;
+//					if (estState != null) {
+//						estPos = new double[] { estState[0], estState[1], estState[2] };
+//						estVel = new double[] { estState[3], estState[4], estState[5] };
+//					}
+//					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estPos);
+//					estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estVel);
+//					estState = estStateMap_vel_doppler.get(time);
+//					estPos = null;
+//					estVel = null;
+//					if (estState != null) {
+//						estPos = new double[] { estState[0], estState[1], estState[2] };
+//						estVel = new double[] { estState[3], estState[4], estState[5] };
+//					}
+//					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+//							.add(estPos);
+//					estVelMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+//							.add(estVel);
+//
+//				}
+//
+//			}
 
 			if (estimatorType == 6) {
 				EKFDoppler ekf = new EKFDoppler();
@@ -380,10 +380,10 @@ public class Android {
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);
-			if (doAnalyze) {
+			
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze);
-			}
+			
 
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();

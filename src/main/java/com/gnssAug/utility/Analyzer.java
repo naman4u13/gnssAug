@@ -7,6 +7,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import org.apache.commons.math3.distribution.NormalDistribution;
+import org.jfree.chart.JFreeChart;
 import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
@@ -25,8 +26,8 @@ public class Analyzer {
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
 			boolean outlierAnalyze) throws Exception {
 
-		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
-		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
+		HashMap<String, TreeMap<Integer, double[]>> dopplerMap = new HashMap<String, TreeMap<Integer, double[]>>();
+		HashMap<String, TreeMap<Integer, double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
 
 		if (truePosEcef.size() != satMap.size()) {
 			throw new Exception("Error in Analyzer processing");
@@ -89,24 +90,19 @@ public class Analyzer {
 					}
 				}
 				int svid = sat.getSvid();
+				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
 				String code = sat.getObsvCode().charAt(0) + "";
-				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						(range - trueRange));
-				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						(rangeRate - trueRangeRate));
+				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+						new double[] {(range - trueRange),elevAngle});
+				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+						new double[] {(rangeRate - trueRangeRate),elevAngle});
 			}
 
 		}
 
-		GraphPlotter chart = new GraphPlotter("Error in Range-Rate(in m/s)", dopplerMap);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+		GraphPlotter.graphTrueError("Error in Range-Rate(in m/s)", dopplerMap);
 
-		chart = new GraphPlotter("Error in Range(in m)", rangeMap);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+		GraphPlotter.graphTrueError("Error in Range(in m)", rangeMap);
 
 		if (outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain
@@ -130,7 +126,7 @@ public class Analyzer {
 			 * 
 			 * } } }
 			 */
-			chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+			GraphPlotter chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
 					satResMap.get(Measurement.Doppler).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
@@ -153,8 +149,8 @@ public class Analyzer {
 			boolean outlierAnalyze) throws Exception {
 //		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
 //		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
-		HashMap<String, TreeMap<Integer, Double>> dopplerMap = new HashMap<String, TreeMap<Integer, Double>>();
-		HashMap<String, TreeMap<Integer, Double>> rangeMap = new HashMap<String, TreeMap<Integer, Double>>();
+		HashMap<String, TreeMap<Integer,  double[]>> dopplerMap = new HashMap<String, TreeMap<Integer,  double[]>>();
+		HashMap<String, TreeMap<Integer,  double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
 		long time0 = satMap.firstKey();
 		double alpha = 0.01;
 		String estType = "LS";
@@ -175,11 +171,11 @@ public class Analyzer {
 			for (int j = 0; j < m; j++) {
 				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
 				rangeMap.computeIfAbsent("RxClkOff(offset of 10 added) " + obsvCodeList[j],
-						k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkOff[j]);
+						k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] {10 + rxClkOff[j],0});
 				if (estType.equals("WLS") || estType.equals("LS")) {
 					rxClkDrift[j] = estVelMap.get(estType).get(i)[j + 3];
 					dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
-							k -> new TreeMap<Integer, Double>()).put(timeDiff, 10 + rxClkDrift[j]);
+							k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] {10 + rxClkDrift[j],0});
 				}
 			}
 
@@ -198,9 +194,9 @@ public class Analyzer {
 				}
 				int svid = sat.getSVID();
 				String code = sat.getObsvCode().charAt(0) + "";
-
-				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-						(range - trueRange));
+				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
+				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+						new double[] {(range - trueRange),elevAngle});
 				if (estType.equals("WLS") || estType.equals("LS")) {
 					double[] satVel = sat.getSatVel();
 					double[] relVel = IntStream.range(0, 3).mapToDouble(k -> satVel[k] - trueVel[k]).toArray();
@@ -214,8 +210,8 @@ public class Analyzer {
 						}
 					}
 
-					dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, Double>()).put(timeDiff,
-							(rangeRate - trueRangeRate));
+					dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+							new double[] {(rangeRate - trueRangeRate),elevAngle});
 				}
 
 			}
@@ -223,24 +219,14 @@ public class Analyzer {
 		}
 
 		// findOutliers(satMap, rangeMap, alpha);
-
-		GraphPlotter chart = new GraphPlotter("Error in Range(in m)", rangeMap);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
-
-//		chart = new GraphPlotter("Range Outlier and Inliers(in m)", rangeMap, alpha);
-//		chart.pack();
-//		RefineryUtilities.positionFrameRandomly(chart);
-//		chart.setVisible(true);
+		GraphPlotter.graphTrueError("Error in Range(in m)", rangeMap);
+		
 		if (estType.equals("WLS") || estType.equals("LS")) {
-			chart = new GraphPlotter("Error in Range-Rate(in m/s)", dopplerMap);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+			
+			GraphPlotter.graphTrueError("Error in Range-Rate(in m/s)", dopplerMap);
 
 			if (outlierAnalyze) {
-				chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+				GraphPlotter chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
 						satResMap.get(Measurement.Doppler).get(estType));
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
@@ -249,12 +235,9 @@ public class Analyzer {
 
 		}
 
-//			chart = new GraphPlotter("Outlier and Inliers Range-Rate(in m/s)", dopplerMap, alpha);
-//			chart.pack();
-//			RefineryUtilities.positionFrameRandomly(chart);
-//			chart.setVisible(true);
+		
 		if (outlierAnalyze) {
-			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+			GraphPlotter chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);

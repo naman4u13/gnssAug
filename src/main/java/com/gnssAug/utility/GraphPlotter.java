@@ -39,11 +39,11 @@ public class GraphPlotter extends ApplicationFrame {
 			if (flag) {
 				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
-				
+
 			} else {
 				charts.add(ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
 						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
-				
+
 			}
 		} else {
 
@@ -87,20 +87,17 @@ public class GraphPlotter extends ApplicationFrame {
 		setContentPane(chartPanel);
 
 	}
-	
-	public GraphPlotter(String title,String type, TreeMap<Long,Satellite> satMap) throws Exception {
-		super(title +" "+ type);
+
+	public GraphPlotter(String title, String type, TreeMap<Long, Satellite> satMap) throws Exception {
+		super(title + " " + type);
 		// TODO Auto-generated constructor stub
 		final JFreeChart chart;
-		if(type.equals("Observables"))
-		{
-		chart = ChartFactory.createXYLineChart(title +" "+ type, "GPS-time",
-				type, createDatasetObservable(satMap));
-		}
-		else
-		{
-			chart = ChartFactory.createXYLineChart(title +" "+ type, "GPS-time",
-					type, createDatasetDeltaRange(satMap));
+		if (type.equals("Observables")) {
+			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
+					createDatasetObservable(satMap));
+		} else {
+			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
+					createDatasetDeltaRange(satMap));
 		}
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -111,7 +108,6 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	
 	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList) throws IOException {
 		super(title + " Satellite Count");
 		// TODO Auto-generated constructor stub
@@ -176,8 +172,6 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-
-
 	public GraphPlotter(String name, IMUsensor[] imu, long[] time) throws IOException {
 		super(name);
 		// TODO Auto-generated constructor stub
@@ -208,11 +202,15 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map) throws IOException {
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map, boolean isElevAngle)
+			throws IOException {
+
 		super(name);
 		// TODO Auto-generated constructor stub
+		String xAxis = isElevAngle ? "Elevation-Angle(degrees)" : "GPS-Time(seconds)";
 
-		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name, createAnalyseDataset(map));
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, xAxis, name,
+				createAnalyseDataset(map, isElevAngle));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -222,8 +220,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	
-	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, Double>> map,
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map,
 			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
 		super(name);
 		// TODO Auto-generated constructor stub
@@ -507,21 +504,38 @@ public class GraphPlotter extends ApplicationFrame {
 				chart.setVisible(true);
 
 				// For Satellite measurement noise std dev
-				
-				 chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
-				 ": Satellite-Measurement Noise Std Dev", false, true,outlierAnaylze); chart.pack();
-				 RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
-				 
-				 chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey +
-				 ": Satellite-Measurement Noise Std Dev", false, false,outlierAnaylze); chart.pack();
-				 RefineryUtilities.positionFrameRandomly(chart); chart.setVisible(true);
-				
+
+				chart = new GraphPlotter(subSatResMap.get(subKey),
+						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, true, outlierAnaylze);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+
+				chart = new GraphPlotter(subSatResMap.get(subKey),
+						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, false, outlierAnaylze);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+
 			}
 		}
 
 	}
 
-	
+	public static void graphTrueError(String name, HashMap<String, TreeMap<Integer, double[]>> map) throws IOException {
+
+		GraphPlotter chart = new GraphPlotter(name, map, false);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		
+		chart = new GraphPlotter(name, map, true);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+	}
+
 	public static void graphIMU(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap) throws IOException {
 		int n = imuMap.size();
 		IMUsensor[] acc = new IMUsensor[n];
@@ -647,38 +661,35 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.setVisible(true);
 
 	}
-	
-	public static void graphDeltaRange(TreeMap<Long, ArrayList<Satellite>> satMap,ArrayList<double[]> truePosEcef) throws Exception
-	{
+
+	public static void graphDeltaRange(TreeMap<Long, ArrayList<Satellite>> satMap, ArrayList<double[]> truePosEcef)
+			throws Exception {
 		if (truePosEcef.size() != satMap.size()) {
 			throw new Exception("Error in DeltaRange Plotting");
 		}
-		HashMap<String,TreeMap<Long, Satellite>> satListMap = new HashMap<String,TreeMap<Long, Satellite>>();
+		HashMap<String, TreeMap<Long, Satellite>> satListMap = new HashMap<String, TreeMap<Long, Satellite>>();
 		long time0 = satMap.firstKey();
 		int i = 0;
-		for(long time:satMap.keySet())
-		{
+		for (long time : satMap.keySet()) {
 			double[] truePos = truePosEcef.get(i);
-			long t = (long) ((time-time0)*(1e-3));
+			long t = (long) ((time - time0) * (1e-3));
 			ArrayList<Satellite> satList = satMap.get(time);
-			for(Satellite sat:satList)
-			{
+			for (Satellite sat : satList) {
 				double[] satPos = sat.getSatEci();
 				double trueRange = MathUtil.getEuclidean(truePos, satPos);
 				sat.setTrueRange(trueRange);
-				String id = sat.getObsvCode().charAt(0)+"" +sat.getSvid();
-				satListMap.computeIfAbsent(id, k->new TreeMap<Long, Satellite>()).put(t, sat);
+				String id = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
+				satListMap.computeIfAbsent(id, k -> new TreeMap<Long, Satellite>()).put(t, sat);
 			}
 			i++;
 		}
-		
-		for(String id:satListMap.keySet())
-		{
-			GraphPlotter chart = new GraphPlotter(id,"Delta-Range",satListMap.get(id));
+
+		for (String id : satListMap.keySet()) {
+			GraphPlotter chart = new GraphPlotter(id, "Delta-Range", satListMap.get(id));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
-			chart = new GraphPlotter(id,"Observables",satListMap.get(id));
+			chart = new GraphPlotter(id, "Observables", satListMap.get(id));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
@@ -756,35 +767,39 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, Double>> map) {
+	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, double[]>> map, boolean isElevAngle) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		ArrayList<Double> dataSeries = new ArrayList<Double>();
 		for (String key : map.keySet()) {
 			String name = key;
 			final XYSeries series = new XYSeries(name);
-			TreeMap<Integer, Double> data = map.get(key);
+			TreeMap<Integer, double[]> data = map.get(key);
 			for (int x : data.keySet()) {
-				double y = data.get(x);
-				series.add(x, y);
+				double y = data.get(x)[0];
+				if (isElevAngle) {
+					series.add(data.get(x)[1], y);
+				} else {
+					series.add(x, y);
+				}
 				dataSeries.add(Math.abs(y));
 			}
 			dataset.addSeries(series);
 		}
-		
-		double avg = dataSeries.stream().mapToDouble(i->i).average().orElse(0);
+
+		double avg = dataSeries.stream().mapToDouble(i -> Math.abs(i)).average().orElse(0);
 		Collections.sort(dataSeries);
 		int n = dataSeries.size();
-		double q50 = dataSeries.get((int)(n*0.5));
-		double q75 = dataSeries.get((int)(n*0.75));
-		double q95 = dataSeries.get((int)(n*0.95));
-		dataset.addSeries(new XYSeries("Average: "+avg));
-		dataset.addSeries(new XYSeries("Q50: "+q50));
-		dataset.addSeries(new XYSeries("Q75: "+q75));
-		dataset.addSeries(new XYSeries("Q95: "+q95));
+		double q50 = dataSeries.get((int) (n * 0.5));
+		double q75 = dataSeries.get((int) (n * 0.75));
+		double q95 = dataSeries.get((int) (n * 0.95));
+		dataset.addSeries(new XYSeries("Average: " + avg));
+		dataset.addSeries(new XYSeries("Q50: " + q50));
+		dataset.addSeries(new XYSeries("Q75: " + q75));
+		dataset.addSeries(new XYSeries("Q95: " + q95));
 		return dataset;
 	}
 
-	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, Double>> map,
+	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, double[]>> map,
 			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries outliers = new XYSeries("outliers");
@@ -794,7 +809,7 @@ public class GraphPlotter extends ApplicationFrame {
 		int out = 0;
 		for (String key : map.keySet()) {
 
-			TreeMap<Integer, Double> data = map.get(key);
+			TreeMap<Integer, double[]> data = map.get(key);
 			if (outlierMap.containsKey(key)) {
 				ArrayList<SatResidual> outlierList = outlierMap.get(key);
 
@@ -807,7 +822,7 @@ public class GraphPlotter extends ApplicationFrame {
 						i++;
 
 					}
-					double y = data.get(x);
+					double y = data.get(x)[0];
 					SatResidual satRes = outlierList.get(i);
 					i++;
 
@@ -1013,46 +1028,42 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 
 	}
-	
-	private XYDataset createDatasetDeltaRange(TreeMap<Long,Satellite> satMap) throws Exception {
-		
+
+	private XYDataset createDatasetDeltaRange(TreeMap<Long, Satellite> satMap) throws Exception {
+
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries pr_dr_series = new XYSeries("PR Derived DeltaRange");
 		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived");
 		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived");
 		final XYSeries true_dr_series = new XYSeries("True DeltaRange");
-		int i =0;
+		int i = 0;
 		long t_prev = -999;
 		double pr_prev = 0;
 		double prRate_prev = 0;
 		double phase_prev = 0;
 		double trueRange_prev = 0;
-		for(Long t:satMap.keySet())
-		{
-			
+		for (Long t : satMap.keySet()) {
+
 			Satellite sat = satMap.get(t);
-			double trueRange =sat.getTrueRange();
+			double trueRange = sat.getTrueRange();
 			double pr = sat.getPseudorange();
 			double prRate = sat.getPseudorangeRateMetersPerSecond();
 			double phase = sat.getAccumulatedDeltaRangeMeters();
-			if((t-t_prev)>1.1)
-			{
+			if ((t - t_prev) > 1.1) {
 				pr_dr_series.add(t, null);
 				prRate_dr_series.add(t, null);
-				phase_dr_series.add(t,null);
-				true_dr_series.add(t,null);
-			}
-			else
-			{
-				double pr_dr = pr-pr_prev;
-				double prRate_dr = (prRate+prRate_prev)*(t-t_prev)/2;
-				double phase_dr = phase-phase_prev;
+				phase_dr_series.add(t, null);
+				true_dr_series.add(t, null);
+			} else {
+				double pr_dr = pr - pr_prev;
+				double prRate_dr = (prRate + prRate_prev) * (t - t_prev) / 2;
+				double phase_dr = phase - phase_prev;
 				double true_dr = trueRange - trueRange_prev;
-				pr_dr_series.add(t, (Double)pr_dr);
-				prRate_dr_series.add(t, (Double)prRate_dr);
-				phase_dr_series.add(t, (Double)phase_dr);
-				true_dr_series.add(t,(Double)true_dr);
-				
+				pr_dr_series.add(t, (Double) pr_dr);
+				prRate_dr_series.add(t, (Double) prRate_dr);
+				phase_dr_series.add(t, (Double) phase_dr);
+				true_dr_series.add(t, (Double) true_dr);
+
 			}
 			t_prev = t;
 			pr_prev = pr;
@@ -1065,13 +1076,12 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
 		dataset.addSeries(phase_dr_series);
-		
-		
+
 		return dataset;
 
 	}
-	
-	private XYDataset createDatasetObservable(TreeMap<Long,Satellite> satMap) {
+
+	private XYDataset createDatasetObservable(TreeMap<Long, Satellite> satMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries pr_series = new XYSeries("Pseudorange");
 		final XYSeries prRate_series = new XYSeries("Pseudorange Rate(Doppler)");
@@ -1079,26 +1089,23 @@ public class GraphPlotter extends ApplicationFrame {
 		double tr0 = satMap.firstEntry().getValue().getTrueRange();
 		double pr0 = satMap.firstEntry().getValue().getPseudorange();
 		double prRate0 = satMap.firstEntry().getValue().getPseudorangeRateMetersPerSecond();
-		for(Long t:satMap.keySet())
-		{
+		for (Long t : satMap.keySet()) {
 			Satellite sat = satMap.get(t);
 			double pr = sat.getPseudorange();
 			double prRate = sat.getPseudorangeRateMetersPerSecond();
 			double tr = sat.getTrueRange();
-			if((t-t0)>1.1)
-			{
-				pr_series.add(t0+1, null);
-				prRate_series.add(t0+1, null);
+			if ((t - t0) > 1.1) {
+				pr_series.add(t0 + 1, null);
+				prRate_series.add(t0 + 1, null);
 			}
-			pr_series.add(t, (Double)(pr));
-			prRate_series.add(t, (Double)(prRate));
+			pr_series.add(t, (Double) (pr));
+			prRate_series.add(t, (Double) (prRate));
 			t0 = t;
 		}
 		dataset.addSeries(pr_series);
 		dataset.addSeries(prRate_series);
 		return dataset;
 	}
-
 
 	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean isSatRes,
 			boolean flag, boolean outlierAnalyze) {
@@ -1140,7 +1147,7 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(outlier);
 			dataset.addSeries(inlier);
 		} else {
-			
+
 			ArrayList<Double> dataSeries = new ArrayList<Double>();
 			for (String key : dataMap.keySet()) {
 				final XYSeries series = new XYSeries(key);
@@ -1174,16 +1181,16 @@ public class GraphPlotter extends ApplicationFrame {
 
 				dataset.addSeries(series);
 			}
-			double avg = dataSeries.stream().mapToDouble(i->i).average().orElse(0);
+			double avg = dataSeries.stream().mapToDouble(i -> i).average().orElse(0);
 			Collections.sort(dataSeries);
 			int n = dataSeries.size();
-			double q50 = dataSeries.get((int)(n*0.5));
-			double q75 = dataSeries.get((int)(n*0.75));
-			double q95 = dataSeries.get((int)(n*0.95));
-			dataset.addSeries(new XYSeries("Average: "+avg));
-			dataset.addSeries(new XYSeries("Q50: "+q50));
-			dataset.addSeries(new XYSeries("Q75: "+q75));
-			dataset.addSeries(new XYSeries("Q95: "+q95));
+			double q50 = dataSeries.get((int) (n * 0.5));
+			double q75 = dataSeries.get((int) (n * 0.75));
+			double q95 = dataSeries.get((int) (n * 0.95));
+			dataset.addSeries(new XYSeries("Average: " + avg));
+			dataset.addSeries(new XYSeries("Q50: " + q50));
+			dataset.addSeries(new XYSeries("Q75: " + q75));
+			dataset.addSeries(new XYSeries("Q95: " + q95));
 		}
 
 		return dataset;
