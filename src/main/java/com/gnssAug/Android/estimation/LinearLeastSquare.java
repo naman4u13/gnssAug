@@ -252,7 +252,7 @@ public class LinearLeastSquare {
 		if (n == l) {
 			postVarOfUnitW = -1;
 		}
-		if (n <= l + 1) {
+		if (n <= l) {
 			Cyy_updated = Cyy;
 			Cxx_hat_updated = Cxx_hat;
 		} else {

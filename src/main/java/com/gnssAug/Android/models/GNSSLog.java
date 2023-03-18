@@ -153,6 +153,10 @@ public class GNSSLog {
 		if (ssi.equals("J")) {
 			svid = qzssMap.get(svid);
 		}
+		// Temporary solution to correct for time scale offset b/w BDS and GPS time
+		if (ssi.equals("C")) {
+			this.tTx +=14;
+		}
 		obsvCode = ssi + freqID + channel;
 		// Only integer value, haven't subtracted the fractional value
 		long nanosSinceGpsEpoch = timeNanos - fullBiasNanos;

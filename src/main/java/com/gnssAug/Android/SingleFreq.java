@@ -12,6 +12,7 @@ import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.fileParser.Clock;
 import com.gnssAug.Rinex.fileParser.Orbit;
+import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Vector;
 
 public class SingleFreq {
@@ -114,8 +115,21 @@ public class SingleFreq {
 						System.err.println(SSI + "" + svid + " MGEX data absent");
 						continue;
 					}
+					
 					satECEF = satPV[0];
 					satVel = satPV[1];
+//					navData= derivedMap.get(key).get(obsvCode).get(svid);
+//					double errP = 0;
+//					double errV = 0;
+//					double _rawPR = 0;
+//					double _satClkDrift = 0;
+//					if(navData!=null)
+//					{
+//					 errP = MathUtil.getEuclidean(satECEF, navData.getSatECEF());
+//					 errV = MathUtil.getEuclidean(satVel, navData.getSatVel());
+//					 _rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
+//					 _satClkDrift = navData.getSatClkDrift();
+//					}
 					double relativistic_error = -2 * (Vector.dotProd(satECEF, satVel)) / Math.pow(SpeedofLight, 2);
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
