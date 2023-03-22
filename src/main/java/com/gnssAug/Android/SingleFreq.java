@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.TimeZone;
 
 import com.gnssAug.Android.models.Derived;
@@ -21,7 +22,7 @@ public class SingleFreq {
 	public static ArrayList<Satellite> process(double tRX,
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,
 			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo,
-			Clock clock, Orbit orbit, boolean useIGS) {
+			Clock clock, Orbit orbit, boolean useIGS,Set<String> discardSet) {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/YYYY kk:mm:ss.SSS");
 		String errStr = sdf.format(time.getTime());
@@ -94,6 +95,12 @@ public class SingleFreq {
 
 				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
+				String code = SSI+""+svid;
+				
+				if(discardSet.contains(code))
+				{
+					continue;
+				}
 				double t = 0;
 
 				Derived navData = null;

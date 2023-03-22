@@ -444,7 +444,7 @@ public class IGS {
 				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 				// GraphPlotter.graphDOP(dopMap, satCountMap.get("EKF"), timeList);
-				GraphPlotter.graphSatCount(satCountMap, timeList);
+				GraphPlotter.graphSatCount(satCountMap, timeList,30);
 			}
 		} catch (
 

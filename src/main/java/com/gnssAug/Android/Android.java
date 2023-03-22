@@ -8,6 +8,7 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
@@ -60,7 +61,7 @@ public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
 			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean mapDeltaRanges) {
+			boolean outlierAnalyze, boolean mapDeltaRanges,Set<String> discardSet) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -82,13 +83,13 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-MTV-1\\test";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-MTV-1\\SamsungS20Ultra_GPS_GAL_BDS_EKFdoppler_noWeight_Discarded";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
 			System.setOut(stream);
-
+			System.out.println("Discarded Satellites: " + discardSet.toString());
 			ArrayList<double[]> rxLLH = GroundTruth.processCSV(GTcsv);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
@@ -119,7 +120,7 @@ public class Android {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if (tRxMilli != (rxLLH.get(gtIndex)[0] * 1000) || weekNo != rxLLH.get(gtIndex)[1]) {
+				if ((Math.abs(tRxMilli - (rxLLH.get(gtIndex)[0] * 1000)))>1 || weekNo != rxLLH.get(gtIndex)[1]) {
 					System.err.println("FATAL ERROR - GT timestamp does not match");
 					continue;
 				}
@@ -130,7 +131,7 @@ public class Android {
 
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
-						weekNo, clock, orbit, useIGS);
+						weekNo, clock, orbit, useIGS,discardSet);
 				int m = obsvCodeList.length;
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
@@ -256,48 +257,48 @@ public class Android {
 				}
 
 			}
-//			if (estimatorType == 5) {
-//
-//				EKF ekf = new EKF();
-////				 Implement EKF based on receiver’s position and clock offset errors as a
-////				 random walk process
-//				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS);
-////				 Implement EKF based on receiver’s velocity and clock drift errors as a random
-////				 walk process
-//				TreeMap<Long, double[]> estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS);
-////				 Implement EKF based on receiver’s velocity and clock drift errors as a random
-////				 walk process along with doppler updates
-//				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true,
-//						useIGS);
-//				int n = timeList.size();
-//				for (int i = 0; i < n; i++) {
-//					long time = timeList.get(i);
-//					double[] estPos = estStateMap_pos.get(time);
-//					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estPos);
-//					double[] estState = estStateMap_vel.get(time);
-//					estPos = null;
-//					double[] estVel = null;
-//					if (estState != null) {
-//						estPos = new double[] { estState[0], estState[1], estState[2] };
-//						estVel = new double[] { estState[3], estState[4], estState[5] };
-//					}
-//					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estPos);
-//					estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estVel);
-//					estState = estStateMap_vel_doppler.get(time);
-//					estPos = null;
-//					estVel = null;
-//					if (estState != null) {
-//						estPos = new double[] { estState[0], estState[1], estState[2] };
-//						estVel = new double[] { estState[3], estState[4], estState[5] };
-//					}
-//					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
-//							.add(estPos);
-//					estVelMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
-//							.add(estVel);
-//
-//				}
-//
-//			}
+			if (estimatorType == 5) {
+
+				EKF ekf = new EKF();
+//				 Implement EKF based on receiver’s position and clock offset errors as a
+//				 random walk process
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS,obsvCodeList,doAnalyze,doTest,outlierAnalyze);
+//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+//				 walk process
+/*				TreeMap<Long, double[]> estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS);
+//				 Implement EKF based on receiver’s velocity and clock drift errors as a random
+//				 walk process along with doppler updates
+				TreeMap<Long, double[]> estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true,
+						useIGS);
+				int n = timeList.size();
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>()).add(estPos);
+					double[] estState = estStateMap_vel.get(time);
+					estPos = null;
+					double[] estVel = null;
+					if (estState != null) {
+						estPos = new double[] { estState[0], estState[1], estState[2] };
+						estVel = new double[] { estState[3], estState[4], estState[5] };
+					}
+					estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estPos);
+					estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>()).add(estVel);
+					estState = estStateMap_vel_doppler.get(time);
+					estPos = null;
+					estVel = null;
+					if (estState != null) {
+						estPos = new double[] { estState[0], estState[1], estState[2] };
+						estVel = new double[] { estState[3], estState[4], estState[5] };
+					}
+					estPosMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+							.add(estPos);
+					estVelMap.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+							.add(estVel);
+
+				}*/
+
+			}
 
 			if (estimatorType == 6) {
 				EKFDoppler ekf = new EKFDoppler();
@@ -600,6 +601,7 @@ public class Android {
 			}
 			if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
+				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 			} else {
 				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 				// Plot Error Graphs
@@ -615,7 +617,7 @@ public class Android {
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 					// GraphPlotter.graphDOP(dopMap,
 					// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
-					GraphPlotter.graphSatCount(satCountMap, timeList);
+					GraphPlotter.graphSatCount(satCountMap, timeList,1);
 
 				}
 			}

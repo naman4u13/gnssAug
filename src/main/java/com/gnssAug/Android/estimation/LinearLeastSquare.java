@@ -30,8 +30,8 @@ public class LinearLeastSquare {
 
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW = 6.2972;
-	final private static double doppler_priorVarOfUnitW = 0.0347;
+	final private static double pseudorange_priorVarOfUnitW = Math.pow(7.47,2);
+	final private static double doppler_priorVarOfUnitW =Math.pow(0.48,2);
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
 		return process(satList, isWLS, false, false, false, Measurement.Pseudorange, null, useIGS);
@@ -157,6 +157,7 @@ public class LinearLeastSquare {
 			m = obsvCodeList.length;
 		}
 		int l = 3 + m;
+		int[] constellCount = new int[m];
 		double[] residual = new double[n];
 		double[][] h = new double[n][l];
 		double[] userEcef = estState;
@@ -179,6 +180,7 @@ public class LinearLeastSquare {
 					if (obsvCode.equals(obsvCodeList[j])) {
 						h[i][3 + j] = 1;
 						y_hat += estState[3 + j];
+						constellCount[j] +=1; 
 					}
 				}
 			} else {
@@ -252,9 +254,18 @@ public class LinearLeastSquare {
 		if (n == l) {
 			postVarOfUnitW = -1;
 		}
-		if (n <= l) {
+		boolean flag = false;
+		for(int i=0;i<m;i++)
+		{
+			if(constellCount[i]==1)
+			{
+				flag = true;
+			}
+		}
+		if ((n <= l)||flag) {
 			Cyy_updated = Cyy;
 			Cxx_hat_updated = Cxx_hat;
+			System.err.println("Redundancy for a particular measuement is zero, cannot calculate Cyy and Cxx hat");
 		} else {
 			Cyy_updated = new SimpleMatrix(n, n);
 			double sum = 0;
@@ -262,13 +273,7 @@ public class LinearLeastSquare {
 				Cyy_updated.set(i, i, Math.pow(e_hat.get(i), 2) / redunMatrix.get(i, i));
 				sum += redunMatrix.get(i, i);
 			}
-			try {
 			Cxx_hat_updated = (Ht.mult(Cyy_updated.invert()).mult(H)).invert();
-			}
-			catch (Exception e) {
-				// TODO: handle exception
-				System.err.println();
-			}
 			
 			if (Math.abs(sum - (n - (3 + m))) > 0.1) {
 				throw new Exception("Error in LS redundancy computation");
@@ -297,7 +302,9 @@ public class LinearLeastSquare {
 		Cxx_hat_updated_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ECEF",
 				Cxx_hat_updated);
 		Cxx_hat = R.mult(Cxx_hat).mult(R.transpose());
+		
 		Cxx_hat_updated = R.mult(Cxx_hat_updated).mult(R.transpose());
+		
 		Cxx_hat_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ENU", Cxx_hat);
 		Cxx_hat_updated_Map.computeIfAbsent(type, k -> new HashMap<String, SimpleMatrix>()).put("ENU", Cxx_hat_updated);
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());

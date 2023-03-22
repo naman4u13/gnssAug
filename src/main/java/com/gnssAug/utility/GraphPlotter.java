@@ -95,9 +95,14 @@ public class GraphPlotter extends ApplicationFrame {
 		if (type.equals("Observables")) {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetObservable(satMap));
-		} else {
+		} else if(type.equals("Delta-Range")){
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetDeltaRange(satMap));
+		}
+		else
+		{
+			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
+					createDatasetSatellitePlot(satMap));
 		}
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
@@ -108,12 +113,12 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList) throws IOException {
+	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList,int freq) throws IOException {
 		super(title + " Satellite Count");
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart(title + " Satellite Count", "GPS-time",
-				title + " Satellite Count", createDatasetSatCount(dataList, timeList));
+				title + " Satellite Count", createDatasetSatCount(dataList, timeList,freq));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -597,7 +602,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphSatCount(HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap,
-			ArrayList<Long> timeList) throws IOException {
+			ArrayList<Long> timeList,int freq) throws IOException {
 
 		for (Measurement key : satCountMap.keySet()) {
 			String type;
@@ -608,7 +613,7 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			for (String subKey : satCountMap.get(key).keySet()) {
 				type += subKey;
-				GraphPlotter chart = new GraphPlotter(type, satCountMap.get(key).get(subKey), timeList);
+				GraphPlotter chart = new GraphPlotter(type, satCountMap.get(key).get(subKey), timeList,freq);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
@@ -617,7 +622,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
-			ArrayList<Long> timeList) throws Exception {
+			ArrayList<Long> timeList,int freq) throws Exception {
 
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 		for (String key : dataMap.keySet()) {
@@ -655,7 +660,7 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter("", satCountList, timeList);
+		chart = new GraphPlotter("", satCountList, timeList,freq);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -690,6 +695,10 @@ public class GraphPlotter extends ApplicationFrame {
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 			chart = new GraphPlotter(id, "Observables", satListMap.get(id));
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+			chart = new GraphPlotter(id, "Satellite-Plot", satListMap.get(id));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
@@ -1012,13 +1021,20 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList) {
+	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList,int freq) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries series = new XYSeries("SatCount");
 		double avg = data.stream().mapToDouble(i -> i).average().orElseThrow();
 		avg = Math.round(avg * 100) / 100.0;
+		long t0 = timeList.get(0);
 		for (int i = 0; i < data.size(); i++) {
+			long t = timeList.get(i);
+			if(t-t0>freq)
+			{
+				series.add(timeList.get(i-1)+freq, null);
+			}
 			series.add(timeList.get(i), data.get(i));
+			t0 = t;
 
 		}
 		final XYSeries avgSeries = new XYSeries("Avg:" + avg);
@@ -1036,7 +1052,7 @@ public class GraphPlotter extends ApplicationFrame {
 		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived");
 		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived");
 		final XYSeries true_dr_series = new XYSeries("True DeltaRange");
-		int i = 0;
+		
 		long t_prev = -999;
 		double pr_prev = 0;
 		double prRate_prev = 0;
@@ -1070,12 +1086,12 @@ public class GraphPlotter extends ApplicationFrame {
 			prRate_prev = prRate;
 			phase_prev = phase;
 			trueRange_prev = trueRange;
-			i++;
+		
 		}
 		dataset.addSeries(true_dr_series);
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		dataset.addSeries(phase_dr_series);
+		//dataset.addSeries(phase_dr_series);
 
 		return dataset;
 
@@ -1104,6 +1120,36 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 		dataset.addSeries(pr_series);
 		dataset.addSeries(prRate_series);
+		return dataset;
+	}
+	
+	private XYDataset createDatasetSatellitePlot(TreeMap<Long, Satellite> satMap) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries x = new XYSeries("X");
+		final XYSeries y = new XYSeries("Y");
+		final XYSeries z = new XYSeries("Z");
+		Long t0 = satMap.firstEntry().getKey();
+		Satellite sat0 = satMap.get(t0);
+		double[] ecef0 = sat0.getSatEci();
+		
+		for (Long t : satMap.keySet()) {
+			Satellite sat = satMap.get(t);
+			double[] ecef = sat.getSatEci();
+		
+			if ((t - t0) > 1.1) {
+				x.add(t0 + 1, null);
+				y.add(t0 + 1, null);
+				z.add(t0 + 1, null);
+			}
+			x.add(t0 + 1, ecef[0]-ecef0[0]);
+			y.add(t0 + 1, ecef[1]-ecef0[1]);
+			z.add(t0 + 1, ecef[2]-ecef0[2]);
+			t0 = t;
+		}
+		dataset.addSeries(x);
+		dataset.addSeries(y);
+		dataset.addSeries(z);
+	
 		return dataset;
 	}
 

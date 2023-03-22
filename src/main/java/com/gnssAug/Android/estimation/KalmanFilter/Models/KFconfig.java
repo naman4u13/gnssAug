@@ -120,7 +120,11 @@ public class KFconfig extends KF {
 		int n = 3+m;
 		
 		//Extra noise
-		double[] qENU = new double[] { 0,0,0,4,4  };
+		double[] qENU = new double[3+m];
+		for(int i=0;i<m;i++)
+		{
+			qENU[i+3] = 400;
+		}
 		SimpleMatrix omega = new SimpleMatrix(n, n);
 		for(int i=0;i<n;i++)
 		{

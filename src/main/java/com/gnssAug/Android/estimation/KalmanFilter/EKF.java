@@ -64,7 +64,7 @@ public class EKF {
 		double[] intialVel = LinearLeastSquare.getEstVel(SatMap.firstEntry().getValue(), true, intialECEF, useIGS);
 		IntStream.range(0, 3+m).forEach(i -> x[i][0] = intialECEF[i]);
 		IntStream.range(0, 3+m).forEach(i -> P[i][i] = 100);
-		if (n ==  3+(2*m)) {
+		if (flag == Flag.POSITION) {
 			IntStream.range( 3+m,3+(2*m)).forEach(i -> P[i][i] = 1e5);
 		} else {
 			IntStream.range(3+m,6+(2*m) ).forEach(i -> x[i][0] = intialVel[i-(3+m)]);
