@@ -35,9 +35,9 @@ public class KFconfig extends KF {
 			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
 //			double[] qENU = new double[] { 12, 12, 0.2 };
-			double[] qENU = new double[] { 16, 16, 4 };
+			double[] qENU = new double[] { 25, 25, 1 };
 			// qECEF_std can have negative element
-			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i]);
+			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i]*deltaT);
 			SimpleMatrix R = new SimpleMatrix(n, n);
 			R.insertIntoThis(0, 0, LatLonUtil.getEnu2EcefRotMat(ecef));
 			for (int i = 3; i < 3 + m; i++) {
@@ -63,8 +63,8 @@ public class KFconfig extends KF {
 			double[][] _Q = new double[n][n];
 			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 			// double[] qENU_std = new double[] { 8, 12, 2 };
-
-			double[] qENU = new double[] { 0.25, 0.25, 0.1 };
+			double[] qENU = new double[] { 0.05, 0.05, 0.0001 };
+			// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 			double[] q = new double[3+m];
 			IntStream.range(0, 3).forEach(i->q[i] = qENU[i]);
 			IntStream.range(3, 3+m).forEach(i->q[i] = sg);
@@ -121,6 +121,10 @@ public class KFconfig extends KF {
 		
 		//Extra noise
 		double[] qENU = new double[3+m];
+		for(int i=0;i<3;i++)
+		{
+			qENU[i] = 0.1;
+		}
 		for(int i=0;i<m;i++)
 		{
 			qENU[i+3] = 400;
@@ -141,7 +145,7 @@ public class KFconfig extends KF {
 		
 		double[][] phi = new double[n][n];
 		SimpleMatrix _Q = new SimpleMatrix(n,n);
-		_Q.insertIntoThis(0, 0, (Cxx_dot_hat.plus(omega)).scale(deltaT*deltaT/2));
+		_Q.insertIntoThis(0, 0, (Cxx_dot_hat.plus(omega)).scale(deltaT));
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);

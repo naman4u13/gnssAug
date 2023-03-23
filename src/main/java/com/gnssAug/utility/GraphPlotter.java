@@ -128,8 +128,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(ArrayList<double[]> dataList) throws IOException {
-		super("Z measurement redundancy");
+	public GraphPlotter(ArrayList<double[]> dataList,String name) throws IOException {
+		super(name+"Z measurement redundancy");
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart("Z measurement redundancy", "GPS-time", "Count",
@@ -573,7 +573,14 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphRedundancy(ArrayList<double[]> redundancyList) throws IOException {
-		GraphPlotter chart = new GraphPlotter(redundancyList);
+		GraphPlotter chart = new GraphPlotter(redundancyList,"");
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+	}
+	
+	public static void graphRedundancy(ArrayList<double[]> redundancyList,String name) throws IOException {
+		GraphPlotter chart = new GraphPlotter(redundancyList,name);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
