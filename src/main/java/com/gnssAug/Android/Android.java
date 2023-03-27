@@ -83,7 +83,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test2";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -162,9 +162,9 @@ public class Android {
 				}
 				double[] estEcefClk = null;
 
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3) {
+				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3||estimatorType==10) {
 					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3) {
+					if (estimatorType == 3||estimatorType == 10) {
 						arr = new int[] { 1, 2 };
 					}
 					for (int i : arr) {
@@ -190,7 +190,7 @@ public class Android {
 							if (doAnalyze) {
 
 								double[] residual = LinearLeastSquare.getResidual(type);
-								SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(type);
+								SimpleMatrix Cyy = LinearLeastSquare.getCyy(type);
 								satResMap
 										.computeIfAbsent(type,
 												k -> new HashMap<String, HashMap<String, ArrayList<SatResidual>>>())
@@ -257,7 +257,7 @@ public class Android {
 				}
 
 			}
-			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8) {
+			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8||estimatorType == 10) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
 
@@ -267,7 +267,7 @@ public class Android {
 				int n = timeList.size();
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
-				if ((estimatorType == 8) && (!doAnalyze)) {
+				if (((estimatorType == 8)||(estimatorType == 10)) && (!doAnalyze)) {
 					estTypes = new int[] { 5, 6, 7 };
 				}
 				for (int type : estTypes) {
@@ -405,7 +405,7 @@ public class Android {
 
 			}
 
-			if (estimatorType == 9) {
+			if (estimatorType == 9||estimatorType == 10) {
 				EKFDoppler ekf = new EKFDoppler();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze);

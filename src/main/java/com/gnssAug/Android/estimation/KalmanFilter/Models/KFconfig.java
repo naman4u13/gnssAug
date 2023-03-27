@@ -19,7 +19,7 @@ public class KFconfig extends KF {
 	private final double sf = ClockAllanVar.TCXO_low_quality.sf;
 	private final double sg = ClockAllanVar.TCXO_low_quality.sg;
 
-	public void config(double deltaT, Flag flag,int m) throws Exception {
+	public void config(double deltaT, Flag flag,int m,boolean useDoppler) throws Exception {
 
 		/*
 		 * The process noise for position vector will be initialized in ENU frame and
@@ -58,16 +58,21 @@ public class KFconfig extends KF {
 			super.configure(phi, Q);
 
 		} else if (flag == Flag.VELOCITY) {
+			
 			int n = 6+(2*m);
+//			if(useDoppler)
+//			{
+//				n = n+1;
+//			}
 			double[][] phi = new double[n][n];
 			double[][] _Q = new double[n][n];
 			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 			// double[] qENU_std = new double[] { 8, 12, 2 };
-			double[] qENU = new double[] { 0.05, 0.05, 0.0001 };
+			double[] qENU = new double[] { 0.5, 0.5, 0.01 };
 			// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 			double[] q = new double[3+m];
 			IntStream.range(0, 3).forEach(i->q[i] = qENU[i]);
-			IntStream.range(3, 3+m).forEach(i->q[i] = sg);
+			IntStream.range(3, 3+m).forEach(i->q[i] = 25);
 		
 			for (int i = 0; i < 3+m; i++) {
 				_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
@@ -76,7 +81,7 @@ public class KFconfig extends KF {
 				_Q[i + 3 + m][i + 3 + m] = q[i] * deltaT;
 				phi[i][i + 3 + m] = deltaT;
 			}
-			IntStream.range(3, 3+m).forEach(i->_Q[i][i] += (sf * deltaT));
+			IntStream.range(3, 3+m).forEach(i->_Q[i][i] += (25 * deltaT));
 			
 			SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
 			SimpleMatrix R = new SimpleMatrix(n, n);
@@ -90,6 +95,11 @@ public class KFconfig extends KF {
 				R.set(3+i,3+i,1);
 				R.set(6+m+i,6+m+i,1);
 			}
+//			if(useDoppler)
+//			{
+//				R.set(n-1,n-1,1);
+//				_Q[n-1][n-1] = 1e-10;
+//			}
 			SimpleMatrix Q = new SimpleMatrix(_Q);
 			Q = R.mult(Q).mult(R.transpose());
 			if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
@@ -121,10 +131,10 @@ public class KFconfig extends KF {
 		
 		//Extra noise
 		double[] qENU = new double[3+m];
-		for(int i=0;i<3;i++)
-		{
-			qENU[i] = 0.1;
-		}
+//		for(int i=0;i<3;i++)
+//		{
+//			qENU[i] = 0.1;
+//		}
 		for(int i=0;i<m;i++)
 		{
 			qENU[i+3] = 400;

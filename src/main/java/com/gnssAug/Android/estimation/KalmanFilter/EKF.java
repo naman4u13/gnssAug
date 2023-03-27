@@ -58,6 +58,10 @@ public class EKF {
 			n = 3 + (2 * m);
 		} else if (flag == Flag.VELOCITY) {
 			n = 6 + (2 * m);
+//			if(useDoppler)
+//			{
+//				n = n+1;
+//			}
 		}
 		double[][] x = new double[n][1];
 		double[][] P = new double[n][n];
@@ -72,11 +76,21 @@ public class EKF {
 		IntStream.range(0, 3 + m).forEach(i -> x[i][0] = intialECEF[i]);
 		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 100);
 		if (flag == Flag.POSITION) {
-			IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e5);
+			IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e13);
 		} else {
 			IntStream.range(3 + m, 6 + (2 * m)).forEach(i -> x[i][0] = intialVel[i - (3 + m)]);
 			IntStream.range(3 + m, 6 + m).forEach(i -> P[i][i] = 1);
-			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] = 1e5);
+			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] = 1e13);
+//			if(useDoppler)
+//			{
+//				double sum = 0;
+//				for(int i=0;i<m;i++)
+//				{
+//					sum += intialVel[3+i];
+//				}
+//				x[n-1][0] = sum/m;
+//				P[n-1][n-1] = 1e2;
+//			}
 		}
 
 		kfObj.setState_ProcessCov(x, P);
@@ -130,6 +144,10 @@ public class EKF {
 				if (flag == Flag.VELOCITY) {
 					R.insertIntoThis(3 + m, 3 + m, rotMat);
 					IntStream.range(3 + (2 * m), 6 + (2 * m)).forEach(j -> R.set(j, j, 1));
+//					if(useDoppler)
+//					{
+//						R.set(n-1, n-1, 1);
+//					}
 				} else {
 					IntStream.range(3 + m, 3 + (2 * m)).forEach(j -> R.set(j, j, 1));
 				}
@@ -165,7 +183,7 @@ public class EKF {
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler,
 			String[] obsvCodeList, boolean useIGS,long currentTime, boolean doAnalyze) throws Exception {
 
-		boolean isWeighted = true;
+		boolean isWeighted = false;
 		boolean useAndroidW = false;
 		// Satellite count
 		int n = satList.size();
@@ -175,7 +193,7 @@ public class EKF {
 		SimpleMatrix priorX = new SimpleMatrix(kfObj.getState());
 		
 		// Assign Q and F matrix
-		kfObj.config(deltaT, flag, m);
+		kfObj.config(deltaT, flag, m,useDoppler);
 		kfObj.predict();
 
 		SimpleMatrix x = kfObj.getState();
@@ -247,6 +265,7 @@ public class EKF {
 			stateN = 6 + (2 * m);
 			if (useDoppler) {
 				rows = 2 * n;
+				//stateN += 1;
 			}
 		}
 		double[][] H = new double[rows][stateN];
@@ -267,6 +286,7 @@ public class EKF {
 					H[i][3 + j] = 1;
 					if (useDoppler) {
 						H[i + n][6 + m + j] = 1;
+						//H[i + n][stateN-1] = 1;
 					}
 				}
 			}
