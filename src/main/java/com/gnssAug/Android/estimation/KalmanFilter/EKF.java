@@ -42,10 +42,19 @@ public class EKF {
 	public EKF() {
 		kfObj = new KFconfig();
 	}
-
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze) throws Exception {
+		
+		 return process( SatMap,  timeList,
+				 flag,  useDoppler,  useIGS,  obsvCodeList,  doAnalyze,  doTest,
+				 outlierAnalyze,false);
+		
+	}
+
+	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
+			Flag flag, boolean useDoppler, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze,boolean complementary) throws Exception {
 
 		int n = 0;
 		int m = obsvCodeList.length;
@@ -80,7 +89,7 @@ public class EKF {
 		} else {
 			IntStream.range(3 + m, 6 + (2 * m)).forEach(i -> x[i][0] = intialVel[i - (3 + m)]);
 			IntStream.range(3 + m, 6 + m).forEach(i -> P[i][i] = 1);
-			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] = 1e13);
+			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] = 1e10);
 //			if(useDoppler)
 //			{
 //				double sum = 0;
@@ -105,13 +114,13 @@ public class EKF {
 			measNoiseMap = new TreeMap<Long, HashMap<State, double[]>>();
 		}
 		// Begin iteration or recursion
-		return iterate(SatMap, timeList, flag, useDoppler, obsvCodeList, doAnalyze, doTest, outlierAnalyze, useIGS);
+		return iterate(SatMap, timeList, flag, useDoppler, obsvCodeList, doAnalyze, doTest, outlierAnalyze, useIGS,complementary);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean useIGS) throws Exception {
+			boolean outlierAnalyze, boolean useIGS,boolean complementary) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 
 		int m = obsvCodeList.length;
@@ -122,7 +131,7 @@ public class EKF {
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
 			// Perform Predict and Update
-			runFilter(deltaT, satList, flag, useDoppler, obsvCodeList, useIGS,currentTime,doAnalyze);
+			runFilter(deltaT, satList, flag, useDoppler, obsvCodeList, useIGS,currentTime,doAnalyze,complementary);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
@@ -181,7 +190,7 @@ public class EKF {
 	}
 
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler,
-			String[] obsvCodeList, boolean useIGS,long currentTime, boolean doAnalyze) throws Exception {
+			String[] obsvCodeList, boolean useIGS,long currentTime, boolean doAnalyze,boolean complementary) throws Exception {
 
 		boolean isWeighted = false;
 		boolean useAndroidW = false;
@@ -193,7 +202,7 @@ public class EKF {
 		SimpleMatrix priorX = new SimpleMatrix(kfObj.getState());
 		
 		// Assign Q and F matrix
-		kfObj.config(deltaT, flag, m,useDoppler);
+		kfObj.config(deltaT, flag, m,useDoppler,complementary);
 		kfObj.predict();
 
 		SimpleMatrix x = kfObj.getState();

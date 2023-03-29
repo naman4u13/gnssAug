@@ -83,7 +83,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test3";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_BDS_EKFdoppler_baarda";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -162,9 +162,9 @@ public class Android {
 				}
 				double[] estEcefClk = null;
 
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3||estimatorType==10) {
+				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3 || estimatorType == 11) {
 					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3||estimatorType == 10) {
+					if (estimatorType == 3 || estimatorType == 11) {
 						arr = new int[] { 1, 2 };
 					}
 					for (int i : arr) {
@@ -257,18 +257,20 @@ public class Android {
 				}
 
 			}
-			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8||estimatorType == 10) {
+			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8
+					|| estimatorType == 9 || estimatorType == 11) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
 
 				TreeMap<Long, double[]> estStateMap_pos = null;
 				TreeMap<Long, double[]> estStateMap_vel = null;
 				TreeMap<Long, double[]> estStateMap_vel_doppler = null;
+				TreeMap<Long, double[]> estStateMap_vel_doppler_complementary = null;
 				int n = timeList.size();
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
-				if (((estimatorType == 8)||(estimatorType == 10)) && (!doAnalyze)) {
-					estTypes = new int[] { 5, 6, 7 };
+				if (((estimatorType == 9) || (estimatorType == 11)) && (!doAnalyze)) {
+					estTypes = new int[] { 5, 6, 7, 8 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -277,36 +279,37 @@ public class Android {
 //					 random walk process
 						estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
+						estName = "EKF - pos. random walk";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estPos = estStateMap_pos.get(time);
-							estPosMap.computeIfAbsent("EKF - pos. random walk", k -> new ArrayList<double[]>())
+							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>())
 									.add(estPos);
 						}
-						estName = "EKF - pos. random walk";
+						
 						break;
 					case 6:
 //					 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //					 walk process
 						estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
+						estName = "EKF - vel. random walk";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estState = estStateMap_vel.get(time);
 							double[] estPos = null;
 							double[] estVel = null;
-							if(estState!=null)
-							{
-							estPos = new double[] { estState[0], estState[1], estState[2] };
-							estVel = new double[] { estState[0+3+m], estState[1+3+m], estState[2+3+m] };
+							if (estState != null) {
+								estPos = new double[] { estState[0], estState[1], estState[2] };
+								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
 							}
-							estPosMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>())
+							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>())
 									.add(estPos);
-							estVelMap.computeIfAbsent("EKF - vel. random walk", k -> new ArrayList<double[]>())
+							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>())
 									.add(estVel);
 
 						}
-						estName = "EKF - vel. random walk";
+						
 						break;
 
 					case 7:
@@ -314,25 +317,51 @@ public class Android {
 //					 walk process along with doppler updates
 						estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze);
+						estName = "EKF - vel. random walk + doppler";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estState = estStateMap_vel_doppler.get(time);
 							double[] estPos = null;
 							double[] estVel = null;
-							if(estState!=null)
-							{
-							estPos = new double[] { estState[0], estState[1], estState[2] };
-							estVel = new double[] { estState[0+3+m], estState[1+3+m], estState[2+3+m] };
+							if (estState != null) {
+								estPos = new double[] { estState[0], estState[1], estState[2] };
+								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
 							}
 							estPosMap
-									.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+									.computeIfAbsent(estName, k -> new ArrayList<double[]>())
 									.add(estPos);
 							estVelMap
-									.computeIfAbsent("EKF - vel. random walk + doppler", k -> new ArrayList<double[]>())
+									.computeIfAbsent(estName, k -> new ArrayList<double[]>())
 									.add(estVel);
 
 						}
-						estName = "EKF - vel. random walk + doppler";
+						
+						break;
+
+					case 8:
+						// Implement EKF based on receiver’s velocity and clock drift errors as a random
+//				 walk process along with doppler updates
+						estStateMap_vel_doppler_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
+								obsvCodeList, doAnalyze, doTest, outlierAnalyze,true);
+						estName = "EKF - vel. random walk + doppler + complementary equivalent";
+						for (int i = 0; i < n; i++) {
+							long time = timeList.get(i);
+							double[] estState = estStateMap_vel_doppler_complementary.get(time);
+							double[] estPos = null;
+							double[] estVel = null;
+							if (estState != null) {
+								estPos = new double[] { estState[0], estState[1], estState[2] };
+								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
+							}
+							estPosMap
+									.computeIfAbsent(estName, k -> new ArrayList<double[]>())
+									.add(estPos);
+							estVelMap
+									.computeIfAbsent(estName, k -> new ArrayList<double[]>())
+									.add(estVel);
+
+						}
+						
 						break;
 
 					}
@@ -405,7 +434,7 @@ public class Android {
 
 			}
 
-			if (estimatorType == 9||estimatorType == 10) {
+			if (estimatorType == 10 || estimatorType == 11) {
 				EKFDoppler ekf = new EKFDoppler();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze);

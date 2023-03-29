@@ -1234,6 +1234,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 				dataset.addSeries(series);
 			}
+			dataSeries.replaceAll(i->Math.abs(i));
 			double avg = dataSeries.stream().mapToDouble(i -> i).average().orElse(0);
 			Collections.sort(dataSeries);
 			int n = dataSeries.size();

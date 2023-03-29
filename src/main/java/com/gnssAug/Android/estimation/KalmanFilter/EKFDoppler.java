@@ -1,6 +1,7 @@
 package com.gnssAug.Android.estimation.KalmanFilter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
@@ -35,7 +36,10 @@ public class EKFDoppler {
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
-	final static private double priorVarOfUnitW = Math.pow(7.47,2);
+	final static private double priorVarOfUnitW = Math.pow(13.9,2);
+	
+	static private double[] prevVel;
+	static private SimpleMatrix prev_Cxx_dot_hat;
 	public EKFDoppler() {
 		kfObj = new KFconfig();
 	}
@@ -84,14 +88,16 @@ public class EKFDoppler {
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long time = timeList.get(0);
+		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), false, true, true, false,
+				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
+		prev_Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			long currentTime = timeList.get(i);
-			ArrayList<Satellite> satList = SatMap.get(time);
 			double deltaT = (currentTime - time) / 1e3;
-			predictTotalState(X, satList, deltaT, useIGS);
-			satList = SatMap.get(currentTime);
-			runFilter(X, currentTime, deltaT, satList, obsvCodeList, doAnalyze, doTest, outlierAnalyze,useIGS);
+			ArrayList<Satellite> satList = SatMap.get(currentTime);
+			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS);
+			runFilter(X, currentTime, deltaT, satList, obsvCodeList,Cxx_dot_hat, doAnalyze, doTest, outlierAnalyze,useIGS);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
 			IntStream.range(0, x_size).forEach(j -> estState[j] = X.get(j));
@@ -115,31 +121,34 @@ public class EKFDoppler {
 		return estStateMap;
 	}
 
-	private void predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
+	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
 			throws Exception {
 
 		
-		double[] vel = LinearLeastSquare.getEstVel(satList, false, true, false, false,
+		double[] vel = LinearLeastSquare.getEstVel(satList, false, true, true, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
-//		for(int i=3;i<vel.length;i++)
-//		{
-//			vel[i] -=122;
-//		}
+		double[] avg_vel = new double[vel.length];
 		for (int i = 0; i < vel.length; i++) {
-			X.set(i, X.get(i) + (vel[i] * deltaT));
+			avg_vel[i] = (vel[i]+prevVel[i])*0.5;
+			X.set(i, X.get(i) + (avg_vel[i]* deltaT));
 		}
+		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
+		SimpleMatrix avg_Cxx_dot_hat =  Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.25);
+		prevVel = Arrays.copyOf(vel, vel.length);
+		prev_Cxx_dot_hat = new SimpleMatrix(Cxx_dot_hat);
+		return avg_Cxx_dot_hat;
 	}
 	
 	// Innovation Based Testing
 	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
-			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,boolean useIGS) throws Exception {
+			String[] obsvCodeList,SimpleMatrix Cxx_dot_hat, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,boolean useIGS) throws Exception {
 
 		boolean isWeighted = false;
 		boolean useAndroidW = false;
 		// Satellite count
 		int n = satList.size();
 		int m = obsvCodeList.length;
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
+		
 		// Last update VC-matrix
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 		SimpleMatrix priorX = new SimpleMatrix(X);
@@ -233,7 +242,7 @@ public class EKFDoppler {
 			performAnalysis(X, testedSatList, satList, R, H, priorP, currentTime,  n, obsvCodeList,
 					doTest, outlierAnalyze);
 		}
-		if (outlierAnalyze) {
+		if (doTest && outlierAnalyze) {
 			kfObj.setState_ProcessCov(new SimpleMatrix(3 + m, 1), priorP);
 			X = new SimpleMatrix(priorX);
 			kfObj.predict();
