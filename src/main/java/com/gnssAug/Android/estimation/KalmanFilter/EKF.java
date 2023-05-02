@@ -332,32 +332,33 @@ public class EKF {
 		double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
 		double rW = Q.mult(HtCvvInvH).trace();
 		int m = HK.numRows();
-		SimpleMatrix tempMat = SimpleMatrix.identity(m).minus(HK);
-		double rZ_pr = tempMat.extractMatrix(0, m / 2, 0, m / 2).trace();
-		double rZ_doppler = tempMat.extractMatrix(m / 2, m, m / 2, m).trace();
-		double rZ = SimpleMatrix.identity(HK.numRows()).minus(HK).trace();
-		double rSum = rX + rW + rZ;
-		if ((2 * _n) - rSum > 0.01) {
-			System.err.println("FATAL ERROR: Redundancy sum is wrong");
-		}
+		SimpleMatrix I_HK = SimpleMatrix.identity(m).minus(HK);
+		double rZ_pr = I_HK.extractMatrix(0, _n, 0, _n).trace();
 		double postVarOfUnitW_pr = e_post_hat_pr.transpose().mult(Cyy_inv_pr).mult(e_post_hat_pr).get(0) / rZ_pr;
-
-		if (flag == Flag.VELOCITY) {
+		double rZ_doppler = 0;
+		if (useDoppler) {
+			rZ_doppler = I_HK.extractMatrix(_n,2*_n,_n,2*_n).trace();
 			double[] doppler_res = Arrays.copyOfRange(residual, _n, 2 * _n);
 			SimpleMatrix e_post_hat_doppler = new SimpleMatrix(_n, 1, true, doppler_res);
 			SimpleMatrix Cyy_inv_doppler = R.extractMatrix(_n, 2 * _n, _n, 2 * _n).invert();
 			double postVarOfUnitW_doppler = e_post_hat_doppler.transpose().mult(Cyy_inv_doppler)
 					.mult(e_post_hat_doppler).get(0) / rZ_doppler;
+			redundancyMap.computeIfAbsent(Measurement.Doppler, k -> new ArrayList<double[]>())
+			.add(new double[] { _n, 0, rX, rW, rZ_doppler });
 			postVarOfUnitWMap.computeIfAbsent(currentTime, k -> new HashMap<Measurement, Double>())
 					.put(Measurement.Doppler, postVarOfUnitW_doppler);
 			residualMap.computeIfAbsent(currentTime, k -> new HashMap<Measurement, double[]>()).put(Measurement.Doppler,
 					doppler_res);
+			
 		}
-
+		double rZ = rZ_pr+rZ_doppler;
+		double rSum = rX + rW + rZ;
+		if (Math.abs(m - rSum) > 0.01) {
+			System.err.println("FATAL ERROR: Redundancy sum is wrong");
+		}
 		redundancyMap.computeIfAbsent(Measurement.Pseudorange, k -> new ArrayList<double[]>())
-				.add(new double[] { _n, rSum - rZ + rZ_pr, rX, rW, rZ_pr });
-		redundancyMap.computeIfAbsent(Measurement.Doppler, k -> new ArrayList<double[]>())
-				.add(new double[] { _n, rSum - rZ + rZ_doppler, rX, rW, rZ_doppler });
+				.add(new double[] { _n, 0, rX, rW, rZ_pr });
+		
 		postVarOfUnitWMap.computeIfAbsent(currentTime, k -> new HashMap<Measurement, Double>())
 				.put(Measurement.Pseudorange, postVarOfUnitW_pr);
 		residualMap.computeIfAbsent(currentTime, k -> new HashMap<Measurement, double[]>()).put(Measurement.Pseudorange,

@@ -155,9 +155,9 @@ public class INSfusion {
 		// Position Update
 		double newAlt = alt - ((tau / 2) * (oldVel.get(2) + newVel.get(2)));
 		double newLat = lat + ((tau / 2) * ((oldVel.get(0) / (Rm + alt)) + (newVel.get(0) / (Rm + newAlt))));
-		double newRe = LatLonUtil.getMeridianEarthRadius(newLat);
+		double newRn = LatLonUtil.getNormalEarthRadius(newLat);
 		double newLon = lon + ((tau / 2) * ((oldVel.get(1) / ((Rn + alt) * Math.cos(lat)))
-				+ (newVel.get(1) / ((newRe + newAlt) * Math.cos(newLat)))));
+				+ (newVel.get(1) / ((newRn + newAlt) * Math.cos(newLat)))));
 
 		// Receiver Clock update
 		double oldRxClkDrift = X.getRxClk()[1];

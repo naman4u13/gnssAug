@@ -96,7 +96,7 @@ public class GraphPlotter extends ApplicationFrame {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetObservable(satMap));
 		} else if(type.equals("Delta-Range")){
-			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
+			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time(in sec)", type+"(in m)",
 					createDatasetDeltaRange(satMap));
 		}
 		else
@@ -226,12 +226,12 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map,
-			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+			HashMap<String, ArrayList<SatResidual>> outlierMap,boolean isElevAngle) throws Exception {
 		super(name);
 		// TODO Auto-generated constructor stub
-
-		final JFreeChart chart = ChartFactory.createScatterPlot(name, "GPS-time", name,
-				createAnalyseDataset3(map, outlierMap));
+		String xAxis = isElevAngle ? "Elevation-Angle(degrees)" : "GPS-Time(seconds)";
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, xAxis, "True Error in Range(in m)",
+				createAnalyseDataset3(map, outlierMap,isElevAngle));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -540,6 +540,20 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.setVisible(true);
 
 	}
+	
+	public static void graphOutlier(String name, HashMap<String, TreeMap<Integer, double[]>> map,HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+
+		GraphPlotter chart = new GraphPlotter(name, map,outlierMap,false);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		
+		chart = new GraphPlotter(name, map,outlierMap, true);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+	}
 
 	public static void graphIMU(TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap) throws IOException {
 		int n = imuMap.size();
@@ -816,7 +830,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, double[]>> map,
-			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+			HashMap<String, ArrayList<SatResidual>> outlierMap,boolean isElevAngle) throws Exception {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries outliers = new XYSeries("outliers");
 		final XYSeries inliers = new XYSeries("inliers");
@@ -833,15 +847,19 @@ public class GraphPlotter extends ApplicationFrame {
 //					throw new Exception("Error while Analysing data in GraphPlotter");
 //				}
 				int i = 0;
-				for (int x : data.keySet()) {
-					while (Math.abs(outlierList.get(i).getT() - x) > 0.5) {
+				for (int t : data.keySet()) {
+					while (Math.abs(outlierList.get(i).getT() - t) > 0.5) {
 						i++;
 
 					}
-					double y = data.get(x)[0];
+					double y = data.get(t)[0];
 					SatResidual satRes = outlierList.get(i);
 					i++;
-
+					double x = t;
+					if(isElevAngle)
+					{
+						x = satRes.getElevAngle();
+					}
 					if (satRes.isOutlier()) {
 						outliers.add(x, y);
 						out++;
@@ -1055,9 +1073,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDatasetDeltaRange(TreeMap<Long, Satellite> satMap) throws Exception {
 
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		final XYSeries pr_dr_series = new XYSeries("PR Derived DeltaRange");
-		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived");
-		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived");
+		final XYSeries pr_dr_series = new XYSeries("PR Derived DR");
+		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived DR");
+		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived DR");
 		final XYSeries true_dr_series = new XYSeries("True DeltaRange");
 		
 		long t_prev = -999;
@@ -1098,7 +1116,7 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(true_dr_series);
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		//dataset.addSeries(phase_dr_series);
+		dataset.addSeries(phase_dr_series);
 
 		return dataset;
 

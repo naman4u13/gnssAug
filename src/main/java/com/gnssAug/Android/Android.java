@@ -63,7 +63,6 @@ public class Android {
 			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet) {
 		try {
-
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 			HashMap<String, ArrayList<HashMap<String, Double>>> ErrMap = new HashMap<String, ArrayList<HashMap<String, Double>>>();
 
@@ -83,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_BDS_EKFdoppler_baarda";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -165,7 +164,7 @@ public class Android {
 				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3 || estimatorType == 11) {
 					int[] arr = new int[] { estimatorType };
 					if (estimatorType == 3 || estimatorType == 11) {
-						arr = new int[] { 1, 2 };
+						arr = new int[] { 1,2 };
 					}
 					for (int i : arr) {
 						boolean isWLS = false;
@@ -261,7 +260,7 @@ public class Android {
 					|| estimatorType == 9 || estimatorType == 11) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
-
+				boolean useDoppler = false;
 				TreeMap<Long, double[]> estStateMap_pos = null;
 				TreeMap<Long, double[]> estStateMap_vel = null;
 				TreeMap<Long, double[]> estStateMap_vel_doppler = null;
@@ -317,6 +316,7 @@ public class Android {
 //					 walk process along with doppler updates
 						estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze);
+						useDoppler = true;
 						estName = "EKF - vel. random walk + doppler";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
@@ -339,10 +339,10 @@ public class Android {
 						break;
 
 					case 8:
-						// Implement EKF based on receiver’s velocity and clock drift errors as a random
-//				 walk process along with doppler updates
+	
 						estStateMap_vel_doppler_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze,true);
+						useDoppler = true;
 						estName = "EKF - vel. random walk + doppler + complementary equivalent";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
@@ -368,12 +368,12 @@ public class Android {
 				}
 
 				if (doAnalyze) {
+					Measurement[] measArr = useDoppler?new Measurement[] {Measurement.Pseudorange,Measurement.Doppler}:new Measurement[] {Measurement.Pseudorange};
 					HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-					for (Measurement meas : Measurement.values()) {
+					for (Measurement meas : measArr ) {
 						satResMap.put(meas, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 						satInnMap.put(meas, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 						postVarOfUnitWeightMap.put(meas, new HashMap<String, ArrayList<Double>>());
-
 						satResMap.get(meas).put(estName, new HashMap<String, ArrayList<SatResidual>>());
 						satInnMap.get(meas).put(estName, new HashMap<String, ArrayList<SatResidual>>());
 
@@ -389,15 +389,19 @@ public class Android {
 					for (int i = 0; i < n; i++) {
 						long time = timeList.get(i);
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
+						if(satList==null)
+						{
+							continue;
+						}
 						HashMap<Measurement, double[]> residualMap = ekf.getResidualMap().get(time);
 						int l = satList.size();
-						long tRx = time / 1000;
+						long tRx =  Math.round(time/1000.0);
 						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < l; j++) {
 							Satellite sat = satList.get(j);
-							for (Measurement meas : Measurement.values()) {
+							for (Measurement meas : measArr) {
 								satResMap.get(meas).get(estName)
-										.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
+										.computeIfAbsent(sat.getObsvCode().charAt(0) +""+ sat.getSvid() + "",
 												k -> new ArrayList<SatResidual>())
 										.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residualMap.get(meas)[j],
 												sat.isOutlier()));
@@ -406,7 +410,7 @@ public class Android {
 						}
 						satCountMap.get(Measurement.Pseudorange).computeIfAbsent(estName, k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
-						for (Measurement meas : Measurement.values()) {
+						for (Measurement meas : measArr) {
 							postVarOfUnitWeightMap.get(meas).computeIfAbsent(estName, k -> new ArrayList<Double>())
 									.add(ekf.getPostVarOfUnitWMap().get(time).get(meas));
 						}
@@ -419,7 +423,7 @@ public class Android {
 						satList = satMap.get(time);
 						for (int j = 0; j < l; j++) {
 							Satellite sat = satList.get(j);
-							for (Measurement meas : Measurement.values()) {
+							for (Measurement meas : measArr) {
 								satInnMap.get(meas).get(estName)
 										.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
 												k -> new ArrayList<SatResidual>())
@@ -435,20 +439,21 @@ public class Android {
 			}
 
 			if (estimatorType == 10 || estimatorType == 11) {
+				String estName = "EKF - Doppler";
 				EKFDoppler ekf = new EKFDoppler();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze);
 				int n = timeList.size();
-				estPosMap.put("EKF - Doppler", new ArrayList<double[]>());
+				estPosMap.put(estName, new ArrayList<double[]>());
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				if (doAnalyze) {
 					satResMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-					satResMap.get(Measurement.Pseudorange).put("EKF - Doppler",
+					satResMap.get(Measurement.Pseudorange).put(estName,
 							new HashMap<String, ArrayList<SatResidual>>());
 					satInnMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-					satInnMap.get(Measurement.Pseudorange).put("EKF - Doppler",
+					satInnMap.get(Measurement.Pseudorange).put(estName,
 							new HashMap<String, ArrayList<SatResidual>>());
 					satCountMap.put(Measurement.Pseudorange, new TreeMap<String, ArrayList<Long>>());
 					Cxx_hat_map.put(State.Position, new HashMap<String, ArrayList<SimpleMatrix>>());
@@ -459,7 +464,7 @@ public class Android {
 				for (int i = 0; i < n; i++) {
 					long time = timeList.get(i);
 					double[] estPos = estStateMap.get(time);
-					estPosMap.get("EKF - Doppler").add(estPos);
+					estPosMap.get(estName).add(estPos);
 					if (estPos == null) {
 						continue;
 					}
@@ -467,25 +472,25 @@ public class Android {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						int m = satList.size();
-						long tRx = time / 1000;
+						long tRx = Math.round(time/1000.0);
 						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
-							satResMap.get(Measurement.Pseudorange).get("EKF - Doppler")
-									.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
+							satResMap.get(Measurement.Pseudorange).get(estName)
+									.computeIfAbsent(sat.getObsvCode().charAt(0) +""+ sat.getSvid() ,
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
 											sat.isOutlier()));
 
 						}
 						satCountMap.get(Measurement.Pseudorange)
-								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<Long>())
+								.computeIfAbsent(estName, k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
 						Cxx_hat_map.get(State.Position)
-								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<SimpleMatrix>())
+								.computeIfAbsent(estName, k -> new ArrayList<SimpleMatrix>())
 								.add(ekf.getErrCovMap().get(time));
 						postVarOfUnitWeightMap.get(Measurement.Pseudorange)
-								.computeIfAbsent("EKF - Doppler", k -> new ArrayList<Double>())
+								.computeIfAbsent(estName, k -> new ArrayList<Double>())
 								.add(ekf.getPostVarOfUnitWMap().get(time));
 
 						// For innovation vector
@@ -497,7 +502,7 @@ public class Android {
 						}
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
-							satInnMap.get(Measurement.Pseudorange).get("EKF - Doppler")
+							satInnMap.get(Measurement.Pseudorange).get(estName)
 									.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
@@ -511,6 +516,9 @@ public class Android {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
+			
+			
+			
 
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,

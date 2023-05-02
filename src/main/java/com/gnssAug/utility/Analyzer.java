@@ -32,13 +32,14 @@ public class Analyzer {
 		if (truePosEcef.size() != satMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
+		long time0 = satMap.firstKey();
 		String estType = estPosMap.firstKey();
 		if (estType.equals("EKF - Doppler")) {
 			estPosMap.get(estType).remove(0);
 			satMap.remove(satMap.firstKey());
 			truePosEcef.remove(0);
+			
 		}
-		long time0 = satMap.firstKey();
 		int i = 0;
 		for (Long time : satMap.keySet()) {
 			double[] truePos = truePosEcef.get(i);
@@ -55,6 +56,7 @@ public class Analyzer {
 
 			double[] trueVel = trueVelEcef.get(time);
 			int timeDiff = (int) Math.round((time - time0) / 1e3);
+			
 			for (int j = 0; j < m; j++) {
 				double[] arr = estPosMap.get(estType).get(i);
 				if ((j + 3) < arr.length) {
@@ -126,16 +128,14 @@ public class Analyzer {
 			 * 
 			 * } } }
 			 */
-			GraphPlotter chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
-					satResMap.get(Measurement.Doppler).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
-			chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+//			GraphPlotter chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+//					satResMap.get(Measurement.Doppler).get(estType));
+//			chart.pack();
+//			RefineryUtilities.positionFrameRandomly(chart);
+//			chart.setVisible(true);
+			GraphPlotter.graphOutlier("Outlier in Pseudorange, based on Baarda's method", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+			
 		}
 
 		// GraphPlotter.graphIMU(imuMap);
@@ -226,22 +226,17 @@ public class Analyzer {
 			GraphPlotter.graphTrueError("Error in Range-Rate(in m/s)", dopplerMap);
 
 			if (outlierAnalyze) {
-				GraphPlotter chart = new GraphPlotter("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
+				GraphPlotter.graphOutlier("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
 						satResMap.get(Measurement.Doppler).get(estType));
-				chart.pack();
-				RefineryUtilities.positionFrameRandomly(chart);
-				chart.setVisible(true);
+				
 			}
 
 		}
 
 		
 		if (outlierAnalyze) {
-			GraphPlotter chart = new GraphPlotter("Outlier in Range, based on DIA method(in m)", rangeMap,
+			GraphPlotter.graphOutlier("Outlier in Range, based on DIA method(in m)", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
 		}
 
 		// GraphPlotter.graphIMU(imuMap);

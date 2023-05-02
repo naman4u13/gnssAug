@@ -36,7 +36,7 @@ public class EKFDoppler {
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
-	final static private double priorVarOfUnitW = Math.pow(13.9,2);
+	final static private double priorVarOfUnitW =  Math.pow(7,2);
 	
 	static private double[] prevVel;
 	static private SimpleMatrix prev_Cxx_dot_hat;
@@ -88,7 +88,7 @@ public class EKFDoppler {
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long time = timeList.get(0);
-		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), false, true, true, false,
+		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), false, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 		prev_Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
 		// Start from 2nd epoch
@@ -96,7 +96,7 @@ public class EKFDoppler {
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - time) / 1e3;
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
-			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS);
+			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS,doTest);
 			runFilter(X, currentTime, deltaT, satList, obsvCodeList,Cxx_dot_hat, doAnalyze, doTest, outlierAnalyze,useIGS);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
@@ -121,11 +121,11 @@ public class EKFDoppler {
 		return estStateMap;
 	}
 
-	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS)
+	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS,boolean doTest)
 			throws Exception {
 
 		
-		double[] vel = LinearLeastSquare.getEstVel(satList, false, true, true, false,
+		double[] vel = LinearLeastSquare.getEstVel(satList, false, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 		double[] avg_vel = new double[vel.length];
 		for (int i = 0; i < vel.length; i++) {
@@ -244,7 +244,9 @@ public class EKFDoppler {
 		}
 		if (doTest && outlierAnalyze) {
 			kfObj.setState_ProcessCov(new SimpleMatrix(3 + m, 1), priorP);
-			X = new SimpleMatrix(priorX);
+			for (int i = 0; i < 3 + m; i++) {
+				X.set(i, priorX.get(i));
+			}
 			kfObj.predict();
 			Object[] params = performTesting(R, H, n, m, satList, testedSatList, z, ze);
 			R = (SimpleMatrix) params[0];
@@ -252,12 +254,12 @@ public class EKFDoppler {
 			z = (double[][]) params[2];
 			ze = (double[][]) params[3];
 			kfObj.update(z, R, ze, H);
+			x = kfObj.getState();
 			for (int i = 0; i < 3 + m; i++) {
 				X.set(i, X.get(i) + x.get(i));
 				x.set(i, 0);
 			}
 		}
-
 	}
 	
 	// Residual Based Testing
