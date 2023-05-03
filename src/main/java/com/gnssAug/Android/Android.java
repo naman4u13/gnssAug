@@ -256,11 +256,12 @@ public class Android {
 				}
 
 			}
+			boolean useDoppler = true;
 			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8
 					|| estimatorType == 9 || estimatorType == 11) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
-				boolean useDoppler = false;
+				
 				TreeMap<Long, double[]> estStateMap_pos = null;
 				TreeMap<Long, double[]> estStateMap_vel = null;
 				TreeMap<Long, double[]> estStateMap_vel_doppler = null;
@@ -276,6 +277,7 @@ public class Android {
 					case 5:
 						// Implement EKF based on receiver’s position and clock offset errors as a
 //					 random walk process
+						useDoppler = false;
 						estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
 						estName = "EKF - pos. random walk";
@@ -290,6 +292,7 @@ public class Android {
 					case 6:
 //					 Implement EKF based on receiver’s velocity and clock drift errors as a random
 //					 walk process
+						useDoppler = false;
 						estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
 						estName = "EKF - vel. random walk";
@@ -316,7 +319,7 @@ public class Android {
 //					 walk process along with doppler updates
 						estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze);
-						useDoppler = true;
+						
 						estName = "EKF - vel. random walk + doppler";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
@@ -342,7 +345,7 @@ public class Android {
 	
 						estStateMap_vel_doppler_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze,true);
-						useDoppler = true;
+						
 						estName = "EKF - vel. random walk + doppler + complementary equivalent";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
@@ -378,14 +381,16 @@ public class Android {
 						satInnMap.get(meas).put(estName, new HashMap<String, ArrayList<SatResidual>>());
 
 					}
-
 					satCountMap.put(Measurement.Pseudorange, new TreeMap<String, ArrayList<Long>>());
 					Cxx_hat_map.put(State.Position, new HashMap<String, ArrayList<SimpleMatrix>>());
 					Cxx_hat_map.put(State.Velocity, new HashMap<String, ArrayList<SimpleMatrix>>());
 					ArrayList<double[]> redundancyList = ekf.getRedundancyList(Measurement.Pseudorange);
 					GraphPlotter.graphRedundancy(redundancyList, "Pseudorange ");
-					redundancyList = ekf.getRedundancyList(Measurement.Doppler);
-					GraphPlotter.graphRedundancy(redundancyList, "Doppler ");
+					if(useDoppler)
+					{
+						redundancyList = ekf.getRedundancyList(Measurement.Doppler);
+						GraphPlotter.graphRedundancy(redundancyList, "Doppler ");
+					}
 					for (int i = 0; i < n; i++) {
 						long time = timeList.get(i);
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
@@ -395,7 +400,7 @@ public class Android {
 						}
 						HashMap<Measurement, double[]> residualMap = ekf.getResidualMap().get(time);
 						int l = satList.size();
-						long tRx =  Math.round(time/1000.0);
+						double tRx =  time/1000.0;
 						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < l; j++) {
 							Satellite sat = satList.get(j);
@@ -440,6 +445,8 @@ public class Android {
 
 			if (estimatorType == 10 || estimatorType == 11) {
 				String estName = "EKF - Doppler";
+				// Doppler is used but no velocity is computed therefore useDoppler is set as false
+				useDoppler = false;
 				EKFDoppler ekf = new EKFDoppler();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze);
@@ -472,7 +479,7 @@ public class Android {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						int m = satList.size();
-						long tRx = Math.round(time/1000.0);
+						double tRx =  time/1000.0;
 						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
@@ -525,7 +532,7 @@ public class Android {
 //						imuList);
 			if (doAnalyze) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
-						outlierAnalyze);
+						outlierAnalyze,useDoppler);
 			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
@@ -615,8 +622,11 @@ public class Android {
 					double[] estVel = estVelList.get(i);
 					long time = timeList.get(i);
 					if (estVel == null || !trueVelEcef.containsKey(time)) {
+						if(!trueVelEcef.containsKey(time)&&(estVel != null))
+						{
 						enuVelList.add(new double[3]);
 						removalList.add(i);
+						}
 						continue;
 					}
 					double[] trueVel = trueVelEcef.get(time);

@@ -24,7 +24,7 @@ public class Analyzer {
 			TreeMap<Long, double[]> trueVelEcef, TreeMap<String, ArrayList<double[]>> estPosMap,
 			TreeMap<String, ArrayList<double[]>> estVelMap,
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap,
-			boolean outlierAnalyze) throws Exception {
+			boolean outlierAnalyze,boolean useDoppler) throws Exception {
 
 		HashMap<String, TreeMap<Integer, double[]>> dopplerMap = new HashMap<String, TreeMap<Integer, double[]>>();
 		HashMap<String, TreeMap<Integer, double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
@@ -64,7 +64,7 @@ public class Analyzer {
 //					rangeMap.computeIfAbsent("RxClkOff(offset of 100 added) " + obsvCodeList[j],
 //							k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] {rxClkOff[j],0});
 				}
-				if (!estType.equals("EKF - Doppler")) {
+				if (useDoppler) {
 					arr = estVelMap.get(estType).get(i);
 					if ((j + 3) < arr.length) {
 					rxClkDrift[j] = arr[j + 3];
