@@ -82,7 +82,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test2";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -301,8 +301,14 @@ public class Android {
 							double[] estPos = null;
 							double[] estVel = null;
 							if (estState != null) {
-								estPos = new double[] { estState[0], estState[1], estState[2] };
-								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
+								estPos = new double[3+m];
+								estVel = new double[3+m];
+								for(int j=0;j<3+m;j++)
+								{
+									estPos[j] = estState[j];
+									estVel[j] = estState[j+3+m];
+								}
+							
 							}
 							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estPos);
 							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estVel);
@@ -324,8 +330,13 @@ public class Android {
 							double[] estPos = null;
 							double[] estVel = null;
 							if (estState != null) {
-								estPos = new double[] { estState[0], estState[1], estState[2] };
-								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
+								estPos = new double[3+m];
+								estVel = new double[3+m];
+								for(int j=0;j<3+m;j++)
+								{
+									estPos[j] = estState[j];
+									estVel[j] = estState[j+3+m];
+								}
 							}
 							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estPos);
 							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estVel);
@@ -346,8 +357,13 @@ public class Android {
 							double[] estPos = null;
 							double[] estVel = null;
 							if (estState != null) {
-								estPos = new double[] { estState[0], estState[1], estState[2] };
-								estVel = new double[] { estState[0 + 3 + m], estState[1 + 3 + m], estState[2 + 3 + m] };
+								estPos = new double[3+m];
+								estVel = new double[3+m];
+								for(int j=0;j<3+m;j++)
+								{
+									estPos[j] = estState[j];
+									estVel[j] = estState[j+3+m];
+								}
 							}
 							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estPos);
 							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estVel);
@@ -383,12 +399,15 @@ public class Android {
 					for (int i = 0; i < n; i++) {
 						long time = timeList.get(i);
 						HashMap<Measurement, ArrayList<Satellite>> satListMap = ekf.getSatListMap().get(time);
+						
 						if (satListMap == null) {
 							continue;
 						}
 						HashMap<Measurement, double[]> residualMap = ekf.getResidualMap().get(time);
 						HashMap<Measurement, Long> satCount = ekf.getSatCountMap().get(time);
 						HashMap<Measurement, Double> postVarOfUnitW = ekf.getPostVarOfUnitWMap().get(time);
+						HashMap<Measurement, double[]> innovation = ekf.getInnovationMap().get(time);
+						ArrayList<Satellite> originalSatList = satMap.get(time); 
 						double tRx = time / 1000.0;
 						for (Measurement meas : satListMap.keySet()) {
 							ArrayList<Satellite> satList = satListMap.get(meas);
@@ -400,12 +419,15 @@ public class Android {
 												k -> new ArrayList<SatResidual>())
 										.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residualMap.get(meas)[j],
 												sat.isOutlier()));
-
+								if(!outlierAnalyze)
+								{
+									sat = originalSatList.get(j);
+								}
 								satInnMap.get(meas).get(estName)
 										.computeIfAbsent(sat.getObsvCode().charAt(0) + sat.getSvid() + "",
 												k -> new ArrayList<SatResidual>())
 										.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0],
-												ekf.getInnovationMap().get(time).get(meas)[j], sat.isOutlier()));
+												innovation.get(meas)[j], sat.isOutlier()));
 
 							}
 							satCountMap.get(meas).computeIfAbsent(estName, k -> new ArrayList<Long>())
@@ -505,10 +527,7 @@ public class Android {
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 //				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 //						imuList);
-			if (doAnalyze) {
-				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
-						outlierAnalyze, useDoppler);
-			}
+			
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
@@ -745,6 +764,10 @@ public class Android {
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 
 				}
+			}
+			if (doAnalyze) {
+				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
+						outlierAnalyze, useDoppler);
 			}
 
 		} catch (

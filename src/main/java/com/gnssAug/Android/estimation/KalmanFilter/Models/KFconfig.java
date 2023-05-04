@@ -90,7 +90,7 @@ public class KFconfig extends KF {
 				// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 				double[] q = new double[3 + m];
 				IntStream.range(0, 3).forEach(i -> q[i] = qENU[i]);
-				IntStream.range(3, 3 + m).forEach(i -> q[i] = 25);
+				IntStream.range(3, 3 + m).forEach(i -> q[i] = 100000);
 
 				for (int i = 0; i < 3 + m; i++) {
 					_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;

@@ -34,17 +34,19 @@ public class Analyzer {
 		}
 		long time0 = satMap.firstKey();
 		String estType = estPosMap.firstKey();
-		if (estType.equals("EKF - Doppler")) {
+		// Don't require to remove velocity estimate or truth value for first epoch, see below
+		if (!(estType.equals("LS")||estType.equals("WLS"))) {
 			estPosMap.get(estType).remove(0);
 			satMap.remove(satMap.firstKey());
 			truePosEcef.remove(0);
-			
+
 		}
 		int i = 0;
 		for (Long time : satMap.keySet()) {
 			double[] truePos = truePosEcef.get(i);
 			i++;
 			// true velocity list does not contain value for first and last epoch
+			// Since EKF also doesn't estimates for first epoch, this works well 
 			if (!trueVelEcef.containsKey(time)) {
 				continue;
 			}
@@ -56,7 +58,7 @@ public class Analyzer {
 
 			double[] trueVel = trueVelEcef.get(time);
 			int timeDiff = (int) Math.round((time - time0) / 1e3);
-			
+
 			for (int j = 0; j < m; j++) {
 				double[] arr = estPosMap.get(estType).get(i);
 				if ((j + 3) < arr.length) {
@@ -67,7 +69,7 @@ public class Analyzer {
 				if (useDoppler) {
 					arr = estVelMap.get(estType).get(i);
 					if ((j + 3) < arr.length) {
-					rxClkDrift[j] = arr[j + 3];
+						rxClkDrift[j] = arr[j + 3];
 //						dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
 //							k -> new TreeMap<Integer, double[]>()).put(timeDiff,new double[] {rxClkDrift[j],0});
 					}
@@ -95,9 +97,9 @@ public class Analyzer {
 				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
 				String code = sat.getObsvCode().charAt(0) + "";
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] {(range - trueRange),elevAngle});
+						new double[] { (range - trueRange), elevAngle });
 				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] {(rangeRate - trueRangeRate),elevAngle});
+						new double[] { (rangeRate - trueRangeRate), elevAngle });
 			}
 
 		}
@@ -135,7 +137,7 @@ public class Analyzer {
 //			chart.setVisible(true);
 			GraphPlotter.graphOutlier("Outlier in Pseudorange, based on Baarda's method", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
-			
+
 		}
 
 		// GraphPlotter.graphIMU(imuMap);
@@ -149,8 +151,8 @@ public class Analyzer {
 			boolean outlierAnalyze) throws Exception {
 //		final double pseudorange_priorSigmaOfUnitW = Math.sqrt(0.182);
 //		final double doppler_priorSimgaOfUnitW = Math.sqrt(2.397e-4);
-		HashMap<String, TreeMap<Integer,  double[]>> dopplerMap = new HashMap<String, TreeMap<Integer,  double[]>>();
-		HashMap<String, TreeMap<Integer,  double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
+		HashMap<String, TreeMap<Integer, double[]>> dopplerMap = new HashMap<String, TreeMap<Integer, double[]>>();
+		HashMap<String, TreeMap<Integer, double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
 		long time0 = satMap.firstKey();
 		double alpha = 0.01;
 		String estType = "LS";
@@ -171,11 +173,13 @@ public class Analyzer {
 			for (int j = 0; j < m; j++) {
 				rxClkOff[j] = estPosMap.get(estType).get(i)[j + 3];
 				rangeMap.computeIfAbsent("RxClkOff(offset of 10 added) " + obsvCodeList[j],
-						k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] {10 + rxClkOff[j],0});
+						k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] { 10 + rxClkOff[j], 0 });
 				if (estType.equals("WLS") || estType.equals("LS")) {
 					rxClkDrift[j] = estVelMap.get(estType).get(i)[j + 3];
-					dopplerMap.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
-							k -> new TreeMap<Integer, double[]>()).put(timeDiff, new double[] {10 + rxClkDrift[j],0});
+					dopplerMap
+							.computeIfAbsent("RxClkDrift(offset of 10 added) " + obsvCodeList[j],
+									k -> new TreeMap<Integer, double[]>())
+							.put(timeDiff, new double[] { 10 + rxClkDrift[j], 0 });
 				}
 			}
 
@@ -196,7 +200,7 @@ public class Analyzer {
 				String code = sat.getObsvCode().charAt(0) + "";
 				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] {(range - trueRange),elevAngle});
+						new double[] { (range - trueRange), elevAngle });
 				if (estType.equals("WLS") || estType.equals("LS")) {
 					double[] satVel = sat.getSatVel();
 					double[] relVel = IntStream.range(0, 3).mapToDouble(k -> satVel[k] - trueVel[k]).toArray();
@@ -211,7 +215,7 @@ public class Analyzer {
 					}
 
 					dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-							new double[] {(rangeRate - trueRangeRate),elevAngle});
+							new double[] { (rangeRate - trueRangeRate), elevAngle });
 				}
 
 			}
@@ -220,20 +224,19 @@ public class Analyzer {
 
 		// findOutliers(satMap, rangeMap, alpha);
 		GraphPlotter.graphTrueError("Error in Range(in m)", rangeMap);
-		
+
 		if (estType.equals("WLS") || estType.equals("LS")) {
-			
+
 			GraphPlotter.graphTrueError("Error in Range-Rate(in m/s)", dopplerMap);
 
 			if (outlierAnalyze) {
 				GraphPlotter.graphOutlier("Outlier in Doppler, based on DIA method(in m/s)", dopplerMap,
 						satResMap.get(Measurement.Doppler).get(estType));
-				
+
 			}
 
 		}
 
-		
 		if (outlierAnalyze) {
 			GraphPlotter.graphOutlier("Outlier in Range, based on DIA method(in m)", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
