@@ -68,7 +68,7 @@ public class KFconfig extends KF {
 					Q.set(i + 3 + m, i + 3 + m, 1e10);
 				}
 				for (int i = m; i < 3 + m; i++) {
-					Q.set(i, i, 100000);
+					Q.set(i, i, 1e5);
 				}
 //				if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 //
@@ -78,10 +78,6 @@ public class KFconfig extends KF {
 
 			} else {
 				int n = 6 + (2 * m);
-//			if(useDoppler)
-//			{
-//				n = n+1;
-//			}
 				double[][] phi = new double[n][n];
 				double[][] _Q = new double[n][n];
 				IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
@@ -113,11 +109,6 @@ public class KFconfig extends KF {
 					R.set(3 + i, 3 + i, 1);
 					R.set(6 + m + i, 6 + m + i, 1);
 				}
-//			if(useDoppler)
-//			{
-//				R.set(n-1,n-1,1);
-//				_Q[n-1][n-1] = 1e-10;
-//			}
 				SimpleMatrix Q = new SimpleMatrix(_Q);
 				Q = R.mult(Q).mult(R.transpose());
 				if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {

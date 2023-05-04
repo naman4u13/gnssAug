@@ -9,6 +9,7 @@ import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
@@ -36,7 +37,7 @@ public class EKFDoppler {
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
-	final static private double priorVarOfUnitW =  Math.pow(7.47, 2);
+	
 	
 	static private double[] prevVel;
 	static private SimpleMatrix prev_Cxx_dot_hat;
@@ -133,7 +134,7 @@ public class EKFDoppler {
 			X.set(i, X.get(i) + (avg_vel[i]* deltaT));
 		}
 		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
-		SimpleMatrix avg_Cxx_dot_hat =  Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.5);
+		SimpleMatrix avg_Cxx_dot_hat =  Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.25);
 		prevVel = Arrays.copyOf(vel, vel.length);
 		prev_Cxx_dot_hat = new SimpleMatrix(Cxx_dot_hat);
 		return avg_Cxx_dot_hat;
@@ -190,7 +191,7 @@ public class EKFDoppler {
 			}
 		} else {
 			for (int i = 0; i < n; i++) {
-				_R[i][i] = priorVarOfUnitW;
+				_R[i][i] = GnssDataConfig.pseudorange_priorVarOfUnitW;
 			}
 		}
 		/*

@@ -12,6 +12,7 @@ import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
@@ -30,8 +31,7 @@ public class LinearLeastSquare {
 
 	private static double[] dop;
 	private static HashMap<Measurement, ArrayList<Satellite>> testedSatListMap = new HashMap<Measurement, ArrayList<Satellite>>();
-	final private static double pseudorange_priorVarOfUnitW =  Math.pow(7.47, 2);
-	final private static double doppler_priorVarOfUnitW =Math.pow(0.48, 2);
+	
 
 	public static double[] getEstPos(ArrayList<Satellite> satList, boolean isWLS, boolean useIGS) throws Exception {
 		return process(satList, isWLS, false, false, false, Measurement.Pseudorange, null, useIGS);
@@ -216,9 +216,9 @@ public class LinearLeastSquare {
 
 		} else {
 			if (type == Measurement.Pseudorange) {
-				priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+				priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;
 			} else if (type == Measurement.Doppler) {
-				priorVarOfUnitW = doppler_priorVarOfUnitW;
+				priorVarOfUnitW = GnssDataConfig.doppler_priorVarOfUnitW;
 			}
 			double[][] cov = new double[n][n];
 			double max = Double.MIN_VALUE;
@@ -384,9 +384,9 @@ public class LinearLeastSquare {
 
 		} else {
 			if (type == Measurement.Pseudorange) {
-				priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+				priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;
 			} else if (type == Measurement.Doppler) {
-				priorVarOfUnitW = doppler_priorVarOfUnitW;
+				priorVarOfUnitW = GnssDataConfig.doppler_priorVarOfUnitW;
 			}
 			double[][] cov = new double[n][n];
 			double max = Double.MIN_VALUE;

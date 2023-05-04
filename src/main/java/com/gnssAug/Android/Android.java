@@ -26,6 +26,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
@@ -82,13 +83,16 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\test3";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-SJC-1\\test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
 			System.setOut(stream);
 			System.out.println("Discarded Satellites: " + discardSet.toString());
+			System.out.println("Elevation Mask in degrees = " + cutOffAng);
+			System.out.println("pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
+			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
 			ArrayList<double[]> rxLLH = GroundTruth.processCSV(GTcsv);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
@@ -186,7 +190,7 @@ public class Android {
 										estEcefClk, useIGS);
 								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 							}
-							if (doAnalyze) {
+							if (doAnalyze&&estimatorType!=11) {
 
 								double[] residual = LinearLeastSquare.getResidual(type);
 								SimpleMatrix Cyy = LinearLeastSquare.getCyy(type);
@@ -269,7 +273,7 @@ public class Android {
 				int n = timeList.size();
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
-				if (((estimatorType == 9) || (estimatorType == 11)) && (!doAnalyze)) {
+				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11)) ) {
 					estTypes = new int[] { 5, 6, 7, 8 };
 				}
 				for (int type : estTypes) {
@@ -375,7 +379,7 @@ public class Android {
 					}
 				}
 
-				if (doAnalyze) {
+				if (doAnalyze&&estimatorType!=11) {
 					Measurement[] measArr = useDoppler
 							? new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }
 							: new Measurement[] { Measurement.Pseudorange };
@@ -442,6 +446,9 @@ public class Android {
 						}
 
 					}
+					
+						GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
+					
 				}
 
 			}
@@ -457,7 +464,7 @@ public class Android {
 				int n = timeList.size();
 				estPosMap.put(estName, new ArrayList<double[]>());
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				if (doAnalyze) {
+				if (doAnalyze&&estimatorType!=11) {
 					satResMap.put(Measurement.Pseudorange,
 							new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 					satResMap.get(Measurement.Pseudorange).put(estName, new HashMap<String, ArrayList<SatResidual>>());
@@ -477,7 +484,7 @@ public class Android {
 					if (estPos == null) {
 						continue;
 					}
-					if (doAnalyze) {
+					if (doAnalyze&&estimatorType!=11) {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						int m = satList.size();
@@ -519,7 +526,7 @@ public class Android {
 
 					}
 				}
-				if (doAnalyze) {
+				if (doAnalyze&&estimatorType!=11) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
@@ -756,7 +763,7 @@ public class Android {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
 				}
-				if (doAnalyze) {
+				if (doAnalyze&&estimatorType!=11) {
 					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 					// GraphPlotter.graphDOP(dopMap,
@@ -765,7 +772,7 @@ public class Android {
 
 				}
 			}
-			if (doAnalyze) {
+			if (doAnalyze&&estimatorType!=11) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}
