@@ -134,7 +134,7 @@ public class EKFDoppler {
 			X.set(i, X.get(i) + (avg_vel[i]* deltaT));
 		}
 		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler,"ECEF");
-		SimpleMatrix avg_Cxx_dot_hat =  Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.25);
+		SimpleMatrix avg_Cxx_dot_hat =  Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.5);
 		prevVel = Arrays.copyOf(vel, vel.length);
 		prev_Cxx_dot_hat = new SimpleMatrix(Cxx_dot_hat);
 		return avg_Cxx_dot_hat;
@@ -468,7 +468,7 @@ public class EKFDoppler {
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
-			csd = new ChiSquaredDistribution(_n - 1);
+			csd = new ChiSquaredDistribution(_n);
 			globalPVal = 1 - csd.cumulativeProbability(globalTq);
 		}
 		return new Object[] { R, H, z, ze };
