@@ -1,6 +1,6 @@
 package com.gnssAug.Android.models;
 
-public class Satellite extends GNSSLog {
+public class Satellite extends GNSSLog implements Cloneable {
 
 	// Note this is GPS System time at time of Transmission
 	private double t;
@@ -16,7 +16,6 @@ public class Satellite extends GNSSLog {
 	private boolean isOutlier;
 	// Experimental param, true range of satellite
 	private double trueRange;
-	
 
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate) {
 		super(log);
@@ -27,8 +26,17 @@ public class Satellite extends GNSSLog {
 		this.rangeRate = rangeRate;
 		compECI();
 
+	} 
+	
+	@Override
+	public Satellite clone() throws CloneNotSupportedException {
+	    Satellite cloned = (Satellite) super.clone();
+	    cloned.satEcef = this.satEcef.clone();
+	    cloned.satVel = this.satVel.clone();
+	    cloned.satEci = this.satEci.clone();
+	    cloned.elevAzm = this.elevAzm.clone();
+	    return cloned;
 	}
-
 	private void compECI() {
 		satEci = new double[3];
 		final double OMEGA_E_DOT = 7.2921151467E-5;// WGS-84 value of the Earth's rotation rate
@@ -84,7 +92,7 @@ public class Satellite extends GNSSLog {
 	public void setOutlier(boolean isOutlier) {
 		this.isOutlier = isOutlier;
 	}
-	
+
 	public double getTrueRange() {
 		return trueRange;
 	}

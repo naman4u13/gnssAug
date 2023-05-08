@@ -2,7 +2,7 @@ package com.gnssAug.Android.models;
 
 import java.util.Map;
 
-public class GNSSLog {
+public class GNSSLog implements Cloneable {
 
 	private static final long nanosInWeek = (long) (604800 * 1e9);
 	private static final Map<Integer, String> freqMap = Map.of(1176450050, "5", 1575420030, "1", 1602000000, "1",
@@ -54,6 +54,10 @@ public class GNSSLog {
 	// GPS week;
 	private int weekNo;
 
+	public GNSSLog()
+	{
+		super();
+	}
 	public GNSSLog(GNSSLog log) {
 		super();
 		this.utcTimeMillis = log.utcTimeMillis;
@@ -347,4 +351,9 @@ public class GNSSLog {
 		return weekNo;
 	}
 
+	@Override
+	public GNSSLog clone() throws CloneNotSupportedException {
+	    GNSSLog cloned = (GNSSLog) super.clone();
+	    return cloned;
+	}
 }

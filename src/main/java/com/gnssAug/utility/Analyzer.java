@@ -135,6 +135,10 @@ public class Analyzer {
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
+			if (useDoppler) {
+			GraphPlotter.graphOutlier("Outlier in Doppler, based on Baarda's method", dopplerMap,
+					satResMap.get(Measurement.Doppler).get(estType));
+			}
 			GraphPlotter.graphOutlier("Outlier in Pseudorange, based on Baarda's method", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
 

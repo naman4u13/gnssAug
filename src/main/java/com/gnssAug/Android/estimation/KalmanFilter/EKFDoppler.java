@@ -16,6 +16,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
+import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
@@ -126,7 +127,7 @@ public class EKFDoppler {
 			throws Exception {
 
 		
-		double[] vel = LinearLeastSquare.getEstVel(satList, false, true, doTest, false,
+		double[] vel = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), false, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 		double[] avg_vel = new double[vel.length];
 		for (int i = 0; i < vel.length; i++) {

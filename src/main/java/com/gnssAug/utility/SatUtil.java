@@ -36,5 +36,16 @@ public class SatUtil {
 		return unitLOS;
 
 	}
+	
+	public static ArrayList<Satellite> createCopy(ArrayList<Satellite> original) throws CloneNotSupportedException
+	{
+		int n = original.size();
+		ArrayList<Satellite> copy = new ArrayList<Satellite>(n);
+		for(int i=0;i<n;i++)
+		{
+			copy.add(original.get(i).clone());
+		}
+		return copy;
+	}
 
 }

@@ -16,6 +16,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
+import com.gnssAug.utility.SatUtil;
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
@@ -53,14 +54,8 @@ public class EKF {
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean complementary) throws Exception {
-		return process(SatMap, timeList, flag, useDoppler, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze,
-				complementary, false);
-	}
 
-	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
-			Flag flag, boolean useDoppler, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean complementary, boolean useEstVel) throws Exception {
-
+		
 		int n = 0;
 		int m = obsvCodeList.length;
 		/* constant position model - state vector(n=5) -> (x,y,z,cdt,cdt_dot) */
@@ -120,13 +115,13 @@ public class EKF {
 		}
 		// Begin iteration or recursion
 		return iterate(SatMap, timeList, flag, useDoppler, obsvCodeList, doAnalyze, doTest, outlierAnalyze, useIGS,
-				complementary, useEstVel);
+				complementary);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean useIGS, boolean complementary, boolean useEstVel) throws Exception {
+			boolean outlierAnalyze, boolean useIGS, boolean complementary) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		Measurement[] measArr = useDoppler ? new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }
 				: new Measurement[] { Measurement.Pseudorange };
@@ -139,7 +134,7 @@ public class EKF {
 			double deltaT = (currentTime - time) / 1e3;
 			// Perform Predict and Update
 			runFilter(deltaT, satList, flag, useDoppler, obsvCodeList, useIGS, currentTime, doAnalyze, doTest,
-					outlierAnalyze, complementary, measArr, useEstVel);
+					outlierAnalyze, complementary, measArr);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
@@ -160,11 +155,7 @@ public class EKF {
 				IntStream.range(3, 3 + m).forEach(j -> R.set(j, j, 1));
 				if (flag == Flag.VELOCITY) {
 					R.insertIntoThis(3 + m, 3 + m, rotMat);
-					IntStream.range(3 + (2 * m), 6 + (2 * m)).forEach(j -> R.set(j, j, 1));
-//					if(useDoppler)
-//					{
-//						R.set(n-1, n-1, 1);
-//					}
+					IntStream.range(6 + m, 6 + (2 * m)).forEach(j -> R.set(j, j, 1));
 				} else {
 					IntStream.range(3 + m, 3 + (2 * m)).forEach(j -> R.set(j, j, 1));
 				}
@@ -201,7 +192,7 @@ public class EKF {
 
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler,
 			String[] obsvCodeList, boolean useIGS, long currentTime, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean complementary, Measurement[] measArr, boolean useEstVel) throws Exception {
+			boolean outlierAnalyze, boolean complementary, Measurement[] measArr) throws Exception {
 
 		boolean isWeighted = false;
 		boolean useAndroidW = false;
@@ -218,20 +209,12 @@ public class EKF {
 
 		SimpleMatrix x = kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-		double[] estVel_Z = null;
-		SimpleMatrix Czz_estVel = null;
-		int size = useDoppler ? 2 * n : n;
-		if (useEstVel) {
-			estVel_Z = LinearLeastSquare.getEstVel(satList, false, true, doTest, false, estPos, useIGS);
-			Czz_estVel = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
-			size = n + 3 + m;
-		}
 		/*
 		 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
 		 * with respect to x
 		 */
-		SimpleMatrix H = getJacobian(satList, estPos, flag, useDoppler, obsvCodeList, useEstVel);
-		Object[] z_ze_res = get_z_ze_res(x, satList, obsvCodeList, H, useDoppler, useEstVel, estVel_Z);
+		SimpleMatrix H = getJacobian(satList, estPos, flag, useDoppler, obsvCodeList);
+		Object[] z_ze_res = get_z_ze_res(x, satList, obsvCodeList, H, useDoppler);
 
 		// Measurement vector
 		double[][] z = (double[][]) z_ze_res[0];
@@ -239,7 +222,7 @@ public class EKF {
 		double[][] ze = (double[][]) z_ze_res[1];
 		// Innovation vector
 		innovation = (double[]) z_ze_res[2];
-
+		int size = useDoppler ? 2 * n : n;
 		// Measurement Noise
 		SimpleMatrix R = new SimpleMatrix(size, size);
 
@@ -248,7 +231,6 @@ public class EKF {
 				for (int i = 0; i < n; i++) {
 					R.set(i, i, Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2));
 					if (useDoppler) {
-
 						R.set(i + n, i + n, Math.pow(satList.get(i).getPseudorangeRateUncertaintyMetersPerSecond(), 2));
 					}
 				}
@@ -270,22 +252,15 @@ public class EKF {
 					R.set(i + n, i + n, GnssDataConfig.doppler_priorVarOfUnitW);
 				}
 			}
-			if (useEstVel) {
-				for (int i = 0; i < 3 + m; i++) {
-					for (int j = 0; j < 3 + m; j++) {
-						R.set(i + n, j + n, Czz_estVel.get(i, j));
-					}
-				}
-			}
 		}
 		HashMap<Measurement, ArrayList<Satellite>> satMap = new HashMap<Measurement, ArrayList<Satellite>>();
 		HashMap<Measurement, ArrayList<Satellite>> testedSatMap = new HashMap<Measurement, ArrayList<Satellite>>();
 		for (Measurement meas : measArr) {
-			satMap.put(meas, new ArrayList<Satellite>(satList));
-			testedSatMap.put(meas, new ArrayList<Satellite>(satList));
+			satMap.put(meas, SatUtil.createCopy(satList));
+			testedSatMap.put(meas, new ArrayList<Satellite>(satMap.get(meas)));
 		}
 		if (doTest && !outlierAnalyze) {
-			Object[] params = performTesting(R, H, n, m, testedSatMap, satMap, z, ze, useDoppler, useEstVel);
+			Object[] params = performTesting(R, H, size, m, testedSatMap, satMap, z, ze, useDoppler);
 			R = (SimpleMatrix) params[0];
 			H = (SimpleMatrix) params[1];
 			z = (double[][]) params[2];
@@ -295,12 +270,12 @@ public class EKF {
 		kfObj.update(z, R, ze, H);
 		if (doAnalyze) {
 			performAnalysis(testedSatMap, satMap, R, H, priorP, currentTime, n, obsvCodeList, doTest, outlierAnalyze,
-					useDoppler, useEstVel);
+					useDoppler);
 		}
 		if (doTest && outlierAnalyze) {
 			kfObj.setState_ProcessCov(priorX, priorP);
 			kfObj.predict();
-			Object[] params = performTesting(R, H, n, m, testedSatMap, satMap, z, ze, useDoppler, useEstVel);
+			Object[] params = performTesting(R, H, size, m, testedSatMap, satMap, z, ze, useDoppler);
 			R = (SimpleMatrix) params[0];
 			H = (SimpleMatrix) params[1];
 			z = (double[][]) params[2];
@@ -312,7 +287,7 @@ public class EKF {
 	}
 
 	private SimpleMatrix getJacobian(ArrayList<Satellite> satList, double[] estECEF, Flag flag, boolean useDoppler,
-			String[] obsvCodeList, boolean useEstVel) {
+			String[] obsvCodeList) {
 		int n = satList.size();
 		int m = obsvCodeList.length;
 		int rows = n;
@@ -321,8 +296,7 @@ public class EKF {
 			stateN = 6 + (2 * m);
 			if (useDoppler) {
 				rows = 2 * n;
-			} else if (useEstVel) {
-				rows = n + 3 + m;
+				// stateN += 1;
 			}
 		}
 		double[][] H = new double[rows][stateN];
@@ -349,12 +323,7 @@ public class EKF {
 			}
 			if (useDoppler) {
 				IntStream.range(0, 3).forEach(j -> H[_i + n][j + 3 + m] = -LOS[j] / GR);
-			}
 
-		}
-		if (useEstVel) {
-			for (int i = 0; i < 3 + m; i++) {
-				H[i + n][i + 3 + m] = 1;
 			}
 		}
 
@@ -364,13 +333,12 @@ public class EKF {
 
 	private void performAnalysis(HashMap<Measurement, ArrayList<Satellite>> testedSatMap,
 			HashMap<Measurement, ArrayList<Satellite>> satMap, SimpleMatrix R, SimpleMatrix H, SimpleMatrix priorP,
-			long currentTime, int n, String[] obsvCodeList, boolean doTest, boolean outlierAnalyze, boolean useDoppler,
-			boolean useEstVel) {
+			long currentTime, int n, String[] obsvCodeList, boolean doTest, boolean outlierAnalyze,
+			boolean useDoppler) {
 
 		SimpleMatrix x = kfObj.getState();
 		int n_pr = testedSatMap.get(Measurement.Pseudorange).size();
 		int n_doppler = 0;
-
 		int size = n_pr;
 		double[] residual = (double[]) get_z_ze_res(x, testedSatMap, obsvCodeList, H, useDoppler)[2];
 		double[] pr_res = Arrays.copyOfRange(residual, 0, n_pr);
@@ -388,12 +356,11 @@ public class EKF {
 		SimpleMatrix Q = kfObj.getQ();
 		double rX = phi.mult(priorP).mult(phi.transpose()).mult(HtCvvInvH).trace();
 		double rW = Q.mult(HtCvvInvH).trace();
-		int rowNum = HK.numRows();
-		SimpleMatrix I_HK = SimpleMatrix.identity(rowNum).minus(HK);
+		int numRows = HK.numRows();
+		SimpleMatrix I_HK = SimpleMatrix.identity(numRows).minus(HK);
 		double rZ_pr = I_HK.extractMatrix(0, n_pr, 0, n_pr).trace();
 		double postVarOfUnitW_pr = e_post_hat_pr.transpose().mult(Cyy_inv_pr).mult(e_post_hat_pr).get(0) / rZ_pr;
 		double rZ_doppler = 0;
-		double rZ_estVel = 0;
 		if (useDoppler) {
 			n_doppler = testedSatMap.get(Measurement.Doppler).size();
 			size = size + n_doppler;
@@ -410,13 +377,10 @@ public class EKF {
 			residualMap.computeIfAbsent(currentTime, k -> new HashMap<Measurement, double[]>()).put(Measurement.Doppler,
 					doppler_res);
 
-		} else if (useEstVel) {
-			size += 3 + obsvCodeList.length;
-			rZ_estVel = I_HK.extractMatrix(n_pr, size, n_pr, size).trace();
 		}
-		double rZ = rZ_pr + rZ_doppler + rZ_estVel;
+		double rZ = rZ_pr + rZ_doppler;
 		double rSum = rX + rW + rZ;
-		if (Math.abs(rowNum - rSum) > 0.01) {
+		if (Math.abs(numRows - rSum) > 0.01) {
 			System.err.println("FATAL ERROR: Redundancy sum is wrong");
 		}
 		redundancyMap.computeIfAbsent(Measurement.Pseudorange, k -> new ArrayList<double[]>())
@@ -445,46 +409,36 @@ public class EKF {
 
 	}
 
-	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m,
+	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int size, int m,
 			HashMap<Measurement, ArrayList<Satellite>> testedSatMap, HashMap<Measurement, ArrayList<Satellite>> satMap,
-			double[][] z, double[][] ze, boolean useDoppler, boolean useEstVel) throws Exception {
+			double[][] z, double[][] ze, boolean useDoppler) throws Exception {
 		int n_pr = testedSatMap.get(Measurement.Pseudorange).size();
 		int n_doppler = 0;
-		int n_estVel = 0;
-		double rZ_estVel = 0;
 		int cols = H.numCols();
 		if (useDoppler) {
 			n_doppler = testedSatMap.get(Measurement.Doppler).size();
 		}
+		int _size = n_pr + n_doppler;
+		// Pre-fit residual/innovation
+		SimpleMatrix v = new SimpleMatrix(_size, 1, true, innovation);
 		SimpleMatrix P = kfObj.getCovariance();
 		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-		int _n = n_pr + n_doppler;
-		if (useEstVel) {
-			SimpleMatrix K = P.mult(H.transpose()).mult(Cvv.invert());
-			SimpleMatrix HK = H.mult(K);
-			SimpleMatrix I_HK = SimpleMatrix.identity(HK.numRows()).minus(HK);
-			rZ_estVel = I_HK.extractMatrix(n_pr, n_pr + 3 + m, n_pr, n_pr + 3 + m).trace();
-			n_estVel = 3 + m;
-			Cvv = Cvv.extractMatrix(0, _n, 0, _n);
-		}
 		SimpleMatrix Cvv_inv = Cvv.invert();
-		// Pre-fit residual/innovation
-		SimpleMatrix v = new SimpleMatrix(_n, 1, true, innovation);
 		double globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
-		ChiSquaredDistribution csd = new ChiSquaredDistribution(_n + n_estVel - rZ_estVel);
+		ChiSquaredDistribution csd = new ChiSquaredDistribution(size);
 		double alpha = 0.01;
 		if (globalTq == 0) {
 			throw new Exception("Error: T stat is zero");
 		}
 		// Detection
 		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
-		int limit = useDoppler ? n : (n / 2);
-		while (globalPVal < alpha && (_n > limit)) {
+
+		while (globalPVal < alpha && (_size > (size / 2))) {
 
 			double max_w = Double.MIN_VALUE;
 			int index = -1;
-			for (int i = 0; i < _n; i++) {
-				SimpleMatrix cv = new SimpleMatrix(_n, 1);
+			for (int i = 0; i < _size; i++) {
+				SimpleMatrix cv = new SimpleMatrix(_size, 1);
 				cv.set(i, 1);
 				double w = Math.abs(cv.transpose().mult(Cvv_inv).mult(v).get(0))
 						/ Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
@@ -510,23 +464,17 @@ public class EKF {
 			satList.get(satList.indexOf(testedSatList.remove(_index))).setOutlier(true);
 			satMap.put(meas, satList);
 			testedSatMap.put(meas, testedSatList);
-			_n = n_pr + n_doppler + n_estVel;
-			SimpleMatrix R_ = new SimpleMatrix(_n, _n);
-			double[][] z_ = new double[_n][1];
-			double[][] ze_ = new double[_n][1];
-			SimpleMatrix H_ = new SimpleMatrix(_n, cols);
-			SimpleMatrix v_ = new SimpleMatrix(_n, 1);
+			_size = n_pr + n_doppler;
+			SimpleMatrix R_ = new SimpleMatrix(_size, _size);
+			double[][] z_ = new double[_size][1];
+			double[][] ze_ = new double[_size][1];
+			SimpleMatrix H_ = new SimpleMatrix(_size, cols);
+			SimpleMatrix v_ = new SimpleMatrix(_size, 1);
 			int j = 0;
-			for (int i = 0; i < _n + 1; i++) {
+			for (int i = 0; i < _size + 1; i++) {
 				if (i != index) {
 					R_.set(j, j, R.get(i, i));
-					if (useEstVel) {
-						if (i <= n_pr) {
-							v_.set(j, v.get(i));
-						}
-					} else {
-						v_.set(j, v.get(i));
-					}
+					v_.set(j, v.get(i));
 					z_[j][0] = z[i][0];
 					ze_[j][0] = ze[i][0];
 					for (int k = 0; k < cols; k++) {
@@ -537,22 +485,20 @@ public class EKF {
 			}
 			R = new SimpleMatrix(R_);
 			H = new SimpleMatrix(H_);
-			z = new double[_n][1];
-			ze = new double[_n][1];
+			z = new double[_size][1];
+			ze = new double[_size][1];
 			v = new SimpleMatrix(v_);
-			for (int i = 0; i < _n; i++) {
+			for (int i = 0; i < _size; i++) {
 				z[i] = z_[i];
 				ze[i] = ze_[i];
 			}
 			Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-			_n -= n_estVel;
-			Cvv = Cvv.extractMatrix(0, _n, 0, _n);
 			Cvv_inv = Cvv.invert();
 			globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
 			if (globalTq == 0) {
 				throw new Exception("Error: T stat is zero");
 			}
-			csd = new ChiSquaredDistribution(_n +n_estVel  - rZ_estVel);
+			csd = new ChiSquaredDistribution(_size);
 			globalPVal = 1 - csd.cumulativeProbability(globalTq);
 		}
 		return new Object[] { R, H, z, ze };
@@ -568,6 +514,7 @@ public class EKF {
 		int size = n_pr;
 		double[] estVel = null;
 		double[] rxClkDrift = null;
+
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double[] rxClkOff = new double[m];// in meters
 		for (int i = 0; i < m; i++) {
@@ -632,16 +579,12 @@ public class EKF {
 
 	private Object[] get_z_ze_res(SimpleMatrix x, ArrayList<Satellite> satList, String[] obsvCodeList, SimpleMatrix H,
 			boolean useDoppler) {
-		return get_z_ze_res(x, satList, obsvCodeList, H, useDoppler, false, null);
-	}
-
-	private Object[] get_z_ze_res(SimpleMatrix x, ArrayList<Satellite> satList, String[] obsvCodeList, SimpleMatrix H,
-			boolean useDoppler, boolean useEstVel, double[] estVel_Z) {
 		int n = satList.size();
 		int m = obsvCodeList.length;
 		int size = n;
 		double[] estVel = null;
 		double[] rxClkDrift = null;
+
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double[] rxClkOff = new double[m];// in meters
 		for (int i = 0; i < m; i++) {
@@ -654,8 +597,6 @@ public class EKF {
 			for (int i = 0; i < m; i++) {
 				rxClkDrift[i] = x.get(6 + m + i);
 			}
-		} else if (useEstVel) {
-			size = n + 3 + m;
 		}
 		double[][] z = new double[size][1];
 		double[][] ze = new double[size][1];
@@ -676,7 +617,6 @@ public class EKF {
 			residual[i] = z[i][0] - ze[i][0];
 
 			if (useDoppler) {
-
 				double rangeRate = sat.getRangeRate();
 				SimpleMatrix satVel = new SimpleMatrix(3, 1, true, sat.getSatVel());
 				SimpleMatrix A = new SimpleMatrix(1, 3, true,
@@ -698,18 +638,6 @@ public class EKF {
 				ze[i + n][0] = estDopplerDerivedObs;
 				residual[i + n] = z[i + n][0] - ze[i + n][0];
 
-			}
-		}
-		if (useEstVel) {
-			for (int i = 0; i < 3; i++) {
-				z[i + n][0] = estVel_Z[i];
-				ze[i + n][0] = estVel[i];
-				residual[i + n] = z[i + n][0] - ze[i + n][0];
-			}
-			for (int i = 0; i < m; i++) {
-				z[i + 3 + n][0] = estVel_Z[3 + i];
-				ze[i + 3 + n][0] = rxClkDrift[i];
-				residual[i + 3 + n] = z[i + 3 + n][0] - ze[i + 3 + n][0];
 			}
 		}
 
