@@ -14,12 +14,11 @@ public class KFconfig extends KF {
 	private final double SpeedofLight = 299792458;
 	private final double c2 = SpeedofLight * SpeedofLight;
 	// Typical Allan Variance Coefficients for TCXO (low quality)
-	private final double h0 = ClockAllanVar.TCXO_low_quality.h0;
-	private final double h_2 = ClockAllanVar.TCXO_low_quality.h_2;
 	private final double sf = ClockAllanVar.TCXO_low_quality.sf;
 	private final double sg = ClockAllanVar.TCXO_low_quality.sg;
 
-	public void config(double deltaT, Flag flag, int m, boolean useDoppler, boolean complementary) throws Exception {
+	public void config(double deltaT, Flag flag, int m, boolean useDoppler, boolean complementary, boolean useEstVel)
+			throws Exception {
 
 		/*
 		 * The process noise for position vector will be initialized in ENU frame and
@@ -58,17 +57,19 @@ public class KFconfig extends KF {
 			super.configure(phi, Q);
 
 		} else if (flag == Flag.VELOCITY) {
-			if (useDoppler && complementary) {
+			if ((useDoppler || useEstVel) && complementary) {
 				int n = 6 + (2 * m);
 				double[][] phi = new double[n][n];
 				SimpleMatrix Q = new SimpleMatrix(n, n);
 				IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 				for (int i = 0; i < 3 + m; i++) {
 					phi[i][i + 3 + m] = deltaT;
-					Q.set(i + 3 + m, i + 3 + m, 1e10);
+					Q.set(i + 3 + m, i + 3 + m, 1e12);
 				}
-				for (int i = m; i < 3 + m; i++) {
-					Q.set(i, i, 1e5);
+				if (!useEstVel) {
+					for (int i = m; i < 3 + m; i++) {
+						Q.set(i, i, 1e5);
+					}
 				}
 //				if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 //
@@ -81,13 +82,14 @@ public class KFconfig extends KF {
 				double[][] phi = new double[n][n];
 				double[][] _Q = new double[n][n];
 				IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
-				// double[] qENU_std = new double[] { 8, 12, 2 };
-				double[] qENU = new double[] { 0.5, 0.5, 0.01 };
+				//double[] qENU = new double[] { 0.5, 0.5, 0.01 };
+				double[] qENU = new double[] { 0.005,0.005,0.001};
 				// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 				double[] q = new double[3 + m];
 				IntStream.range(0, 3).forEach(i -> q[i] = qENU[i]);
-				IntStream.range(3, 3 + m).forEach(i -> q[i] = 100000);
-
+				double _sf = useDoppler?25:sf;
+				double _sg = useDoppler?1e5:sg;
+				IntStream.range(3, 3 + m).forEach(i -> q[i] = _sg);
 				for (int i = 0; i < 3 + m; i++) {
 					_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
 					_Q[i][i + 3 + m] = q[i] * Math.pow(deltaT, 2) / 2;
@@ -95,7 +97,7 @@ public class KFconfig extends KF {
 					_Q[i + 3 + m][i + 3 + m] = q[i] * deltaT;
 					phi[i][i + 3 + m] = deltaT;
 				}
-				IntStream.range(3, 3 + m).forEach(i -> _Q[i][i] += (25 * deltaT));
+				IntStream.range(3, 3 + m).forEach(i -> _Q[i][i] += (_sf * deltaT));
 
 				SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(ecef);
 				SimpleMatrix R = new SimpleMatrix(n, n);
@@ -145,7 +147,7 @@ public class KFconfig extends KF {
 //			qENU[i] = 0.1;
 //		}
 		for (int i = 0; i < m; i++) {
-			qENU[i + 3] = 100000;
+			qENU[i + 3] = 1e5;
 		}
 		SimpleMatrix omega = new SimpleMatrix(n, n);
 		for (int i = 0; i < n; i++) {

@@ -83,7 +83,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-SJC-1\\test";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\SamsungS20Ultra_GPS_GAL_BDS_All_Estimators_wrongQ_IPIN";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -262,7 +262,7 @@ public class Android {
 			}
 			boolean useDoppler = true;
 			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8
-					|| estimatorType == 9 || estimatorType == 11) {
+					|| estimatorType == 9 || estimatorType == 11|| estimatorType == 12|| estimatorType == 13) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
 
@@ -270,11 +270,13 @@ public class Android {
 				TreeMap<Long, double[]> estStateMap_vel = null;
 				TreeMap<Long, double[]> estStateMap_vel_doppler = null;
 				TreeMap<Long, double[]> estStateMap_vel_doppler_complementary = null;
+				TreeMap<Long, double[]> estStateMap_vel_estVel = null;
+				TreeMap<Long, double[]> estStateMap_vel_estVel_complementary = null;
 				int n = timeList.size();
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
 				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11)) ) {
-					estTypes = new int[] { 5, 6, 7, 8 };
+					estTypes = new int[] { 5, 6, 7, 8,12,13 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -349,15 +351,43 @@ public class Android {
 
 						break;
 
-					case 8:
+//					case 8:
+//
+//						estStateMap_vel_doppler_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, true,
+//								useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze, true);
+//
+//						estName = "EKF - vel. random walk + doppler + complementary equivalent";
+//						for (int i = 0; i < n; i++) {
+//							long time = timeList.get(i);
+//							double[] estState = estStateMap_vel_doppler_complementary.get(time);
+//							double[] estPos = null;
+//							double[] estVel = null;
+//							if (estState != null) {
+//								estPos = new double[3+m];
+//								estVel = new double[3+m];
+//								for(int j=0;j<3+m;j++)
+//								{
+//									estPos[j] = estState[j];
+//									estVel[j] = estState[j+3+m];
+//								}
+//							}
+//							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estPos);
+//							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estVel);
+//
+//						}
+//
+//						break;
+					case 12:
+						useDoppler = false;
+						// Implement EKF based on receiver’s velocity and clock drift errors as a random
+//					 walk process along with estimated velocity updates
+						estStateMap_vel_estVel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS,
+								obsvCodeList, doAnalyze, doTest, outlierAnalyze,false,true);
 
-						estStateMap_vel_doppler_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, true,
-								useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze, true);
-
-						estName = "EKF - vel. random walk + doppler + complementary equivalent";
+						estName = "EKF - vel. random walk + est vel";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
-							double[] estState = estStateMap_vel_doppler_complementary.get(time);
+							double[] estState = estStateMap_vel_estVel.get(time);
 							double[] estPos = null;
 							double[] estVel = null;
 							if (estState != null) {
@@ -375,6 +405,32 @@ public class Android {
 						}
 
 						break;
+					case 13:
+						useDoppler = false;
+						// Implement EKF based on receiver’s velocity and clock drift errors as a random
+//					 walk process along with estimated velocity updates
+						estStateMap_vel_estVel_complementary = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS,
+								obsvCodeList, doAnalyze, doTest, outlierAnalyze,true,true);
+
+						estName = "EKF - vel. random walk + estVel + complementary equivalent";
+						for (int i = 0; i < n; i++) {
+							long time = timeList.get(i);
+							double[] estState = estStateMap_vel_estVel_complementary.get(time);
+							double[] estPos = null;
+							double[] estVel = null;
+							if (estState != null) {
+								estPos = new double[3+m];
+								estVel = new double[3+m];
+								for(int j=0;j<3+m;j++)
+								{
+									estPos[j] = estState[j];
+									estVel[j] = estState[j+3+m];
+								}
+							}
+							estPosMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estPos);
+							estVelMap.computeIfAbsent(estName, k -> new ArrayList<double[]>()).add(estVel);
+
+						}
 
 					}
 				}
