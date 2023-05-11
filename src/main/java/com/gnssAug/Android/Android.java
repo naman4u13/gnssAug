@@ -83,7 +83,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-28-US-MTV-1\\SamsungS20Ultra_GPS_GAL_BDS_All_Estimators_wrongQ_IPIN";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_BDS_noWeight_All_Estimators_IPIN";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;

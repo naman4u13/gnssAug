@@ -98,9 +98,8 @@ public class EKFDoppler {
 			double deltaT = (currentTime - time) / 1e3;
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest);
-//			if (i > 1994&&i<2000) {
-//				System.out.println("P(+) epoch " + (i - 1));
-//				System.out.println(kfObj.getCovariance());
+//			if (i<150) {
+//			System.out.println("P(+)  \n"+kfObj.getCovariance());
 //			}
 			runFilter(X, currentTime, deltaT, satList, obsvCodeList, Cxx_dot_hat, doAnalyze, doTest, outlierAnalyze,
 					useIGS, i);
@@ -161,7 +160,9 @@ public class EKFDoppler {
 		// Assign Q and F matrix
 		kfObj.configDoppler(deltaT, Cxx_dot_hat, m, X);
 		kfObj.predict();
-//		if (ct > 1994&&ct<2000) {
+//		if (ct<150) {
+//			System.out.println("Q epoch " + ct);
+//			System.out.println(kfObj.getQ());
 //			System.out.println("P(-) epoch " + ct);
 //			System.out.println(kfObj.getCovariance());
 //		}
@@ -333,16 +334,13 @@ public class EKFDoppler {
 		// Detection
 		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
 		int _n = testedSatList.size();
-//		if (globalPVal < alpha) {
-//			System.out.println("\nOutlier Detection Epoch " + ct);
-//			System.out.println("Size " + _n);
-//			if(ct<150)
-//			{
-//				System.out.println(P);
-//				System.out.println(Cvv);
-//			}
-//
+//		if(globalPVal < alpha)
+//		{
+//			System.out.println("\nOutlier Detection Epoch "+ct);
+//			System.out.println("Size "+_n);
 //		}
+		
+		
 		while (globalPVal < alpha && _n > (n / 2)) {
 
 			double max_w = Double.MIN_VALUE;
@@ -357,7 +355,7 @@ public class EKFDoppler {
 					index = i;
 				}
 			}
-//			System.out.print(" " + index + " ");
+			//System.out.print(" " + index + " ");
 			satList.get(satList.indexOf(testedSatList.remove(index))).setOutlier(true);
 			_n = testedSatList.size();
 			SimpleMatrix R_ = new SimpleMatrix(_n, _n);
@@ -396,6 +394,22 @@ public class EKFDoppler {
 			csd = new ChiSquaredDistribution(_n);
 			globalPVal = 1 - csd.cumulativeProbability(globalTq);
 		}
+//		if(ct<150)
+//		{
+//			System.out.println("\n Epoch "+ct);
+//			System.out.println("P  \n"+P.extractMatrix(0, 3+m, 0, 3+m));
+//			System.out.println("H  \n"+H.extractMatrix(0, _n, 0, 3+m));
+//			System.out.println("R  \n"+R.extractMatrix(0, _n, 0, _n));
+//			System.out.println("Cvv  \n"+Cvv);
+//			double[] residual = new double[_n];
+//			for(int i=0;i<_n;i++)
+//			{
+//				residual[i] = z[i][0]-ze[i][0];
+//			}
+//			
+//			System.out.println("Residual  \n"+Arrays.toString(residual));
+//			
+//		}
 		return new Object[] { R, H, z, ze };
 
 	}

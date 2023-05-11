@@ -82,8 +82,8 @@ public class KFconfig extends KF {
 				double[][] phi = new double[n][n];
 				double[][] _Q = new double[n][n];
 				IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
-				//double[] qENU = new double[] { 0.5, 0.5, 0.01 };
-				double[] qENU = new double[] { 0.005,0.005,0.001};
+				double[] qENU = new double[] { 0.5, 0.5, 0.01 };
+//				double[] qENU = new double[] { 5e-3,5e-3,1e-2};
 				// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 				double[] q = new double[3 + m];
 				IntStream.range(0, 3).forEach(i -> q[i] = qENU[i]);

@@ -136,9 +136,8 @@ public class EKF {
 			long currentTime = timeList.get(i);
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
 			double deltaT = (currentTime - time) / 1e3;
-//			if (i > 1994&&i<2000) {
-//				System.out.println("P(+) epoch " + (i - 1));
-//				System.out.println(kfObj.getCovariance());
+//			if (i<150) {
+//				System.out.println("P(+)  \n"+kfObj.getCovariance().extractMatrix(0, 3+m, 0, 3+m));
 //			}
 			// Perform Predict and Update
 			runFilter(deltaT, satList, flag, useDoppler, obsvCodeList, useIGS, currentTime, doAnalyze, doTest,
@@ -227,11 +226,12 @@ public class EKF {
 				}
 			}
 			kfObj.setProcessCov(P);
-
 		}
-//		if (ct > 1994&&ct<2000) {
+//		if (ct<150) {
+//			System.out.println("Q epoch " + ct);
+//			System.out.println(priorP.extractMatrix( 3+m, 3+m+3+m,  3+m, 3+m+3+m));
 //			System.out.println("P(-) epoch " + ct);
-//			System.out.println(kfObj.getCovariance());
+//			System.out.println(kfObj.getCovariance().extractMatrix(0, 3+m, 0, 3+m));
 //		}
 		SimpleMatrix x = kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
@@ -340,7 +340,7 @@ public class EKF {
 			z = (double[][]) params[2];
 			ze = (double[][]) params[3];
 			kfObj.update(z, R, ze, H);
-			System.out.print("");
+			
 		}
 
 	}
@@ -416,7 +416,7 @@ public class EKF {
 		SimpleMatrix HK = H.mult(K);
 		SimpleMatrix phi = kfObj.getPhi();
 		SimpleMatrix Cvv = kfObj.getCvv();
-//		if (ct > 1994&&ct<2000) {
+//		if (ct<5) {
 //			System.out.println("Cvv epoch " + ct);
 //			System.out.println(Cvv);
 //		}
@@ -496,7 +496,8 @@ public class EKF {
 		SimpleMatrix P = kfObj.getCovariance();
 		SimpleMatrix Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
 		if (useEstVel) {
-			Cvv = Cvv.extractMatrix(0, _size, 0, _size);
+			Cvv = ((H.extractMatrix(0, _size, 0, 3+m).mult(P.extractMatrix(0, 3+m, 0, 3+m)).mult(H.extractMatrix(0, _size, 0, 3+m).transpose())).plus(R.extractMatrix(0, _size, 0, _size)));
+			//Cvv = Cvv.extractMatrix(0, _size, 0, _size);
 			n_estVel = 3 + m;
 //			SimpleMatrix K = P.mult(H.transpose()).mult(Cvv.invert());
 //			SimpleMatrix HK = H.mult(K);
@@ -516,17 +517,10 @@ public class EKF {
 		}
 		// Detection
 		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
-
 //		if(globalPVal < alpha)
 //		{
 //			System.out.println("\nOutlier Detection Epoch "+ct);
 //			System.out.println("Size "+_size);
-//			if(ct<150)
-//			{
-//				System.out.println(P.extractMatrix(0, 3+m, 0, 3+m));
-//				System.out.println(Cvv);
-//			}
-//			
 //		}
 		while (globalPVal < alpha && (_size > ((size - n_estVel) / 2))) {
 			double max_w = Double.MIN_VALUE;
@@ -541,9 +535,7 @@ public class EKF {
 					index = i;
 				}
 			}
-			
-//			System.out.print(" "+index+" ");
-			
+//			System.out.print(" " + index + " ");
 			Measurement meas = null;
 			int _index = index;
 			if (index >= n_pr) {
@@ -568,13 +560,20 @@ public class EKF {
 			int j = 0;
 			for (int i = 0; i < _size + 1; i++) {
 				if (i != index) {
-					R_.set(j, j, R.get(i, i));
 					if (useEstVel) {
 						if (i <= n_pr) {
 							v_.set(j, v.get(i));
 						}
+						int l = 0;
+						for (int k = 0; k < _size + 1; k++) {
+							if (k != index) {
+								R_.set(j, l, R.get(i, k));
+								l++;
+							}	
+						}
 					} else {
 						v_.set(j, v.get(i));
+						R_.set(j, j, R.get(i, i));
 					}
 					z_[j][0] = z[i][0];
 					ze_[j][0] = ze[i][0];
@@ -595,7 +594,11 @@ public class EKF {
 			}
 			_size -= n_estVel;
 			Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
-			Cvv = Cvv.extractMatrix(0, _size, 0, _size);
+			if(useEstVel)
+			{
+				Cvv = ((H.extractMatrix(0, _size, 0, 3+m).mult(P.extractMatrix(0, 3+m, 0, 3+m)).mult(H.extractMatrix(0, _size, 0, 3+m).transpose())).plus(R.extractMatrix(0, _size, 0, _size)));
+			}
+			//Cvv = Cvv.extractMatrix(0, _size, 0, _size);
 			Cvv_inv = Cvv.invert();
 			globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
 			if (globalTq == 0) {
@@ -604,6 +607,22 @@ public class EKF {
 			csd = new ChiSquaredDistribution(_size);
 			globalPVal = 1 - csd.cumulativeProbability(globalTq);
 		}
+//		if(ct<150)
+//		{
+//			System.out.println("\n Epoch "+ct);
+//			System.out.println("P  \n"+P.extractMatrix(0, 3+m, 0, 3+m));
+//			System.out.println("H  \n"+H.extractMatrix(0, n_pr, 0, 3+m));
+//			System.out.println("R  \n"+R.extractMatrix(0, n_pr, 0, n_pr));
+//			System.out.println("Cvv  \n"+Cvv);
+//			double[] residual = new double[n_pr];
+//			for(int i=0;i<n_pr;i++)
+//			{
+//				residual[i] = z[i][0]-ze[i][0];
+//			}
+//			
+//			System.out.println("Residual  \n"+Arrays.toString(residual));
+//
+//		}
 		return new Object[] { R, H, z, ze };
 
 	}
