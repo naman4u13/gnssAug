@@ -17,6 +17,7 @@ import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
+import com.gnssAug.utility.Weight;
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
@@ -64,6 +65,7 @@ public class EKF {
 			Flag flag, boolean useDoppler, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean complementary, boolean useEstVel) throws Exception {
 
+		boolean isWeighted = true;
 		int n = 0;
 		int m = obsvCodeList.length;
 		/* constant position model - state vector(n=5) -> (x,y,z,cdt,cdt_dot) */
@@ -91,7 +93,7 @@ public class EKF {
 		if (flag == Flag.POSITION) {
 			IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e13);
 		} else {
-			double[] intialVel = LinearLeastSquare.getEstVel(SatUtil.createCopy(SatMap.firstEntry().getValue()), false,
+			double[] intialVel = LinearLeastSquare.getEstVel(SatUtil.createCopy(SatMap.firstEntry().getValue()), isWeighted,
 					true, doTest, false, intialECEF, useIGS);
 			SimpleMatrix intialVelCov =  LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
 			IntStream.range(3 + m, 6 + (2 * m)).forEach(i -> x[i][0] = intialVel[i - (3 + m)]);
@@ -119,13 +121,13 @@ public class EKF {
 		}
 		// Begin iteration or recursion
 		return iterate(SatMap, timeList, flag, useDoppler, obsvCodeList, doAnalyze, doTest, outlierAnalyze, useIGS,
-				complementary, useEstVel);
+				complementary, useEstVel,isWeighted);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			Flag flag, boolean useDoppler, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean useIGS, boolean complementary, boolean useEstVel) throws Exception {
+			boolean outlierAnalyze, boolean useIGS, boolean complementary, boolean useEstVel,boolean isWeighted) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		Measurement[] measArr = useDoppler ? new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }
 				: new Measurement[] { Measurement.Pseudorange };
@@ -141,7 +143,7 @@ public class EKF {
 //			}
 			// Perform Predict and Update
 			runFilter(deltaT, satList, flag, useDoppler, obsvCodeList, useIGS, currentTime, doAnalyze, doTest,
-					outlierAnalyze, complementary, measArr, useEstVel, i);
+					outlierAnalyze, complementary, measArr, useEstVel, i,isWeighted);
 			// Fetch Posteriori state estimate and estimate error covariance matrix
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
@@ -199,10 +201,9 @@ public class EKF {
 
 	private void runFilter(double deltaT, ArrayList<Satellite> satList, Flag flag, boolean useDoppler,
 			String[] obsvCodeList, boolean useIGS, long currentTime, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean complementary, Measurement[] measArr, boolean useEstVel, int ct)
+			boolean outlierAnalyze, boolean complementary, Measurement[] measArr, boolean useEstVel, int ct, boolean isWeighted)
 			throws Exception {
 
-		boolean isWeighted = false;
 		boolean useAndroidW = false;
 		// Satellite count
 		int n = satList.size();
@@ -227,19 +228,14 @@ public class EKF {
 			}
 			kfObj.setProcessCov(P);
 		}
-//		if (ct<150) {
-//			System.out.println("Q epoch " + ct);
-//			System.out.println(priorP.extractMatrix( 3+m, 3+m+3+m,  3+m, 3+m+3+m));
-//			System.out.println("P(-) epoch " + ct);
-//			System.out.println(kfObj.getCovariance().extractMatrix(0, 3+m, 0, 3+m));
-//		}
+
 		SimpleMatrix x = kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
 		double[] estVel_Z = null;
 		SimpleMatrix Czz_estVel = null;
 		int size = useDoppler ? 2 * n : n;
 		if (useEstVel) {
-			estVel_Z = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), false, true, doTest, false, estPos,
+			estVel_Z = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), isWeighted, true, doTest, false, estPos,
 					useIGS);
 			Czz_estVel = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
 			size = n + 3 + m;
@@ -270,15 +266,28 @@ public class EKF {
 					}
 				}
 			} else {
-				LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
-				SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
-				if (useDoppler) {
-					LinearLeastSquare.getEstVel(satList, true, true, false, false, estPos, useIGS);
-					Cyy.concatRows(LinearLeastSquare.getCyy_updated(Measurement.Doppler));
+//				LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
+//				SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
+//				if (useDoppler) {
+//					LinearLeastSquare.getEstVel(satList, true, true, false, false, estPos, useIGS);
+//					Cyy.concatRows(LinearLeastSquare.getCyy_updated(Measurement.Doppler));
+//				}
+//				R = Cyy;
+				SimpleMatrix Cyy = Weight.getNormCyy(satList, GnssDataConfig.pseudorange_priorVarOfUnitW);
+				R.insertIntoThis(0, 0, Cyy);
+				if(useDoppler)
+				{
+					Cyy = Weight.getNormCyy(satList, GnssDataConfig.doppler_priorVarOfUnitW);
+					R.insertIntoThis(n, n, Cyy);
 				}
-				R = Cyy;
-//				SimpleMatrix Cyy = Weight.getNormCyy(satList, priorVarOfUnitW);
-//				_R = Matrix.matrix2Array(Cyy);
+				if(useEstVel)
+				{
+					R.insertIntoThis(n, n, Czz_estVel);
+					for (int i = 3; i < 3 + m; i++) {
+						R.set(i + n, i + n, R.get(i + n, i + n) + GnssDataConfig.clkDriftVar);
+					}
+				}
+				
 			}
 		} else {
 			for (int i = 0; i < n; i++) {
@@ -294,7 +303,7 @@ public class EKF {
 					}
 				}
 				for (int i = 3; i < 3 + m; i++) {
-					R.set(i + n, i + n, R.get(i + n, i + n) + 1e5);
+					R.set(i + n, i + n, R.get(i + n, i + n) + GnssDataConfig.clkDriftVar);
 				}
 			}
 		}

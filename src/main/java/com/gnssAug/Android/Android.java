@@ -83,7 +83,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\SamsungS20Ultra_GPS_GAL_BDS_noWeight_All_Estimators_IPIN";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -93,6 +93,8 @@ public class Android {
 			System.out.println("Elevation Mask in degrees = " + cutOffAng);
 			System.out.println("pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
 			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
+			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
+			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
 			ArrayList<double[]> rxLLH = GroundTruth.processCSV(GTcsv);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
@@ -131,7 +133,6 @@ public class Android {
 						rxLLH.get(gtIndex)[4] };
 				double trueVelRms = rxLLH.get(gtIndex)[5];
 				gtIndex++;
-
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
 						weekNo, clock, orbit, useIGS, discardSet);
@@ -168,7 +169,7 @@ public class Android {
 				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3 || estimatorType == 11) {
 					int[] arr = new int[] { estimatorType };
 					if (estimatorType == 3 || estimatorType == 11) {
-						arr = new int[] { 1, 2 };
+						arr = new int[] {  2 };
 					}
 					for (int i : arr) {
 						boolean isWLS = false;
@@ -221,7 +222,7 @@ public class Android {
 								State state = (type != Measurement.Pseudorange) ? State.Velocity : State.Position;
 								Cxx_hat_map.computeIfAbsent(state, k -> new HashMap<String, ArrayList<SimpleMatrix>>())
 										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
-										.add(LinearLeastSquare.getCxx_hat_updated(type, "ENU"));
+										.add(LinearLeastSquare.getCxx_hat(type, "ENU"));
 							}
 							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
 									.add(LinearLeastSquare.getDop());
@@ -276,7 +277,7 @@ public class Android {
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
 				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11)) ) {
-					estTypes = new int[] { 5, 6, 7, 8,12,13 };
+					estTypes = new int[] { 5, 6,12 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -286,7 +287,7 @@ public class Android {
 						useDoppler = false;
 						estStateMap_pos = ekf.process(satMap, timeList, Flag.POSITION, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
-						estName = "EKF - pos. random walk";
+						estName = "PRW";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estPos = estStateMap_pos.get(time);
@@ -300,7 +301,7 @@ public class Android {
 						useDoppler = false;
 						estStateMap_vel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS, obsvCodeList,
 								doAnalyze, doTest, outlierAnalyze);
-						estName = "EKF - vel. random walk";
+						estName = "VRW";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estState = estStateMap_vel.get(time);
@@ -384,7 +385,7 @@ public class Android {
 						estStateMap_vel_estVel = ekf.process(satMap, timeList, Flag.VELOCITY, false, useIGS,
 								obsvCodeList, doAnalyze, doTest, outlierAnalyze,false,true);
 
-						estName = "EKF - vel. random walk + est vel";
+						estName = "VRWD";
 						for (int i = 0; i < n; i++) {
 							long time = timeList.get(i);
 							double[] estState = estStateMap_vel_estVel.get(time);
@@ -510,7 +511,7 @@ public class Android {
 			}
 
 			if (estimatorType == 10 || estimatorType == 11) {
-				String estName = "EKF - Doppler";
+				String estName = "Proposed Filter";
 				// Doppler is used but no velocity is computed therefore useDoppler is set as
 				// false
 				useDoppler = false;
@@ -806,19 +807,19 @@ public class Android {
 					System.out.println("t-t0:" + (t - t0) + " i:" + i + " ctr:" + ctr);
 				}
 			}
-			if (mapDeltaRanges) {
+			/*if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 			} else {
 				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 				// Plot Error Graphs
-				if (Cxx_hat_map.isEmpty()) {
-					GraphPlotter.graphENU(GraphPosMap, timeList, true);
-					GraphPlotter.graphENU(GraphVelMap, timeList, false);
+			if (Cxx_hat_map.isEmpty()) {
+				GraphPlotter.graphENU(GraphPosMap, timeList, true);
+				//GraphPlotter.graphENU(GraphVelMap, timeList, false);
 				} else {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
-					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
-				}
+					//GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
+			}
 				if (doAnalyze&&estimatorType!=11) {
 					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
@@ -827,7 +828,7 @@ public class Android {
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 
 				}
-			}
+			}*/
 			if (doAnalyze&&estimatorType!=11) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);

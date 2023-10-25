@@ -139,7 +139,7 @@ public class Analyzer {
 			GraphPlotter.graphOutlier("Outlier in Doppler, based on Baarda's method", dopplerMap,
 					satResMap.get(Measurement.Doppler).get(estType));
 			}
-			GraphPlotter.graphOutlier("Outlier in Pseudorange, based on Baarda's method", rangeMap,
+			GraphPlotter.graphOutlier("Outliers in Pseudoranges", rangeMap,
 					satResMap.get(Measurement.Pseudorange).get(estType));
 
 		}

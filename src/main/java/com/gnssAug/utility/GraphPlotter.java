@@ -1,12 +1,18 @@
 package com.gnssAug.utility;
 
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.math3.distribution.NormalDistribution;
@@ -14,7 +20,9 @@ import org.ejml.simple.SimpleMatrix;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.CategoryPlot;
 import org.jfree.chart.ui.ApplicationFrame;
+import org.jfree.data.xy.XYDataItem;
 import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
@@ -25,6 +33,7 @@ import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.models.SatResidual;
+import com.opencsv.CSVWriter;
 
 public class GraphPlotter extends ApplicationFrame {
 
@@ -72,13 +81,19 @@ public class GraphPlotter extends ApplicationFrame {
 		JFreeChart chart;
 
 		if (isHorizontal) {
-			chart = ChartFactory.createScatterPlot("Horizontal " + name, "East", "North",
-					createDataset2DTraj(trajectoryMap, n));
+			chart = ChartFactory.createScatterPlot("Horizontal " + name + " Trajectory", "East(in m)",
+					"North(in m)", createDataset2DTraj(trajectoryMap, n));
+
 		} else {
-			chart = ChartFactory.createXYLineChart("Vertical", "Time(in sec)", "Up",
+			chart = ChartFactory.createXYLineChart("Vertical", "Time(in sec)", "Up(in m)",
 					createDatasetVerticalTraj(trajectoryMap, n));
 		}
-
+//		chart.getPlot().setBackgroundPaint(Color.WHITE);
+//		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().setRangeGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(3, Color.ORANGE);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(4, Color.MAGENTA);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(5, Color.CYAN);
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -95,12 +110,10 @@ public class GraphPlotter extends ApplicationFrame {
 		if (type.equals("Observables")) {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetObservable(satMap));
-		} else if(type.equals("Delta-Range")){
-			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time(in sec)", type+"(in m)",
+		} else if (type.equals("Delta-Range")) {
+			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time(in sec)", type + "(in m)",
 					createDatasetDeltaRange(satMap));
-		}
-		else
-		{
+		} else {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetSatellitePlot(satMap));
 		}
@@ -113,12 +126,12 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList,int freq) throws IOException {
+	public GraphPlotter(String title, ArrayList<Long> dataList, ArrayList<Long> timeList, int freq) throws IOException {
 		super(title + " Satellite Count");
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart(title + " Satellite Count", "GPS-time",
-				title + " Satellite Count", createDatasetSatCount(dataList, timeList,freq));
+				title + " Satellite Count", createDatasetSatCount(dataList, timeList, freq));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -128,8 +141,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(ArrayList<double[]> dataList,String name) throws IOException {
-		super(name+"Z measurement redundancy");
+	public GraphPlotter(ArrayList<double[]> dataList, String name) throws IOException {
+		super(name + "Z measurement redundancy");
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart("Z measurement redundancy", "GPS-time", "Count",
@@ -226,12 +239,15 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map,
-			HashMap<String, ArrayList<SatResidual>> outlierMap,boolean isElevAngle) throws Exception {
+			HashMap<String, ArrayList<SatResidual>> outlierMap, boolean isElevAngle) throws Exception {
 		super(name);
 		// TODO Auto-generated constructor stub
 		String xAxis = isElevAngle ? "Elevation-Angle(degrees)" : "GPS-Time(seconds)";
 		final JFreeChart chart = ChartFactory.createScatterPlot(name, xAxis, "True Error in Range(in m)",
-				createAnalyseDataset3(map, outlierMap,isElevAngle));
+				createAnalyseDataset3(map, outlierMap, isElevAngle));
+//		chart.getPlot().setBackgroundPaint(Color.WHITE);
+//		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().setRangeGridlinePaint(Color.BLACK);
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -276,9 +292,19 @@ public class GraphPlotter extends ApplicationFrame {
 		super(applicationTitle + " Error");
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle + " Error", "GPS-time", chartTitle,
-				createDatasetENU(dataMap, timeList));
+		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle + " Error", "Time-Elapsed(in sec)",
+				chartTitle, createDatasetENU(dataMap, timeList));
+
+
+//		chart.getPlot().setBackgroundPaint(Color.WHITE);
+//		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().setRangeGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(3, Color.ORANGE);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(4, Color.MAGENTA);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(5, Color.CYAN);
+
 		final ChartPanel chartPanel = new ChartPanel(chart);
+		// chartPanel.setBackground(Color.WHITE);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
 		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
@@ -310,6 +336,14 @@ public class GraphPlotter extends ApplicationFrame {
 
 		final JFreeChart chart = ChartFactory.createScatterPlot(applicationTitle, "East" + unit, "North" + unit,
 				createDataset2dErr(dataMap));
+
+//		chart.getXYPlot().getRenderer().setSeriesPaint(3, Color.ORANGE);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(4, Color.MAGENTA);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(5, Color.CYAN);
+//		chart.getPlot().setBackgroundPaint(Color.WHITE);
+//		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().setRangeGridlinePaint(Color.BLACK);
+
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -348,7 +382,7 @@ public class GraphPlotter extends ApplicationFrame {
 			name = "GNSS Velocity";
 			unit = "(m/s)";
 		}
-		String[] chartNames = new String[] { "E", "N", "U" };
+		String[] chartNames = new String[] { "East", "North", "Up" };
 		for (int i = 0; i < 3; i++) {
 			final int index = i;
 			HashMap<String, double[]> subDataMap = new HashMap<String, double[]>();
@@ -362,6 +396,37 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
+
+			boolean makeCSV = false;
+			if (makeCSV) {
+				String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\" + chartNames[i] + "3.csv";
+				File file = new File(filePath);
+				try {
+					// create FileWriter object with file as parameter
+					FileWriter outputfile = new FileWriter(file);
+					// create CSVWriter object filewriter object as parameter
+					CSVWriter writer = new CSVWriter(outputfile);
+					// create a List which contains String array
+					List<String[]> data = new ArrayList<String[]>();
+					String[] header = new String[] { "Time", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" };
+					writer.writeNext(header);
+					for (int j = 0; j < timeList.size() - 1; j++) {
+						String[] entry = new String[header.length];
+						entry[0] = timeList.get(j) + "";
+						for (int k = 1; k < header.length; k++) {
+							entry[k] = subDataMap.get(header[k])[j] + "";
+						}
+						data.add(entry);
+					}
+					writer.writeAll(data);
+					// closing writer connection
+					writer.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+
 		}
 		GraphPlotter chart = new GraphPlotter(name + " 2D-Error", dataMap, unit);
 		chart.pack();
@@ -533,22 +598,23 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		
+
 		chart = new GraphPlotter(name, map, true);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
 	}
-	
-	public static void graphOutlier(String name, HashMap<String, TreeMap<Integer, double[]>> map,HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
 
-		GraphPlotter chart = new GraphPlotter(name, map,outlierMap,false);
+	public static void graphOutlier(String name, HashMap<String, TreeMap<Integer, double[]>> map,
+			HashMap<String, ArrayList<SatResidual>> outlierMap) throws Exception {
+
+		GraphPlotter chart = new GraphPlotter(name, map, outlierMap, false);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		
-		chart = new GraphPlotter(name, map,outlierMap, true);
+
+		chart = new GraphPlotter(name, map, outlierMap, true);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -587,14 +653,14 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphRedundancy(ArrayList<double[]> redundancyList) throws IOException {
-		GraphPlotter chart = new GraphPlotter(redundancyList,"");
+		GraphPlotter chart = new GraphPlotter(redundancyList, "");
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 	}
-	
-	public static void graphRedundancy(ArrayList<double[]> redundancyList,String name) throws IOException {
-		GraphPlotter chart = new GraphPlotter(redundancyList,name);
+
+	public static void graphRedundancy(ArrayList<double[]> redundancyList, String name) throws IOException {
+		GraphPlotter chart = new GraphPlotter(redundancyList, name);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -611,19 +677,19 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", true);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
-		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", false);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+//		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", true);
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
+//		chart = new GraphPlotter(trajectoryVelMap, n, "Velocity(in m/s)", false);
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
 
 	}
 
 	public static void graphSatCount(HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap,
-			ArrayList<Long> timeList,int freq) throws IOException {
+			ArrayList<Long> timeList, int freq) throws IOException {
 
 		for (Measurement key : satCountMap.keySet()) {
 			String type;
@@ -634,7 +700,7 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			for (String subKey : satCountMap.get(key).keySet()) {
 				type += subKey;
-				GraphPlotter chart = new GraphPlotter(type, satCountMap.get(key).get(subKey), timeList,freq);
+				GraphPlotter chart = new GraphPlotter(type, satCountMap.get(key).get(subKey), timeList, freq);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
@@ -643,7 +709,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
-			ArrayList<Long> timeList,int freq) throws Exception {
+			ArrayList<Long> timeList, int freq) throws Exception {
 
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 		for (String key : dataMap.keySet()) {
@@ -681,7 +747,7 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter("", satCountList, timeList,freq);
+		chart = new GraphPlotter("", satCountList, timeList, freq);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -728,7 +794,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	private XYDataset createDataset3dErr(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		for (String key : dataMap.keySet()) {
+		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -830,7 +896,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	private XYDataset createAnalyseDataset3(HashMap<String, TreeMap<Integer, double[]>> map,
-			HashMap<String, ArrayList<SatResidual>> outlierMap,boolean isElevAngle) throws Exception {
+			HashMap<String, ArrayList<SatResidual>> outlierMap, boolean isElevAngle) throws Exception {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries outliers = new XYSeries("outliers");
 		final XYSeries inliers = new XYSeries("inliers");
@@ -856,9 +922,8 @@ public class GraphPlotter extends ApplicationFrame {
 					SatResidual satRes = outlierList.get(i);
 					i++;
 					double x = t;
-					if(isElevAngle)
-					{
-						x = satRes.getElevAngle();
+					if (isElevAngle) {
+						x = Math.toDegrees(satRes.getElevAngle());
 					}
 					if (satRes.isOutlier()) {
 						outliers.add(x, y);
@@ -875,7 +940,45 @@ public class GraphPlotter extends ApplicationFrame {
 		outliers.setKey("Outliers (Count: " + out + ")");
 		dataset.addSeries(outliers);
 		dataset.addSeries(inliers);
-
+		
+		
+		boolean makeCSV = false&&isElevAngle;
+		if (makeCSV) {
+			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\VRWD_CorrectQ_Outliers.csv";
+			File file = new File(filePath);
+			
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "Angle", "Value", "isOut"};
+				writer.writeNext(header);
+				List<XYDataItem> ins = inliers.getItems();
+				List<XYDataItem> outs = outliers.getItems();
+				int flag = 0;
+				for(List<XYDataItem> list:new ArrayList<List<XYDataItem>>(Arrays.asList(ins,outs)))
+				{
+					
+					for(XYDataItem xy:list)
+					{
+						String[] entry = new String[3];
+						entry[0] = ""+xy.getXValue();
+						entry[1] = ""+xy.getYValue();
+						entry[2] = ""+flag;
+						dataList.add(entry);
+					}
+					flag++;
+				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
 		return dataset;
 	}
 
@@ -903,7 +1006,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	private XYDataset createDatasetENU(HashMap<String, double[]> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		for (String key : dataMap.keySet()) {
+		dataset.addSeries(new XYSeries(""));
+		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			double[] data = dataMap.get(key);
 			for (int i = 0; i < data.length; i++) {
@@ -911,7 +1015,6 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 			dataset.addSeries(series);
 		}
-
 		return dataset;
 
 	}
@@ -985,7 +1088,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 	private XYDataset createDataset2dErr(HashMap<String, ArrayList<double[]>> dataMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		for (String key : dataMap.keySet()) {
+		dataset.addSeries(new XYSeries(""));
+		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -1046,7 +1150,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList,int freq) {
+	private XYDataset createDatasetSatCount(ArrayList<Long> data, ArrayList<Long> timeList, int freq) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries series = new XYSeries("SatCount");
 		double avg = data.stream().mapToDouble(i -> i).average().orElseThrow();
@@ -1054,9 +1158,8 @@ public class GraphPlotter extends ApplicationFrame {
 		long t0 = timeList.get(0);
 		for (int i = 0; i < data.size(); i++) {
 			long t = timeList.get(i);
-			if(t-t0>freq)
-			{
-				series.add(timeList.get(i-1)+freq, null);
+			if (t - t0 > freq) {
+				series.add(timeList.get(i - 1) + freq, null);
 			}
 			series.add(timeList.get(i), data.get(i));
 			t0 = t;
@@ -1077,7 +1180,7 @@ public class GraphPlotter extends ApplicationFrame {
 		final XYSeries prRate_dr_series = new XYSeries("Doppler Derived DR");
 		final XYSeries phase_dr_series = new XYSeries("Carrier-Phase Derived DR");
 		final XYSeries true_dr_series = new XYSeries("True DeltaRange");
-		
+
 		long t_prev = -999;
 		double pr_prev = 0;
 		double prRate_prev = 0;
@@ -1111,12 +1214,12 @@ public class GraphPlotter extends ApplicationFrame {
 			prRate_prev = prRate;
 			phase_prev = phase;
 			trueRange_prev = trueRange;
-		
+
 		}
 		dataset.addSeries(true_dr_series);
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		dataset.addSeries(phase_dr_series);
+		// dataset.addSeries(phase_dr_series);
 
 		return dataset;
 
@@ -1147,7 +1250,7 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(prRate_series);
 		return dataset;
 	}
-	
+
 	private XYDataset createDatasetSatellitePlot(TreeMap<Long, Satellite> satMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries x = new XYSeries("X");
@@ -1156,25 +1259,25 @@ public class GraphPlotter extends ApplicationFrame {
 		Long t0 = satMap.firstEntry().getKey();
 		Satellite sat0 = satMap.get(t0);
 		double[] ecef0 = sat0.getSatEci();
-		
+
 		for (Long t : satMap.keySet()) {
 			Satellite sat = satMap.get(t);
 			double[] ecef = sat.getSatEci();
-		
+
 			if ((t - t0) > 1.1) {
 				x.add(t0 + 1, null);
 				y.add(t0 + 1, null);
 				z.add(t0 + 1, null);
 			}
-			x.add(t0 + 1, ecef[0]-ecef0[0]);
-			y.add(t0 + 1, ecef[1]-ecef0[1]);
-			z.add(t0 + 1, ecef[2]-ecef0[2]);
+			x.add(t0 + 1, ecef[0] - ecef0[0]);
+			y.add(t0 + 1, ecef[1] - ecef0[1]);
+			z.add(t0 + 1, ecef[2] - ecef0[2]);
 			t0 = t;
 		}
 		dataset.addSeries(x);
 		dataset.addSeries(y);
 		dataset.addSeries(z);
-	
+
 		return dataset;
 	}
 
@@ -1252,7 +1355,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 				dataset.addSeries(series);
 			}
-			dataSeries.replaceAll(i->Math.abs(i));
+			dataSeries.replaceAll(i -> Math.abs(i));
 			double avg = dataSeries.stream().mapToDouble(i -> i).average().orElse(0);
 			Collections.sort(dataSeries);
 			int n = dataSeries.size();
@@ -1282,11 +1385,12 @@ public class GraphPlotter extends ApplicationFrame {
 		double[] end = trajectoryMap.get("True").get(j);
 		final XYSeries s = new XYSeries("START");
 		final XYSeries e = new XYSeries("END");
-		s.add(start[0], start[1]);
-		e.add(end[0], end[1]);
-		dataset.addSeries(s);
-		dataset.addSeries(e);
-		for (String key : trajectoryMap.keySet()) {
+//		s.add(start[0], start[1]);
+//		e.add(end[0], end[1]);
+//		dataset.addSeries(s);
+//		dataset.addSeries(e);
+
+		for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> trajectory = trajectoryMap.get(key);
 			for (int i = 0; i < n; i++) {
@@ -1299,6 +1403,54 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(series);
 		}
 
+		boolean makeCSV = false;
+		if (makeCSV) {
+			String eastFilePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\TrajectoryCorrectQ_East.csv";
+			String northFilePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\TrajectoryCorrectQ_North.csv";
+			File eastfile = new File(eastFilePath);
+			File northFile = new File(northFilePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter eastOutputfile = new FileWriter(eastfile);
+				FileWriter northOutputfile = new FileWriter(northFile);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter eastWriter = new CSVWriter(eastOutputfile);
+				CSVWriter northWriter = new CSVWriter(northOutputfile);
+				// create a List which contains String array
+				List<String[]> eastDataList = new ArrayList<String[]>();
+				List<String[]> northDataList = new ArrayList<String[]>();
+				String[] header = new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" };
+				eastWriter.writeNext(header);
+				northWriter.writeNext(header);
+				for (int i = 1; i < n; i++) {
+					String[] eastEntry = new String[header.length];
+					String[] northEntry = new String[header.length];
+					int k = 0;
+					for (String key : header) {
+						ArrayList<double[]> trajectory = trajectoryMap.get(key);
+						double[] data = trajectory.get(i);
+						if ((data[0] != -999) && (data[1] != -999) && (data[2] != -999)) {
+							eastEntry[k] = data[0]+"";
+							northEntry[k] = data[1]+"";
+						}
+						k++;
+					}
+
+					northDataList.add(northEntry);
+					eastDataList.add(eastEntry);
+				}
+
+				eastWriter.writeAll(eastDataList);
+				northWriter.writeAll(northDataList);
+				// closing writer connection
+				eastWriter.close();
+				northWriter.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
+
 		return dataset;
 
 	}
@@ -1306,7 +1458,7 @@ public class GraphPlotter extends ApplicationFrame {
 	private static XYDataset createDatasetVerticalTraj(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		for (String key : trajectoryMap.keySet()) {
+		for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> trajectory = trajectoryMap.get(key);
 			for (int i = 0; i < n; i++) {

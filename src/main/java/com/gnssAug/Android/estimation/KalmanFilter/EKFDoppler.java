@@ -48,7 +48,7 @@ public class EKFDoppler {
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze)
 			throws Exception {
-
+		boolean isWeighted = true;
 		int m = obsvCodeList.length;
 		int n = 3 + m;
 		double[][] _X = new double[n][1];
@@ -78,18 +78,18 @@ public class EKFDoppler {
 			satListMap = new TreeMap<Long, ArrayList<Satellite>>();
 			measNoiseMap = new TreeMap<Long, double[]>();
 		}
-		return iterate(X, SatMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze);
+		return iterate(X, SatMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze,isWeighted);
 
 	}
 
 	TreeMap<Long, double[]> iterate(SimpleMatrix X, TreeMap<Long, ArrayList<Satellite>> SatMap,
 			ArrayList<Long> timeList, boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze) throws Exception {
+			boolean outlierAnalyze,boolean isWeighted) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long time = timeList.get(0);
-		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), false, true, doTest, false,
+		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), isWeighted, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 		prev_Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
 		// Start from 2nd epoch
@@ -97,12 +97,9 @@ public class EKFDoppler {
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - time) / 1e3;
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
-			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest);
-//			if (i<150) {
-//			System.out.println("P(+)  \n"+kfObj.getCovariance());
-//			}
+			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest,isWeighted);
 			runFilter(X, currentTime, deltaT, satList, obsvCodeList, Cxx_dot_hat, doAnalyze, doTest, outlierAnalyze,
-					useIGS, i);
+					useIGS, i,isWeighted);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
 			IntStream.range(0, x_size).forEach(j -> estState[j] = X.get(j));
@@ -127,8 +124,8 @@ public class EKFDoppler {
 	}
 
 	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS,
-			boolean doTest) throws Exception {
-		double[] vel = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), false, true, doTest, false,
+			boolean doTest,boolean isWeighted) throws Exception {
+		double[] vel = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), isWeighted, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
 		double[] avg_vel = new double[vel.length];
 		for (int i = 0; i < vel.length; i++) {
@@ -146,9 +143,8 @@ public class EKFDoppler {
 	// Innovation Based Testing
 	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
 			String[] obsvCodeList, SimpleMatrix Cxx_dot_hat, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean useIGS, int ct) throws Exception {
+			boolean useIGS, int ct,boolean isWeighted) throws Exception {
 
-		boolean isWeighted = false;
 		boolean useAndroidW = false;
 		// Satellite count
 		int n = satList.size();
@@ -160,12 +156,7 @@ public class EKFDoppler {
 		// Assign Q and F matrix
 		kfObj.configDoppler(deltaT, Cxx_dot_hat, m, X);
 		kfObj.predict();
-//		if (ct<150) {
-//			System.out.println("Q epoch " + ct);
-//			System.out.println(kfObj.getQ());
-//			System.out.println("P(-) epoch " + ct);
-//			System.out.println(kfObj.getCovariance());
-//		}
+
 		double[] estPos = new double[] { X.get(0), X.get(1), X.get(2) };
 		double[] rxClkOff = new double[m];// in meters
 		for (int i = 0; i < m; i++) {
@@ -192,11 +183,11 @@ public class EKFDoppler {
 					_R[i][i] = Math.pow(satList.get(i).getReceivedSvTimeUncertaintyNanos() * SpeedofLight * 1e-9, 2);
 				}
 			} else {
-				LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
-				SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
-				_R = Matrix.matrix2Array(Cyy);
-//				SimpleMatrix Cyy = Weight.getNormCyy(satList, priorVarOfUnitW);
+//				LinearLeastSquare.getEstPos(satList, true, true, false, false, useIGS);
+//				SimpleMatrix Cyy = LinearLeastSquare.getCyy_updated(Measurement.Pseudorange);
 //				_R = Matrix.matrix2Array(Cyy);
+				SimpleMatrix Cyy = Weight.getNormCyy(satList, GnssDataConfig.pseudorange_priorVarOfUnitW);
+				_R = Matrix.matrix2Array(Cyy);
 			}
 		} else {
 			for (int i = 0; i < n; i++) {

@@ -6,6 +6,7 @@ import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.ClockAllanVar;
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 
@@ -33,8 +34,8 @@ public class KFconfig extends KF {
 			double[][] _Q = new double[n][n];
 			IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
-//			double[] qENU = new double[] { 12, 12, 0.2 };
-			double[] qENU = new double[] { 25, 25, 1 };
+			double[] qENU = GnssDataConfig.qENU_posRandWalk;
+
 			// qECEF_std can have negative element
 			IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i] * deltaT);
 			SimpleMatrix R = new SimpleMatrix(n, n);
@@ -82,13 +83,13 @@ public class KFconfig extends KF {
 				double[][] phi = new double[n][n];
 				double[][] _Q = new double[n][n];
 				IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
-				double[] qENU = new double[] { 0.5, 0.5, 0.01 };
-//				double[] qENU = new double[] { 5e-3,5e-3,1e-2};
+
+				double[] qENU = GnssDataConfig.qENU_velRandWalk;
 				// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 				double[] q = new double[3 + m];
 				IntStream.range(0, 3).forEach(i -> q[i] = qENU[i]);
 				double _sf = useDoppler?25:sf;
-				double _sg = useDoppler?1e5:sg;
+				double _sg = useDoppler?GnssDataConfig.clkDriftVar:sg;
 				IntStream.range(3, 3 + m).forEach(i -> q[i] = _sg);
 				for (int i = 0; i < 3 + m; i++) {
 					_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
@@ -147,7 +148,7 @@ public class KFconfig extends KF {
 //			qENU[i] = 0.1;
 //		}
 		for (int i = 0; i < m; i++) {
-			qENU[i + 3] = 1e5;
+			qENU[i + 3] = GnssDataConfig.clkDriftVar;
 		}
 		SimpleMatrix omega = new SimpleMatrix(n, n);
 		for (int i = 0; i < n; i++) {

@@ -243,7 +243,7 @@ public class LinearLeastSquare {
 
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
-		SimpleMatrix Cxx_hat = (Ht.mult(Cyy_inv).mult(H)).invert();
+		SimpleMatrix Cxx_hat= (Ht.mult(Cyy_inv).mult(H)).invert();
 		SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
 		SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
 		SimpleMatrix redunMatrix = Cee_hat.mult(Cyy_inv);
@@ -518,13 +518,7 @@ public class LinearLeastSquare {
 				H = H.concatColumns(C);
 				SimpleMatrix Ht = H.transpose();
 				SimpleMatrix W = new SimpleMatrix(weight);
-				SimpleMatrix HtWHinv = null;
-				try {
-					HtWHinv = (Ht.mult(W).mult(H)).invert();
-				} catch (Exception e) {
-					// TODO: handle exception
-					System.err.println();
-				}
+				SimpleMatrix HtWHinv  = (Ht.mult(W).mult(H)).invert();
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector

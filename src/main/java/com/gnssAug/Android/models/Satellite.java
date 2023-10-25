@@ -46,7 +46,12 @@ public class Satellite extends GNSSLog implements Cloneable {
 		satEci[0] = (satEcef[0] * Math.cos(eciArg)) + (satEcef[1] * Math.sin(eciArg));
 		satEci[1] = -(satEcef[0] * Math.sin(eciArg)) + (satEcef[1] * Math.cos(eciArg));
 		satEci[2] = satEcef[2];
-
+		
+//		double[] satVel_new = new double[3];
+//		satVel_new[0] = (satVel[0] * Math.cos(eciArg)) + (satVel[1] * Math.sin(eciArg));
+//		satVel_new[1] = -(satVel[0] * Math.sin(eciArg)) + (satVel[1] * Math.cos(eciArg));
+//		satVel_new[2] = satVel[2];
+//		satVel = new double[] {satVel_new[0],satVel_new[1],satVel_new[2]};
 	}
 
 	public double getT() {

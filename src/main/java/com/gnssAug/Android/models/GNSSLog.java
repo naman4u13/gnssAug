@@ -113,8 +113,8 @@ public class GNSSLog implements Cloneable {
 		this.fullBiasNanos = Long.parseLong(data[5]);
 		this.biasNanos = Double.parseDouble(data[6]);
 		this.biasUncertaintyNanos = Double.parseDouble(data[7]);
-		this.driftNanosPerSecond = Double.parseDouble(data[8]);
-		this.driftUncertaintyNanosPerSecond = Double.parseDouble(data[9]);
+		this.driftNanosPerSecond = data[8].isBlank()?0:Double.parseDouble(data[8]);
+		this.driftUncertaintyNanosPerSecond = data[9].isBlank()?0:Double.parseDouble(data[9]);
 		this.hardwareClockDiscontinuityCount = Integer.parseInt(data[10]);
 		this.svid = Integer.parseInt(data[11]);
 		this.timeOffsetNanos = Double.parseDouble(data[12]);
@@ -143,7 +143,10 @@ public class GNSSLog implements Cloneable {
 			this.satelliteInterSignalBiasNanos = data[33].isBlank() ? 0 : Double.parseDouble(data[33]);
 			this.satelliteInterSignalBiasUncertaintyNanos = data[34].isBlank() ? 0 : Double.parseDouble(data[34]);
 			this.codeType = data[35];
-			this.chipsetElapsedRealtimeNanos = Long.parseLong(data[36]);
+			if(data.length>36)
+			{
+				this.chipsetElapsedRealtimeNanos = data[36].isBlank()?0:Long.parseLong(data[36]);
+			}
 		}
 		int freq = (int) carrierFrequencyHz;
 		if (freq >= 1598062460 && freq <= 1608750000) {
