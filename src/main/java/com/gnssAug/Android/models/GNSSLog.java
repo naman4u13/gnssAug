@@ -5,8 +5,8 @@ import java.util.Map;
 public class GNSSLog implements Cloneable {
 
 	private static final long nanosInWeek = (long) (604800 * 1e9);
-	private static final Map<Integer, String> freqMap = Map.of(1176450050, "5", 1575420030, "1", 1602000000, "1",
-			1561097980, "2");
+	private static final Map<Integer, String> freqMap = Map.of(1176450050, "5",1176450000, "5", 1575420000, "1", 1575420030, "1", 1602000000, "1",
+			1561097980, "2",1561098000, "2");
 	private static final Map<Integer, String> SSIMap = Map.of(1, "G", 2, "S", 3, "R", 4, "J", 5, "C", 6, "E", 7, "I");
 	private static final Map<Integer, Integer> qzssMap = Map.of(193, 1, 194, 2, 199, 3, 195, 4);
 

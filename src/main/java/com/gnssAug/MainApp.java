@@ -20,14 +20,13 @@ public class MainApp {
 
 		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] {"G1C","E1C","C2I" };
-
+			//String[] obsvCodeList = new String[] {"G5X","E5X","C2I"};
+			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
 			String basePath =  "C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
 			//"C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
 			
-			Set<String> discardSet = false?Set.of("C33", "G29", "G31"):Set.of("C11","G12","G2");//C33
+			Set<String> discardSet = true?Set.of(""):Set.of("C11","G12","G2");//C33
 			String[] strList = basePath.split("\\\\");
-
 			String[] date = strList[strList.length - 2].split("-");
 			int year = Integer.parseInt(date[0]);
 			int month = Integer.parseInt(date[1]);
@@ -44,8 +43,8 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + "\\COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0,1, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, false, false,false,discardSet);
+			Android.posEstimate(true, 0, 0,2, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, true, true, false, false,true,discardSet);
 			break;
 
 		case 2:
@@ -57,7 +56,7 @@ public class MainApp {
 			ionex_path = base_url + year + "_" + doy + "\\igsg" + doy + "0.21I";
 			String sinex_path = base_url + year + "_" + doy + "\\igs21P21554.SNX";
 			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C", "E1C" }, 4, 1, 0, true, true, 1, true, false, false);
+					new String[] { "G5Q" }, 4, 1, 0, true, true, 2, true, false, false);
 			break;
 
 		}

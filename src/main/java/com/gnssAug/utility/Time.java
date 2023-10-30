@@ -43,6 +43,17 @@ public class Time {
 
 		return new double[] { GPSTime, weekNo };
 	}
+	
+	public static double UnixTimeToGPSTimeMilli(double unixTime)
+	{
+		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+		cal.set(1980, 0, 6, 0, 0, 0);
+		double GPSEpoch = cal.getTimeInMillis();
+		double GPSTime = unixTime - GPSEpoch;
+	
+
+		return GPSTime;
+	}
 
 	public static Calendar getDate(double GPSTime, long weekNo, double longitude) {
 		// There is no such thing as local GPS Time, the variable is a way of

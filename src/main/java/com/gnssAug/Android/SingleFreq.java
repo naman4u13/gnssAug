@@ -22,7 +22,7 @@ public class SingleFreq {
 	public static ArrayList<Satellite> process(double tRX,
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,
 			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo,
-			Clock clock, Orbit orbit, boolean useIGS,Set<String> discardSet) {
+			Clock clock, Orbit orbit, boolean useIGS,Set<String> discardSet) throws Exception {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/YYYY kk:mm:ss.SSS");
 		String errStr = sdf.format(time.getTime());
@@ -108,11 +108,46 @@ public class SingleFreq {
 				double[] satVel = null;
 				double corrPR = 0;
 				double corrPRrate = 0;
+				String state = Integer.toBinaryString(logObs.getState());
+//				double var = logObs.getReceivedSvTimeUncertaintyNanos();
+//				boolean state_flag = state.charAt(0)=='1'||state.charAt(1)=='1'||state.charAt(2)=='1'||state.charAt(3)=='1';
+//				if(!state_flag||var>1e3)
+//				{
+//				//	continue;
+//				}
 				if (useIGS) {
-
+//					double tSV_temp = 0;
+//					double tRX_temp = 0;
+//					String state_temp = "";
+//					double var_temp = 0;
+//					for(GNSSLog temp_log:gnssLogMap.get("G1C"))
+//					{
+//						if(temp_log.getSvid()==svid)
+//						{
+//							tSV_temp = temp_log.gettTx();
+//							tRX_temp = temp_log.gettRx();
+//							state_temp = Integer.toBinaryString(temp_log.getState());
+//							var_temp = temp_log.getReceivedSvTimeUncertaintyNanos();
+//						}
+//						
+//					}
+//					if(tSV_temp == -999)
+//					{
+//						throw new Exception("FAULT");
+//						
+//					}
+//					double[] sat_ClkOff_Drift_temp = clock.getBiasAndDrift(tSV_temp, svid, "G1C", true);
+//					
+//					
+					
 					double tSV = logObs.gettTx();
-
 					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, true);
+					
+//					if(Math.abs(tSV_temp-tSV)*3e8>100||Math.abs(sat_ClkOff_Drift[0]-sat_ClkOff_Drift_temp[0])>1e-8||Math.abs(sat_ClkOff_Drift[1]-sat_ClkOff_Drift_temp[1])>1e-9)
+//					{
+//						System.out.print("");
+//					}
+					
 					double satClkOff = sat_ClkOff_Drift[0];
 					double satClkDrift = sat_ClkOff_Drift[1];
 					// GPS System transmission time
@@ -142,6 +177,11 @@ public class SingleFreq {
 					satClkOff += relativistic_error;
 					t = tSV - satClkOff;
 					double rawPR = (logObs.gettRx() - t) * SpeedofLight;
+//					double rawPR_temp = (tRX_temp - t) * SpeedofLight;
+//					if(Math.abs(rawPR-rawPR_temp)>1)
+//					{
+//						System.out.print("");
+//					}
 					corrPR = rawPR;
 					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * satClkDrift);
 

@@ -2,8 +2,14 @@ package com.gnssAug.utility;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.stream.IntStream;
 
+import org.ejml.simple.SimpleMatrix;
+
+import com.gnssAug.Android.constants.Measurement;
+import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.models.Satellite;
 
 public class SatUtil {
@@ -46,6 +52,81 @@ public class SatUtil {
 			copy.add(original.get(i).clone());
 		}
 		return copy;
+	}
+	
+	public static String[] findObsvCodeArray(ArrayList<Satellite> satList) {
+		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
+		for (int i = 0; i < satList.size(); i++) {
+			obsvCodeSet.add(satList.get(i).getObsvCode());
+		}
+		return obsvCodeSet.toArray(new String[0]);
+
+	}
+	public static LinkedHashSet<String> findObsvCodeSet(ArrayList<Satellite> satList) {
+		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
+		for (int i = 0; i < satList.size(); i++) {
+			obsvCodeSet.add(satList.get(i).getObsvCode());
+		}
+		return obsvCodeSet;
+
+	}
+	
+	public static Object[] resetVar(Measurement meas, String[] obsvCodeList, double[] estX, SimpleMatrix estXcov)
+	{
+		int m = obsvCodeList.length;
+		ArrayList<Satellite> temp_satList = LinearLeastSquare.getTestedSatList(Measurement.Doppler);
+		Set<String> obsvCode_current = SatUtil.findObsvCodeSet(temp_satList);
+		ArrayList<Integer> indices = new ArrayList<Integer>();
+		if(obsvCode_current.size()!=obsvCodeList.length)
+		{
+			for(int i =0;i<m;i++)
+			{
+				if(obsvCode_current.contains(obsvCodeList[i]))
+				{
+					indices.add(i);
+				}
+				
+			}
+		}
+		if(indices.size()>0)
+		{
+			SimpleMatrix _estXcov = new SimpleMatrix(3+m,3+m);
+			_estXcov.fill(1e10);
+			_estXcov.insertIntoThis(0, 0, estXcov.extractMatrix(0, 3, 0, 3));
+			double[] _estX = new double[3+m];
+			System.arraycopy(estX, 0, _estX, 
+                    0, 3);
+			for(int i=0;i<indices.size();i++)
+			{
+				int index = indices.get(i);
+				_estX[3+index] = estX[3+i];
+				_estXcov.insertIntoThis(3+index, 0, estXcov.extractMatrix(3+i, 3+1+i, 0, 3));
+				_estXcov.insertIntoThis(0,3+index, estXcov.extractMatrix(0, 3, 3+i, 3+1+i));
+			}
+			int k = 0,l = 0;
+			for(int i=0;i<m;i++)
+			{
+				if(indices.contains(i))
+				{
+					l=0;
+					for(int j=0;j<m;j++)
+					{
+						if(indices.contains(j))
+						{
+							_estXcov.set(i+3,j+3,estXcov.get(k+3, l+3));
+							l++;
+						}
+					}
+					k++;
+				}
+			}
+			estX= _estX;
+			estXcov = _estXcov;
+		}
+		
+		return new Object[] {estX,estXcov};
+		
+	
 	}
 
 }

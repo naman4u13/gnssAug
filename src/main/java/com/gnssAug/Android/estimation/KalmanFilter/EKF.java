@@ -3,6 +3,8 @@ package com.gnssAug.Android.estimation.KalmanFilter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
@@ -235,10 +237,14 @@ public class EKF {
 		SimpleMatrix Czz_estVel = null;
 		int size = useDoppler ? 2 * n : n;
 		if (useEstVel) {
+			
 			estVel_Z = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), isWeighted, true, doTest, false, estPos,
 					useIGS);
 			Czz_estVel = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
 			size = n + 3 + m;
+			Object[] resettedVar = SatUtil.resetVar(Measurement.Doppler, obsvCodeList, estVel_Z, Czz_estVel);	
+			estVel_Z = (double[]) resettedVar[0];
+			Czz_estVel = (SimpleMatrix) resettedVar[1];
 		}
 		/*
 		 * H is the Jacobian matrix of partial derivatives Observation StateModel(h) of
@@ -396,9 +402,11 @@ public class EKF {
 			}
 		}
 		if (useEstVel) {
+			
 			for (int i = 0; i < 3 + m; i++) {
 				H[i + n][i + 3 + m] = 1;
 			}
+			
 		}
 		return new SimpleMatrix(H);
 

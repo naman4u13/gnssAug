@@ -95,18 +95,19 @@ public class Analyzer {
 				}
 				int svid = sat.getSvid();
 				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
+				double cn0  = sat.getCn0DbHz();
 				String code = sat.getObsvCode().charAt(0) + "";
 				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] { (range - trueRange), elevAngle });
+						new double[] { (range - trueRange), elevAngle,cn0 });
 				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] { (rangeRate - trueRangeRate), elevAngle });
+						new double[] { (rangeRate - trueRangeRate), elevAngle,cn0 });
 			}
 
 		}
 
-		GraphPlotter.graphTrueError("Error in Range-Rate(in m/s)", dopplerMap);
+		GraphPlotter.graphTrueError("Error in Range-Rate(in metrePerSec)", dopplerMap);
 
-		GraphPlotter.graphTrueError("Error in Range(in m)", rangeMap);
+		GraphPlotter.graphTrueError("Error in Range(in metre)", rangeMap);
 
 		if (outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain

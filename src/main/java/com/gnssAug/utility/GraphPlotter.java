@@ -81,8 +81,8 @@ public class GraphPlotter extends ApplicationFrame {
 		JFreeChart chart;
 
 		if (isHorizontal) {
-			chart = ChartFactory.createScatterPlot("Horizontal " + name + " Trajectory", "East(in m)",
-					"North(in m)", createDataset2DTraj(trajectoryMap, n));
+			chart = ChartFactory.createScatterPlot("Horizontal " + name + " Trajectory", "East(in m)", "North(in m)",
+					createDataset2DTraj(trajectoryMap, n));
 
 		} else {
 			chart = ChartFactory.createXYLineChart("Vertical", "Time(in sec)", "Up(in m)",
@@ -220,15 +220,23 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map, boolean isElevAngle)
-			throws IOException {
+	public GraphPlotter(String name, HashMap<String, TreeMap<Integer, double[]>> map, int opt) throws IOException {
 
 		super(name);
 		// TODO Auto-generated constructor stub
-		String xAxis = isElevAngle ? "Elevation-Angle(degrees)" : "GPS-Time(seconds)";
-
-		final JFreeChart chart = ChartFactory.createScatterPlot(name, xAxis, name,
-				createAnalyseDataset(map, isElevAngle));
+		String xAxis = "";
+		switch (opt) {
+		case 1:
+			xAxis = "Elevation-Angle(degrees)";
+			break;
+		case 2:
+			xAxis = "GPS-Time(seconds)";
+			break;
+		case 3:
+			xAxis = "C/N0 (in dB)";
+			break;
+		}
+		final JFreeChart chart = ChartFactory.createScatterPlot(name, xAxis, name, createAnalyseDataset(map, opt));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -294,7 +302,6 @@ public class GraphPlotter extends ApplicationFrame {
 
 		final JFreeChart chart = ChartFactory.createXYLineChart(applicationTitle + " Error", "Time-Elapsed(in sec)",
 				chartTitle, createDatasetENU(dataMap, timeList));
-
 
 //		chart.getPlot().setBackgroundPaint(Color.WHITE);
 //		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
@@ -594,16 +601,54 @@ public class GraphPlotter extends ApplicationFrame {
 
 	public static void graphTrueError(String name, HashMap<String, TreeMap<Integer, double[]>> map) throws IOException {
 
-		GraphPlotter chart = new GraphPlotter(name, map, false);
+		GraphPlotter chart = new GraphPlotter(name, map, 1);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
-		chart = new GraphPlotter(name, map, true);
+		chart = new GraphPlotter(name, map, 2);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
+		chart = new GraphPlotter(name, map, 3);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
+		boolean makeCSV = false;
+		if (makeCSV) {
+			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\Pixel4\\" + name + "3.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "SVID", "Time", "Angle", "CN0", "Error" };
+				writer.writeNext(header);
+				for (String key : map.keySet()) {
+					TreeMap<Integer, double[]> data = map.get(key);
+					for (int x : data.keySet()) {
+						String[] entry = new String[5];
+						double[] val = data.get(x);
+						entry[0] = key;
+						entry[1] = x + "";
+						entry[2] = val[1] + "";
+						entry[3] = val[2] + "";
+						entry[4] = val[0] + "";
+						dataList.add(entry);
+					}
+				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
 	}
 
 	public static void graphOutlier(String name, HashMap<String, TreeMap<Integer, double[]>> map,
@@ -781,20 +826,22 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
-			chart = new GraphPlotter(id, "Observables", satListMap.get(id));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
-			chart = new GraphPlotter(id, "Satellite-Plot", satListMap.get(id));
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
+//			chart = new GraphPlotter(id, "Observables", satListMap.get(id));
+//			chart.pack();
+//			RefineryUtilities.positionFrameRandomly(chart);
+//			chart.setVisible(true);
+//			chart = new GraphPlotter(id, "Satellite-Plot", satListMap.get(id));
+//			chart.pack();
+//			RefineryUtilities.positionFrameRandomly(chart);
+//			chart.setVisible(true);
 		}
 	}
 
 	private XYDataset createDataset3dErr(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
+		for (String key : dataMap.keySet()) {
+			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
+			// "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -863,7 +910,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, double[]>> map, boolean isElevAngle) {
+	private XYDataset createAnalyseDataset(HashMap<String, TreeMap<Integer, double[]>> map, int opt) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		ArrayList<Double> dataSeries = new ArrayList<Double>();
 		for (String key : map.keySet()) {
@@ -872,8 +919,10 @@ public class GraphPlotter extends ApplicationFrame {
 			TreeMap<Integer, double[]> data = map.get(key);
 			for (int x : data.keySet()) {
 				double y = data.get(x)[0];
-				if (isElevAngle) {
+				if (opt == 1) {
 					series.add(data.get(x)[1], y);
+				} else if (opt == 3) {
+					series.add(data.get(x)[2], y);
 				} else {
 					series.add(x, y);
 				}
@@ -940,13 +989,12 @@ public class GraphPlotter extends ApplicationFrame {
 		outliers.setKey("Outliers (Count: " + out + ")");
 		dataset.addSeries(outliers);
 		dataset.addSeries(inliers);
-		
-		
-		boolean makeCSV = false&&isElevAngle;
+
+		boolean makeCSV = false && isElevAngle;
 		if (makeCSV) {
 			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\VRWD_CorrectQ_Outliers.csv";
 			File file = new File(filePath);
-			
+
 			try {
 				// create FileWriter object with file as parameter
 				FileWriter outputfile = new FileWriter(file);
@@ -954,20 +1002,18 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "Angle", "Value", "isOut"};
+				String[] header = new String[] { "Angle", "Value", "isOut" };
 				writer.writeNext(header);
 				List<XYDataItem> ins = inliers.getItems();
 				List<XYDataItem> outs = outliers.getItems();
 				int flag = 0;
-				for(List<XYDataItem> list:new ArrayList<List<XYDataItem>>(Arrays.asList(ins,outs)))
-				{
-					
-					for(XYDataItem xy:list)
-					{
+				for (List<XYDataItem> list : new ArrayList<List<XYDataItem>>(Arrays.asList(ins, outs))) {
+
+					for (XYDataItem xy : list) {
 						String[] entry = new String[3];
-						entry[0] = ""+xy.getXValue();
-						entry[1] = ""+xy.getYValue();
-						entry[2] = ""+flag;
+						entry[0] = "" + xy.getXValue();
+						entry[1] = "" + xy.getYValue();
+						entry[2] = "" + flag;
 						dataList.add(entry);
 					}
 					flag++;
@@ -1007,7 +1053,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDatasetENU(HashMap<String, double[]> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
-		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
+		for (String key : dataMap.keySet()) {
+			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
+			// "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			double[] data = dataMap.get(key);
 			for (int i = 0; i < data.length; i++) {
@@ -1052,7 +1100,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 			for (int i = 0; i < data.size(); i++) {
 				double val = data.get(i);
-				if (val == 0 || val == -1) {
+				if (val == 0 || val == -1 || val > 500) {
 					continue;
 				}
 				sum += val;
@@ -1089,7 +1137,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDataset2dErr(HashMap<String, ArrayList<double[]>> dataMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
-		for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
+		for (String key : dataMap.keySet()) {
+			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
+			// "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -1219,7 +1269,43 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(true_dr_series);
 		dataset.addSeries(pr_dr_series);
 		dataset.addSeries(prRate_dr_series);
-		// dataset.addSeries(phase_dr_series);
+		dataset.addSeries(phase_dr_series);
+
+		boolean makeCSV = false&&(satMap.get(satMap.firstEntry().getKey()).getObsvCode().charAt(0)=='G')&&(satMap.get(satMap.firstEntry().getKey()).getSvid()==28);
+		if (makeCSV) {
+			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\SamsungS20Ultra\\G28_DR2.csv";
+			File file = new File(filePath);
+
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "Time", "True", "PR", "Doppler", "Phase" };
+				writer.writeNext(header);
+				int i = 0;
+				for (Long t : satMap.keySet()) {
+
+					String[] entry = new String[5];
+					entry[0] = "" + t;
+					entry[1] = "" + true_dr_series.getY(i);
+					entry[2] = "" + pr_dr_series.getY(i);
+					entry[3] = "" + prRate_dr_series.getY(i);
+					entry[4] = "" + phase_dr_series.getY(i);
+					dataList.add(entry);
+					i++;
+
+				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+
+		}
 
 		return dataset;
 
@@ -1389,8 +1475,9 @@ public class GraphPlotter extends ApplicationFrame {
 //		e.add(end[0], end[1]);
 //		dataset.addSeries(s);
 //		dataset.addSeries(e);
-
-		for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
+		for (String key : trajectoryMap.keySet()) {
+			// for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW",
+			// "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> trajectory = trajectoryMap.get(key);
 			for (int i = 0; i < n; i++) {
@@ -1430,8 +1517,8 @@ public class GraphPlotter extends ApplicationFrame {
 						ArrayList<double[]> trajectory = trajectoryMap.get(key);
 						double[] data = trajectory.get(i);
 						if ((data[0] != -999) && (data[1] != -999) && (data[2] != -999)) {
-							eastEntry[k] = data[0]+"";
-							northEntry[k] = data[1]+"";
+							eastEntry[k] = data[0] + "";
+							northEntry[k] = data[1] + "";
 						}
 						k++;
 					}
@@ -1457,8 +1544,9 @@ public class GraphPlotter extends ApplicationFrame {
 
 	private static XYDataset createDatasetVerticalTraj(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
-
-		for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" }) {
+		for (String key : trajectoryMap.keySet()) {
+			// for (String key : new String[] { "True", "Proposed Filter", "VRWD", "VRW",
+			// "PRW", "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> trajectory = trajectoryMap.get(key);
 			for (int i = 0; i < n; i++) {

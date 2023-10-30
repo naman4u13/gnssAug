@@ -137,10 +137,7 @@ public class Clock {
 				Y[i] = clk.getClkBias().get(SSI).get(SVID);
 			} catch (Exception e) {
 				System.err.println("Error in IGS clock data: missing data: "+SSI+SVID );
-				if(SVID!=4)
-				{
-					System.err.print("");
-				}
+				
 			}
 
 		}

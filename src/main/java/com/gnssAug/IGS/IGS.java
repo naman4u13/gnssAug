@@ -79,8 +79,8 @@ public class IGS {
 			Clock clock = null;
 			Antenna antenna = null;
 			IONEX ionex = null;
-
-			String base_path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
+			
+			String base_path = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
 
 			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
 
@@ -90,7 +90,7 @@ public class IGS {
 			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
 
 			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
-			String path = "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\output_files\\test";
+			String path = "C:\\\\Users\\\\naman.agarwal\\\\Documents\\\\GNSS\\\\gnss_output\\\\IGS_rinex_output\\test2";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -154,8 +154,8 @@ public class IGS {
 					continue;
 				}
 				double[] refEcef = LinearLeastSquare.getEstPos(satList, rxPCO, false);
-				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(refEcef, i.getSatEci())));
-				filterSat(satList, refEcef, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time);
+				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(rxARP, i.getSatEci())));
+				filterSat(satList, rxARP, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
@@ -507,7 +507,7 @@ public class IGS {
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
 		File orekitData = new File(
-				"C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master");
+				"C:\\Users\\naman.agarwal\\Documents\\orekit\\");
 		/*
 		 * File orekitData = new File(
 		 * "C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master"

@@ -18,6 +18,7 @@ import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
+import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
@@ -96,7 +97,7 @@ public class LinearLeastSquare {
 				weight[i][i] = 1;
 			}
 		}
-		String[] obsvCodeList = useIGS ? (String[]) findObsvCodeSet(satList) : null;
+		String[] obsvCodeList = useIGS ? (String[]) SatUtil.findObsvCodeArray(satList) : null;
 
 		double[] estState = estimate(satList, weight, null, refPos, type, useIGS, obsvCodeList);
 		if (doAnalyze) {
@@ -127,7 +128,7 @@ public class LinearLeastSquare {
 							}
 						}
 						_weight = _tempweight;
-						obsvCodeList = findObsvCodeSet(testedSatList);
+						obsvCodeList = SatUtil.findObsvCodeArray(testedSatList);
 
 						estState = estimate(testedSatList, _weight, null, refPos, type, useIGS, obsvCodeList);
 					}
@@ -244,6 +245,7 @@ public class LinearLeastSquare {
 		SimpleMatrix H = new SimpleMatrix(h);
 		SimpleMatrix Ht = H.transpose();
 		SimpleMatrix Cxx_hat= (Ht.mult(Cyy_inv).mult(H)).invert();
+		
 		SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, Cyy_inv);
 		SimpleMatrix Cee_hat = P_H_perpendicular.mult(Cyy).mult(P_H_perpendicular.transpose());
 		SimpleMatrix redunMatrix = Cee_hat.mult(Cyy_inv);
@@ -641,13 +643,6 @@ public class LinearLeastSquare {
 		return testedSatListMap.get(type);
 	}
 
-	private static String[] findObsvCodeSet(ArrayList<Satellite> satList) {
-		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();
-		for (int i = 0; i < satList.size(); i++) {
-			obsvCodeSet.add(satList.get(i).getObsvCode());
-		}
-		return obsvCodeSet.toArray(new String[0]);
-
-	}
+	
 
 }

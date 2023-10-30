@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
@@ -54,6 +55,7 @@ import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
+import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Time;
 
 public class Android {
@@ -83,7 +85,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\test2";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -129,6 +131,7 @@ public class Android {
 					System.err.println("FATAL ERROR - GT timestamp does not match");
 					continue;
 				}
+				
 				double[] trueUserLLH = new double[] { rxLLH.get(gtIndex)[2], rxLLH.get(gtIndex)[3],
 						rxLLH.get(gtIndex)[4] };
 				double trueVelRms = rxLLH.get(gtIndex)[5];
@@ -136,6 +139,44 @@ public class Android {
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
 						weekNo, clock, orbit, useIGS, discardSet);
+				
+				
+				
+				
+				
+				/*HashMap<Integer,HashMap<String,Satellite>> satDiff = new HashMap<Integer,HashMap<String,Satellite>>();
+				for(Satellite sat: satList)
+				{
+					int svid = sat.getSvid();
+					String obsvCode = sat.getObsvCode();
+					satDiff.computeIfAbsent(svid, k->new HashMap<String,Satellite>()).put(obsvCode, sat);
+				}
+				ArrayList<Integer> removeList = new ArrayList<Integer>();
+				for(int svid:satDiff.keySet())
+				{
+					if(satDiff.get(svid).size()<2)
+					{
+						removeList.add(svid);
+					}
+					else
+					{
+						double diff = satDiff.get(svid).get("G1C").getPseudorange()-satDiff.get(svid).get("G5X").getPseudorange();
+						if(diff>100)
+						{
+							System.out.println();
+						}
+						else
+						{
+							removeList.add(svid);
+						}
+					}
+				}
+				removeList.stream().forEach(i->satDiff.remove(i));
+				*/
+				
+				
+				
+				
 				int m = obsvCodeList.length;
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
@@ -151,12 +192,20 @@ public class Android {
 					e.printStackTrace();
 					continue;
 				}
-				for (Satellite sat : satList) {
-					sat.setElevAzm(ComputeEleAzm.computeEleAzm(refUserEcef, sat.getSatEci()));
-				}
-				filterSat(satList, cutOffAng, snrMask, refUserEcef, useIGS, ionex, time);
+//				if(gtIndex==1189)
+//				{
+//					System.out.println();
+//				}
 				double[] truePosEcef = LatLonUtil
-						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
+						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] -61}, true);
+				for (Satellite sat : satList) {
+					sat.setElevAzm(ComputeEleAzm.computeEleAzm(truePosEcef, sat.getSatEci()));
+					
+				}
+				filterSat(satList, cutOffAng, snrMask, truePosEcef, useIGS, ionex, time);
+				
+				
+				
 
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
@@ -807,7 +856,7 @@ public class Android {
 					System.out.println("t-t0:" + (t - t0) + " i:" + i + " ctr:" + ctr);
 				}
 			}
-			/*if (mapDeltaRanges) {
+			if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 				GraphPlotter.graphTrajectory(trajectoryPosMap, trajectoryVelMap, trueEcefList.size());
 			} else {
@@ -828,7 +877,7 @@ public class Android {
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 
 				}
-			}*/
+			}
 			if (doAnalyze&&estimatorType!=11) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);

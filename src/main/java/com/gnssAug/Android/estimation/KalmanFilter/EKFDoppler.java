@@ -97,7 +97,7 @@ public class EKFDoppler {
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - time) / 1e3;
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
-			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest,isWeighted);
+			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest,isWeighted,obsvCodeList);
 			runFilter(X, currentTime, deltaT, satList, obsvCodeList, Cxx_dot_hat, doAnalyze, doTest, outlierAnalyze,
 					useIGS, i,isWeighted);
 			SimpleMatrix P = kfObj.getCovariance();
@@ -124,15 +124,19 @@ public class EKFDoppler {
 	}
 
 	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS,
-			boolean doTest,boolean isWeighted) throws Exception {
+			boolean doTest,boolean isWeighted,String[] obsvCodeList) throws Exception {
 		double[] vel = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), isWeighted, true, doTest, false,
 				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
+		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
+		Object[] resettedVar = SatUtil.resetVar(Measurement.Doppler, obsvCodeList, vel, Cxx_dot_hat);
+		vel = (double[]) resettedVar[0];
+		Cxx_dot_hat = (SimpleMatrix) resettedVar[1];
 		double[] avg_vel = new double[vel.length];
 		for (int i = 0; i < vel.length; i++) {
 			avg_vel[i] = (vel[i] + prevVel[i]) * 0.5;
 			X.set(i, X.get(i) + (prevVel[i] * deltaT));
 		}
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
+		
 		SimpleMatrix avg_Cxx_dot_hat = Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.5);
 		prevVel = Arrays.copyOf(vel, vel.length);
 		SimpleMatrix temp = prev_Cxx_dot_hat;
