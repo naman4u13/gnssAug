@@ -85,7 +85,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\test3";
+			String path = "C:\\Users\\naman.agarwal\\Documents\\GNSS\\gnss_output\\2021-04-29-US-SJC-2\\test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -273,8 +273,11 @@ public class Android {
 										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
 										.add(LinearLeastSquare.getCxx_hat(type, "ENU"));
 							}
+							if(type==Measurement.Pseudorange)
+							{
 							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
 									.add(LinearLeastSquare.getDop());
+							}
 						}
 					}
 				}
@@ -872,8 +875,7 @@ public class Android {
 				if (doAnalyze&&estimatorType!=11) {
 					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-					// GraphPlotter.graphDOP(dopMap,
-					// satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList);
+					GraphPlotter.graphDOP(dopMap,satCountMap.get(Measurement.Pseudorange).get("WLS"), timeList,1);
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 
 				}
@@ -918,6 +920,7 @@ public class Android {
 				tropoErr = tropo.getSlantDelay(eleAzm[0]);
 
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
+				sat.setPhase(sat.getPhase()+ionoErr-tropoErr);
 			}
 		}
 	}

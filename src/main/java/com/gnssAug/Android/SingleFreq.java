@@ -108,6 +108,7 @@ public class SingleFreq {
 				double[] satVel = null;
 				double corrPR = 0;
 				double corrPRrate = 0;
+				double corrPhase = 0;
 				String state = Integer.toBinaryString(logObs.getState());
 //				double var = logObs.getReceivedSvTimeUncertaintyNanos();
 //				boolean state_flag = state.charAt(0)=='1'||state.charAt(1)=='1'||state.charAt(2)=='1'||state.charAt(3)=='1';
@@ -184,6 +185,7 @@ public class SingleFreq {
 //					}
 					corrPR = rawPR;
 					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * satClkDrift);
+					corrPhase = logObs.getAccumulatedDeltaRangeMeters()+(SpeedofLight*satClkOff);
 
 				} else {
 					if (!navMap.containsKey(svid)) {
@@ -200,11 +202,12 @@ public class SingleFreq {
 					double rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
 					corrPR = rawPR - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM();
 					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * navData.getSatClkDrift());
+					corrPhase = logObs.getAccumulatedDeltaRangeMeters() - navData.getIsrbM() - navData.getIonoDelayM() - navData.getTropoDelayM()+ (navData.getSatClkBias() * SpeedofLight);
 				}
 
 				// double diff = MathUtil.getEuclidean(satVel, navData.getSatVel());
 				// NOTE: satClkDrift require investigation
-				Satellite sat = new Satellite(logObs, t, corrPR, satECEF, satVel, corrPRrate);
+				Satellite sat = new Satellite(logObs, t, corrPR, satECEF, satVel, corrPRrate,corrPhase);
 				SV.add(sat);
 
 			}

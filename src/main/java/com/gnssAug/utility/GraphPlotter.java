@@ -616,9 +616,9 @@ public class GraphPlotter extends ApplicationFrame {
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
-		boolean makeCSV = false;
+		boolean makeCSV = true;
 		if (makeCSV) {
-			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\Pixel4\\" + name + "3.csv";
+			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\GPS\\Ucalgary\\ENGO 638\\Presentation Plots\\Mi8\\" + name + "2.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -756,6 +756,7 @@ public class GraphPlotter extends ApplicationFrame {
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
 			ArrayList<Long> timeList, int freq) throws Exception {
 
+		List<String[]> dataList = new ArrayList<String[]>();
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 		for (String key : dataMap.keySet()) {
 			ArrayList<double[]> dopList = dataMap.get(key);
@@ -769,19 +770,21 @@ public class GraphPlotter extends ApplicationFrame {
 				throw new Exception("DOP list size does not match timeList size");
 			}
 			for (int i = 0; i < n; i++) {
+				
 				double[] dopDiag = dopList.get(i);
 				gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
 				pdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2]));
 				hdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1]));
 				vdopList.add(Math.sqrt(dopDiag[2]));
 				tdopList.add(Math.sqrt(dopDiag[3]));
+				dataList.add(new String[] {timeList.get(i)+"",satCountList.get(i)+"",gdopList.get(i)+"",pdopList.get(i)+"",hdopList.get(i)+"",vdopList.get(i)+"",tdopList.get(i)+""});
 			}
 			dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
 			dopMap.computeIfAbsent("PDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, pdopList);
 			dopMap.computeIfAbsent("HDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, hdopList);
 			dopMap.computeIfAbsent("VDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, vdopList);
 			dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
-
+			
 		}
 
 		GraphPlotter chart = new GraphPlotter(dopMap, timeList, true);
@@ -796,6 +799,27 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
+		
+		boolean makeCSV = false;
+		if (makeCSV) {
+			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\Pixel4\\GPS_GAL_L1_BEI.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				
+				String[] header = new String[] { "Time","SatCount","GDOP","PDOP","HDOP","VDOP","TDOP" };
+				writer.writeNext(header);
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
 
 	}
 
@@ -1492,8 +1516,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String eastFilePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\TrajectoryCorrectQ_East.csv";
-			String northFilePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\TrajectoryCorrectQ_North.csv";
+			String eastFilePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\IPIN\\IPIN_images_csv\\Pixel4\\TrajectoryInCorrectQ_East.csv";
+			String northFilePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\IPIN\\IPIN_images_csv\\Pixel4\\TrajectoryInCorrectQ_North.csv";
 			File eastfile = new File(eastFilePath);
 			File northFile = new File(northFilePath);
 			try {

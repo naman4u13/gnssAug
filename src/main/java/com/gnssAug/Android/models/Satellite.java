@@ -6,6 +6,8 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private double t;
 	// Corrected pseudorange
 	private double pseudorange;
+	// Corrected phase
+	private double phase;
 	private double[] satEcef;
 	private double[] satVel;
 	private double[] satEci;
@@ -17,6 +19,11 @@ public class Satellite extends GNSSLog implements Cloneable {
 	// Experimental param, true range of satellite
 	private double trueRange;
 
+	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
+		this(log,t,pseudorange,satEcef,satVel,rangeRate);
+		this.phase = phase;
+
+	}
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate) {
 		super(log);
 		this.t = t;
@@ -86,6 +93,12 @@ public class Satellite extends GNSSLog implements Cloneable {
 		return rangeRate;
 	}
 
+	public double getPhase() {
+		return phase;
+	}
+	public void setPhase(double phase) {
+		this.phase = phase;
+	}
 	public void setPseudorange(double pseudorange) {
 		this.pseudorange = pseudorange;
 	}

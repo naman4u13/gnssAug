@@ -28,7 +28,8 @@ public class Analyzer {
 
 		HashMap<String, TreeMap<Integer, double[]>> dopplerMap = new HashMap<String, TreeMap<Integer, double[]>>();
 		HashMap<String, TreeMap<Integer, double[]>> rangeMap = new HashMap<String, TreeMap<Integer, double[]>>();
-
+		HashMap<String, TreeMap<Integer, double[]>> phaseMap = new HashMap<String, TreeMap<Integer, double[]>>();
+		
 		if (truePosEcef.size() != satMap.size()) {
 			throw new Exception("Error in Analyzer processing");
 		}
@@ -87,19 +88,28 @@ public class Analyzer {
 				double trueRangeRate = IntStream.range(0, 3).mapToDouble(j -> unitLos[j] * relVel[j]).sum();
 				double range = sat.getPseudorange();
 				double rangeRate = sat.getRangeRate();
+				double phase = sat.getPhase();
+				int svid = sat.getSvid();
+				String code = sat.getObsvCode().charAt(0) + "";
+				String satCode = code + svid;
 				for (int k = 0; k < m; k++) {
 					if (obsvCode.equals(obsvCodeList[k])) {
-						range -= rxClkOff[k];
-						rangeRate -= rxClkDrift[k];
+//						range -= rxClkOff[k];
+//						phase -= rxClkOff[k];
+//						rangeRate -= rxClkDrift[k];
 					}
 				}
-				int svid = sat.getSvid();
+				
 				double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
 				double cn0  = sat.getCn0DbHz();
-				String code = sat.getObsvCode().charAt(0) + "";
-				rangeMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+				
+				rangeMap.computeIfAbsent(satCode, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
 						new double[] { (range - trueRange), elevAngle,cn0 });
-				dopplerMap.computeIfAbsent(code + svid, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+				
+				phaseMap.computeIfAbsent(satCode, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
+						new double[] { (phase - trueRange), elevAngle,cn0 });
+				
+				dopplerMap.computeIfAbsent(satCode, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
 						new double[] { (rangeRate - trueRangeRate), elevAngle,cn0 });
 			}
 
@@ -108,6 +118,8 @@ public class Analyzer {
 		GraphPlotter.graphTrueError("Error in Range-Rate(in metrePerSec)", dopplerMap);
 
 		GraphPlotter.graphTrueError("Error in Range(in metre)", rangeMap);
+		
+		GraphPlotter.graphTrueError("Error in Phase(in metre)", phaseMap);
 
 		if (outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain
