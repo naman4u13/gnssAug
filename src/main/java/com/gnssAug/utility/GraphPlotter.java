@@ -616,7 +616,7 @@ public class GraphPlotter extends ApplicationFrame {
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
 
-		boolean makeCSV = true;
+		boolean makeCSV = false;
 		if (makeCSV) {
 			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\GPS\\Ucalgary\\ENGO 638\\Presentation Plots\\Mi8\\" + name + "2.csv";
 			File file = new File(filePath);
@@ -823,6 +823,11 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	/**
+	 * @param satMap
+	 * @param truePosEcef
+	 * @throws Exception
+	 */
 	public static void graphDeltaRange(TreeMap<Long, ArrayList<Satellite>> satMap, ArrayList<double[]> truePosEcef)
 			throws Exception {
 		if (truePosEcef.size() != satMap.size()) {
@@ -858,6 +863,66 @@ public class GraphPlotter extends ApplicationFrame {
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
+			
+		}
+		
+		
+		
+		
+		boolean makeCSV = true;
+		if (makeCSV) {
+			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\work\\ENC-2024\\CSVs\\SamsungS20Ultra_SJC_L5.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "SVID","Time", "True", "PR", "Doppler", "Phase" };
+				writer.writeNext(header);
+				i = 0;
+				for(String id : satListMap.keySet()) {
+					TreeMap<Long, Satellite> satList = satListMap.get(id);
+					double t0 = satList.firstEntry().getKey();
+					for (Long t : satList.keySet()) {
+						Satellite sat = satList.get(t);
+						double pr = sat.getPseudorange();
+						double prRate = sat.getPseudorangeRateMetersPerSecond();
+						double cp = sat.getPhase();
+						double tr = sat.getTrueRange();
+						if ((t - t0) > 1.1) {
+							String[] entry = new String[6];
+							entry[0] = ""+id;
+							entry[1] = "" + (t0 + 1);
+							entry[2] = "" + null;
+							entry[3] = "" + null; 
+							entry[4] = "" + null; 
+							entry[5] = "" + null; 
+							dataList.add(entry);
+							i++;
+						}
+						String[] entry = new String[6];
+						entry[0] = ""+id;
+						entry[1] = "" + t;
+						entry[2] = "" + tr;
+						entry[3] = "" + pr; 
+						entry[4] = "" + prRate; 
+						entry[5] = "" + cp; 
+						dataList.add(entry);
+						i++;
+						t0 = t;
+					}
+				}
+			
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+
 		}
 	}
 
@@ -1161,9 +1226,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDataset2dErr(HashMap<String, ArrayList<double[]>> dataMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
-		for (String key : dataMap.keySet()) {
-			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
-			// "WLS" }) {
+//		for (String key : dataMap.keySet()) {
+			 for (String key : new String[] {  "Proposed Filter", "VRWD", "VRW", "PRW",
+			 "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -1295,9 +1360,9 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(prRate_dr_series);
 		dataset.addSeries(phase_dr_series);
 
-		boolean makeCSV = false&&(satMap.get(satMap.firstEntry().getKey()).getObsvCode().charAt(0)=='G')&&(satMap.get(satMap.firstEntry().getKey()).getSvid()==28);
+		boolean makeCSV = false&&(satMap.get(satMap.firstEntry().getKey()).getObsvCode().charAt(0)=='G')&&(satMap.get(satMap.firstEntry().getKey()).getSvid()==30);
 		if (makeCSV) {
-			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\SamsungS20Ultra\\G28_DR2.csv";
+			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\GPS\\Ucalgary\\ENGO 638\\Presentation Plots\\Pixel4\\Pixel4_G30_DR.csv";
 			File file = new File(filePath);
 
 			try {
@@ -1339,25 +1404,32 @@ public class GraphPlotter extends ApplicationFrame {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		final XYSeries pr_series = new XYSeries("Pseudorange");
 		final XYSeries prRate_series = new XYSeries("Pseudorange Rate(Doppler)");
+		final XYSeries cp_series = new XYSeries("Carrier Phase");
+		final XYSeries tr_series = new XYSeries("True Range");
 		double t0 = satMap.firstEntry().getKey();
-		double tr0 = satMap.firstEntry().getValue().getTrueRange();
-		double pr0 = satMap.firstEntry().getValue().getPseudorange();
-		double prRate0 = satMap.firstEntry().getValue().getPseudorangeRateMetersPerSecond();
 		for (Long t : satMap.keySet()) {
 			Satellite sat = satMap.get(t);
 			double pr = sat.getPseudorange();
 			double prRate = sat.getPseudorangeRateMetersPerSecond();
+			double cp = sat.getPhase();
 			double tr = sat.getTrueRange();
 			if ((t - t0) > 1.1) {
 				pr_series.add(t0 + 1, null);
 				prRate_series.add(t0 + 1, null);
+				cp_series.add(t0 + 1, null);
+				tr_series.add(t0 + 1, null);
 			}
 			pr_series.add(t, (Double) (pr));
 			prRate_series.add(t, (Double) (prRate));
+			cp_series.add(t, (Double) (cp));
+			tr_series.add(t, (Double) (tr));
 			t0 = t;
 		}
 		dataset.addSeries(pr_series);
 		dataset.addSeries(prRate_series);
+		dataset.addSeries(cp_series);
+		dataset.addSeries(tr_series);
+		
 		return dataset;
 	}
 

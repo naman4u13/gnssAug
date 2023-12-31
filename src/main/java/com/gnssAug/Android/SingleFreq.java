@@ -110,45 +110,11 @@ public class SingleFreq {
 				double corrPRrate = 0;
 				double corrPhase = 0;
 				String state = Integer.toBinaryString(logObs.getState());
-//				double var = logObs.getReceivedSvTimeUncertaintyNanos();
-//				boolean state_flag = state.charAt(0)=='1'||state.charAt(1)=='1'||state.charAt(2)=='1'||state.charAt(3)=='1';
-//				if(!state_flag||var>1e3)
-//				{
-//				//	continue;
-//				}
+
 				if (useIGS) {
-//					double tSV_temp = 0;
-//					double tRX_temp = 0;
-//					String state_temp = "";
-//					double var_temp = 0;
-//					for(GNSSLog temp_log:gnssLogMap.get("G1C"))
-//					{
-//						if(temp_log.getSvid()==svid)
-//						{
-//							tSV_temp = temp_log.gettTx();
-//							tRX_temp = temp_log.gettRx();
-//							state_temp = Integer.toBinaryString(temp_log.getState());
-//							var_temp = temp_log.getReceivedSvTimeUncertaintyNanos();
-//						}
-//						
-//					}
-//					if(tSV_temp == -999)
-//					{
-//						throw new Exception("FAULT");
-//						
-//					}
-//					double[] sat_ClkOff_Drift_temp = clock.getBiasAndDrift(tSV_temp, svid, "G1C", true);
-//					
-//					
 					
 					double tSV = logObs.gettTx();
 					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, true);
-					
-//					if(Math.abs(tSV_temp-tSV)*3e8>100||Math.abs(sat_ClkOff_Drift[0]-sat_ClkOff_Drift_temp[0])>1e-8||Math.abs(sat_ClkOff_Drift[1]-sat_ClkOff_Drift_temp[1])>1e-9)
-//					{
-//						System.out.print("");
-//					}
-					
 					double satClkOff = sat_ClkOff_Drift[0];
 					double satClkDrift = sat_ClkOff_Drift[1];
 					// GPS System transmission time
@@ -161,28 +127,11 @@ public class SingleFreq {
 					
 					satECEF = satPV[0];
 					satVel = satPV[1];
-//					navData= derivedMap.get(key).get(obsvCode).get(svid);
-//					double errP = 0;
-//					double errV = 0;
-//					double _rawPR = 0;
-//					double _satClkDrift = 0;
-//					if(navData!=null)
-//					{
-//					 errP = MathUtil.getEuclidean(satECEF, navData.getSatECEF());
-//					 errV = MathUtil.getEuclidean(satVel, navData.getSatVel());
-//					 _rawPR = navData.getRawPrM() + (navData.getSatClkBias() * SpeedofLight);
-//					 _satClkDrift = navData.getSatClkDrift();
-//					}
 					double relativistic_error = -2 * (Vector.dotProd(satECEF, satVel)) / Math.pow(SpeedofLight, 2);
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
 					t = tSV - satClkOff;
 					double rawPR = (logObs.gettRx() - t) * SpeedofLight;
-//					double rawPR_temp = (tRX_temp - t) * SpeedofLight;
-//					if(Math.abs(rawPR-rawPR_temp)>1)
-//					{
-//						System.out.print("");
-//					}
 					corrPR = rawPR;
 					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * satClkDrift);
 					corrPhase = logObs.getAccumulatedDeltaRangeMeters()+(SpeedofLight*satClkOff);

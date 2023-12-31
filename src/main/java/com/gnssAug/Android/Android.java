@@ -329,7 +329,7 @@ public class Android {
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
 				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11)) ) {
-					estTypes = new int[] { 5, 6,12 };
+					estTypes = new int[] { 5,6,12 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -919,8 +919,8 @@ public class Android {
 
 				tropoErr = tropo.getSlantDelay(eleAzm[0]);
 
-				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
-				sat.setPhase(sat.getPhase()+ionoErr-tropoErr);
+//				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
+//				sat.setPhase(sat.getPhase()+ionoErr-tropoErr);
 			}
 		}
 	}
