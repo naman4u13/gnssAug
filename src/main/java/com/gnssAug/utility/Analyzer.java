@@ -94,9 +94,9 @@ public class Analyzer {
 				String satCode = code + svid;
 				for (int k = 0; k < m; k++) {
 					if (obsvCode.equals(obsvCodeList[k])) {
-//						range -= rxClkOff[k];
-//						phase -= rxClkOff[k];
-//						rangeRate -= rxClkDrift[k];
+						range -= rxClkOff[k];
+						phase -= rxClkOff[k];
+						rangeRate -= rxClkDrift[k];
 					}
 				}
 				
@@ -119,7 +119,7 @@ public class Analyzer {
 
 		GraphPlotter.graphTrueError("Error in Range(in metre)", rangeMap);
 		
-		GraphPlotter.graphTrueError("Error in Phase(in metre)", phaseMap);
+		//GraphPlotter.graphTrueError("Error in Phase(in metre)", phaseMap);
 
 		if (outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain

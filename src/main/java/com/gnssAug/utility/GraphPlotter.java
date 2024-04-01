@@ -406,7 +406,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 			boolean makeCSV = false;
 			if (makeCSV) {
-				String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\" + chartNames[i] + "3.csv";
+				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/" + chartNames[i] + ".csv";
 				File file = new File(filePath);
 				try {
 					// create FileWriter object with file as parameter
@@ -415,7 +415,7 @@ public class GraphPlotter extends ApplicationFrame {
 					CSVWriter writer = new CSVWriter(outputfile);
 					// create a List which contains String array
 					List<String[]> data = new ArrayList<String[]>();
-					String[] header = new String[] { "Time", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" };
+					String[] header = new String[] { "Time", "Proposed AKF","DBP Filter", "VRWD", "WLS" };
 					writer.writeNext(header);
 					for (int j = 0; j < timeList.size() - 1; j++) {
 						String[] entry = new String[header.length];
@@ -618,7 +618,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\GPS\\Ucalgary\\ENGO 638\\Presentation Plots\\Mi8\\" + name + "2.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2\\" + name + ".csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -869,7 +869,7 @@ public class GraphPlotter extends ApplicationFrame {
 		
 		
 		
-		boolean makeCSV = true;
+		boolean makeCSV = false;
 		if (makeCSV) {
 			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\work\\ENC-2024\\CSVs\\SamsungS20Ultra_SJC_L5.csv";
 			File file = new File(filePath);
@@ -1226,9 +1226,9 @@ public class GraphPlotter extends ApplicationFrame {
 	private XYDataset createDataset2dErr(HashMap<String, ArrayList<double[]>> dataMap) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
-//		for (String key : dataMap.keySet()) {
-			 for (String key : new String[] {  "Proposed Filter", "VRWD", "VRW", "PRW",
-			 "WLS" }) {
+		for (String key : dataMap.keySet()) {
+			 //for (String key : new String[] {  "Proposed Filter", "VRWD", "VRW", "PRW",
+			 //"WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -1586,10 +1586,10 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(series);
 		}
 
-		boolean makeCSV = false;
+		boolean makeCSV = true;
 		if (makeCSV) {
-			String eastFilePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\IPIN\\IPIN_images_csv\\Pixel4\\TrajectoryInCorrectQ_East.csv";
-			String northFilePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\IPIN\\IPIN_images_csv\\Pixel4\\TrajectoryInCorrectQ_North.csv";
+			String eastFilePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_East.csv";
+			String northFilePath ="/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_North.csv";
 			File eastfile = new File(eastFilePath);
 			File northFile = new File(northFilePath);
 			try {
@@ -1602,7 +1602,7 @@ public class GraphPlotter extends ApplicationFrame {
 				// create a List which contains String array
 				List<String[]> eastDataList = new ArrayList<String[]>();
 				List<String[]> northDataList = new ArrayList<String[]>();
-				String[] header = new String[] { "True", "Proposed Filter", "VRWD", "VRW", "PRW", "WLS" };
+				String[] header = new String[] { "True", "Proposed AKF","DBP Filter", "VRWD", "WLS"};
 				eastWriter.writeNext(header);
 				northWriter.writeNext(header);
 				for (int i = 1; i < n; i++) {
