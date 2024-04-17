@@ -34,6 +34,7 @@ import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.KFDopplerParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
@@ -87,7 +88,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -163,7 +164,7 @@ public class Android {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(truePosEcef, sat.getSatEci()));
 
 				}
-				filterSat(satList, cutOffAng, snrMask, truePosEcef, useIGS, ionex, time);
+				filterSat(satList, cutOffAng, snrMask, truePosEcef, useIGS, ionex, time,estimatorType);
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
 
@@ -618,6 +619,15 @@ public class Android {
 				}
 
 			}
+			
+			if (estimatorType == 15)
+			{
+				TreeMap<Long, double[]> estStateMap;
+				KFDopplerParent ekf;
+				ekf = new EKF_PPP();
+				estStateMap = ((EKF_PPP) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
+						doTest, outlierAnalyze);
+			}
 
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 			// TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap =
@@ -877,7 +887,7 @@ public class Android {
 	}
 
 	public static void filterSat(ArrayList<Satellite> satList, double cutOffAng, double snrMask, double[] refEcef,
-			boolean useIGS, IONEX ionex, Calendar time) {
+			boolean useIGS, IONEX ionex, Calendar time,int estimatorType) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -900,7 +910,12 @@ public class Android {
 						sat.getCarrierFrequencyHz(), time);
 
 				tropoErr = tropo.getSlantDelay(eleAzm[0]);
-
+				
+				if(estimatorType==15)
+				{
+					sat.setIonoErr(ionoErr);
+					ionoErr = 0;
+				}
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
 				sat.setPhase(sat.getPhase() + ionoErr - tropoErr);
 			}

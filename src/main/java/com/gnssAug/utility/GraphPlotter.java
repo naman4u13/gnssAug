@@ -871,7 +871,7 @@ public class GraphPlotter extends ApplicationFrame {
 		
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\work\\ENC-2024\\CSVs\\SamsungS20Ultra_SJC_L5.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/2021-04-29-US-SJC-2-SamsungS20Ultra-L5.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -889,7 +889,7 @@ public class GraphPlotter extends ApplicationFrame {
 					for (Long t : satList.keySet()) {
 						Satellite sat = satList.get(t);
 						double pr = sat.getPseudorange();
-						double prRate = sat.getPseudorangeRateMetersPerSecond();
+						double prRate = sat.getRangeRate();
 						double cp = sat.getPhase();
 						double tr = sat.getTrueRange();
 						if ((t - t0) > 1.1) {
@@ -1586,7 +1586,7 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(series);
 		}
 
-		boolean makeCSV = true;
+		boolean makeCSV = false;
 		if (makeCSV) {
 			String eastFilePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_East.csv";
 			String northFilePath ="/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_North.csv";

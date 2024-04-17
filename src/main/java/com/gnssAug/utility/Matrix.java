@@ -1,5 +1,7 @@
 package com.gnssAug.utility;
 
+import java.util.ArrayList;
+
 import org.ejml.simple.SimpleMatrix;
 
 public class Matrix {
@@ -56,6 +58,24 @@ public class Matrix {
 			}
 		}
 		return array;
+	}
+	
+	public static double[] matrix2ArrayVec(SimpleMatrix matrix) {
+		double[] array = new double[matrix.numRows()];
+		for (int r = 0; r < matrix.numRows(); r++) {
+			
+				array[r] = matrix.get(r, 0);
+			
+		}
+		return array;
+	}
+	
+	public static SimpleMatrix ArrayList2Vector(ArrayList<Integer> list)
+	{
+		int n = list.size();
+		double[] data = list.stream().mapToDouble(i -> i).toArray();
+		SimpleMatrix vec = new SimpleMatrix(n,1,true,data);
+		return vec;
 	}
 
 	public static SimpleMatrix getProjection(SimpleMatrix A, SimpleMatrix W) {

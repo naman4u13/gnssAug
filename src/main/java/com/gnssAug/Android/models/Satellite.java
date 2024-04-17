@@ -18,7 +18,15 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private boolean isOutlier;
 	// Experimental param, true range of satellite
 	private double trueRange;
-
+	// Iono param required for PPP & CSDR
+	private double ionoErr;
+	// Tropo param required to be removed from Doppler Measurements
+	private double tropoErr;
+	// Phase lock indicator
+	private boolean isPhaseLocked = false;
+	
+	
+	
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
 		this(log,t,pseudorange,satEcef,satVel,rangeRate);
 		this.phase = phase;
@@ -118,5 +126,22 @@ public class Satellite extends GNSSLog implements Cloneable {
 	public void setTrueRange(double trueRange) {
 		this.trueRange = trueRange;
 	}
-
+	public double getIonoErr() {
+		return ionoErr;
+	}
+	public void setIonoErr(double ionoErr) {
+		this.ionoErr = ionoErr;
+	}
+	public boolean isPhaseLocked() {
+		return isPhaseLocked;
+	}
+	public void setPhaseLocked(boolean isPhaseLocked) {
+		this.isPhaseLocked = isPhaseLocked;
+	}
+	public double getTropoErr() {
+		return tropoErr;
+	}
+	public void setTropoErr(double tropoErr) {
+		this.tropoErr = tropoErr;
+	}
 }
