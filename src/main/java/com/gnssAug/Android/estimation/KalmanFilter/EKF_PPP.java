@@ -24,6 +24,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.helper.IntegerLeastSquares;
+import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
@@ -929,7 +930,7 @@ public class EKF_PPP extends KFDopplerParent {
 					
 					boolean isCS = false;
 					double approxCS = Math.abs(carrierPhaseDR-dopplerDR);
-					if(approxCS>wavelength)
+					if(approxCS>3*wavelength)
 					{
 						if(approxCS<100*wavelength)
 						{
@@ -967,7 +968,7 @@ public class EKF_PPP extends KFDopplerParent {
 		H.insertIntoThis(l, 0, unitLOS.scale(-1));
 		
 		SimpleMatrix Czz_doppler = Weight.getNormCyy(csdSatList, GnssDataConfig.doppler_priorVarOfUnitW);
-		SimpleMatrix Czz_phase = new SimpleMatrix(Czz_doppler);
+		SimpleMatrix Czz_phase = new SimpleMatrix(Czz_doppler).scale(0.1);
 		
 		
 		
@@ -1014,59 +1015,40 @@ public class EKF_PPP extends KFDopplerParent {
 		
 		
 		
-		RealMatrix Cxx_float_hat =  new Array2DRowRealMatrix(Matrix.matrix2Array(HtWHinv));
+		RealMatrix Cxx_floatAmb_hat =  new Array2DRowRealMatrix(Matrix.matrix2Array(floatAmbCov));
 		LambdaMethod lm = new LambdaMethod();
 		
 		// Full ambiguity Resolution
-		int[] indirection = IntStream.range(3+m, 3+m+initialAmbCount).toArray();
-		IntegerLeastSquareSolution[] ILSsol = lm.solveILS(5, Matrix.matrix2ArrayVec(floatAmb), indirection, Cxx_float_hat);
+		
+		int[] indirection = IntStream.range(0, initialAmbCount).toArray();
+		IntegerLeastSquareSolution[] ILSsol = lm.solveILS(5, Matrix.matrix2ArrayVec(floatAmb), indirection, Cxx_floatAmb_hat);
 		SimpleRatioAmbiguityAcceptance ratioTest = new SimpleRatioAmbiguityAcceptance(1.0/3.0);
 		IntegerLeastSquareSolution acceptedILS = ratioTest.accept(ILSsol);
 		
 		
 		if(acceptedILS==null)
 		{
-			 double[] diagAmbCov = Matrix.matrix2ArrayVec(floatAmbCov.diag());
-			 int ambCount = diagAmbCov.length;
-			 int[] sortedIndices = IntStream.range(0, diagAmbCov.length)
-		                .boxed().sorted((i, j) -> (int)(diagAmbCov[i]-diagAmbCov[j]) )
-		                .mapToInt(ele -> ele).toArray();
-			 int count = ambCount-1;
-			 HashSet<Integer> indexSet = new HashSet<Integer>();
-			 while(acceptedILS==null&&count>=0)
-			 {
-				 indexSet.add(sortedIndices[count]);
-				 double[] newFloatAmb = new double[count];
-				 double[][] newFloatAmbCov = new double[count][count];
-				 indirection = new int[count];
-				 int _i=0,_j=0;
-				 for(int i=0;i<ambCount;i++)
-				 {
-					 if(!indexSet.contains(i))
-					 {
-						 newFloatAmb[_i] = floatAmb.get(i);
-						 indirection[_i] = _i;
-						 for(int j=0;j<ambCount;j++)
-						 {
-							 if(!indexSet.contains(j))
-							 {
-								 newFloatAmbCov[_i][_j] = floatAmbCov.get(i,j);
-								 _j++;
-							 }
-							 
-						 }
-						 _i++;
-					 }
-					 _j = 0;
-				 }
-				 ILSsol = lm.solveILS(5, newFloatAmb,indirection ,new Array2DRowRealMatrix(newFloatAmbCov));
-				 acceptedILS = ratioTest.accept(ILSsol);
-				 count--;
-			 }
-			 if(acceptedILS!=null)
-			 {
-				 System.out.println();
-			 }
+			
+			int count = initialAmbCount-1;
+			int[] arr = IntStream.range(0, initialAmbCount).toArray();
+			while(acceptedILS==null&&count>=0)
+			{
+				ArrayList<int[]> combs = Combination.getCombination(arr,initialAmbCount,count);
+				for(int i=0;i<combs.size();i++)
+				{
+					int[] comb = combs.get(i);
+					double[] newFloatAmb = IntStream.range(0, count).mapToDouble(j->floatAmb.get(comb[j])).toArray();
+					ILSsol = lm.solveILS(5, newFloatAmb,comb ,Cxx_floatAmb_hat);
+					acceptedILS = ratioTest.accept(ILSsol);
+					if(acceptedILS!=null)
+					{
+						break;
+					}
+				}
+				count--;
+			}
+			
+
 		}
 			
 		
