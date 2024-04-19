@@ -8,6 +8,7 @@ public class TDCP {
 	private double deltaRange;
 	private double satVelCorr;
 	private SimpleMatrix unitLOS;
+	// Also means a Cycle Slip
 	private boolean isOutlier;
 	
 	public TDCP(Satellite sat, double deltaRange,double satVelCorr,SimpleMatrix unitLOS) {

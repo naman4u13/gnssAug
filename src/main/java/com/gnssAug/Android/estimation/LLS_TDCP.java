@@ -34,17 +34,17 @@ public class LLS_TDCP {
 
 	public static double[] getEstVel(ArrayList<Satellite> currentSatList, ArrayList<Satellite> prevSatList,
 			boolean isWLS, double[] refPos, boolean useIGS) throws Exception {
-		return process(currentSatList, prevSatList, isWLS, false, false, false, refPos, useIGS);
+		return process(currentSatList, prevSatList, isWLS, false, false, false, refPos, useIGS,false);
 	}
 
 	public static double[] getEstVel(ArrayList<Satellite> currentSatList, ArrayList<Satellite> prevSatList,
-			boolean isWLS, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, double[] refPos, boolean useIGS)
+			boolean isWLS, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, double[] refPos, boolean useIGS,boolean useGFCSD)
 			throws Exception {
-		return process(currentSatList, prevSatList, isWLS, doAnalyze, doTest, outlierAnalyze, refPos, useIGS);
+		return process(currentSatList, prevSatList, isWLS, doAnalyze, doTest, outlierAnalyze, refPos, useIGS,useGFCSD);
 	}
 
 	public static double[] process(ArrayList<Satellite> currentsatList, ArrayList<Satellite> prevSatList, boolean isWLS,
-			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, double[] refPos, boolean useIGS)
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, double[] refPos, boolean useIGS,boolean useGFCSD)
 			throws Exception {
 
 		ArrayList<TDCP> tdcpList = new ArrayList<TDCP>();
@@ -69,7 +69,16 @@ public class LLS_TDCP {
 					double satVelCorr = unitLOS.mult(satEci.minus(prev_satEci)).get(0);
 					double wavelength = SpeedofLight/current_sat.getCarrierFrequencyHz();
 					double approxCS = Math.abs(phaseDR-dopplerDR);
-					if(approxCS<5*wavelength)
+					if(useGFCSD)
+					{
+						if(approxCS<5*wavelength)
+						{
+							
+							tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS));
+						}
+						
+					}
+					else
 					{
 						tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS));
 					}

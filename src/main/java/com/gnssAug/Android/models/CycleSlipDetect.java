@@ -5,7 +5,7 @@ public class CycleSlipDetect {
 	private Satellite sat;
 	private double dopplerDR;
 	private double carrierPhaseDR;
-	private boolean isCS;
+	private boolean isCS = false;
 	private double ionoRate;
 	private double wavelength;
 	private double satVelCorr;

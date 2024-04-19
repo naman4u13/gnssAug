@@ -25,7 +25,7 @@ public class MainApp {
 			String basePath =  "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/decimeter/train/2021-04-29-US-SJC-2/SamsungS20Ultra";
 					//"C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
 			//"C:\\D drive\\Study\\Google Decimeter Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
-			Set<String> discardSet = false?Set.of(""):Set.of("C11","G12","G2");//C33
+			Set<String> discardSet = true?Set.of(""):Set.of("C11","G12","G2");//C33
 			String[] strList = basePath.split("/");
 			String[] date = strList[strList.length - 2].split("-");
 			int year = Integer.parseInt(date[0]);
@@ -44,7 +44,7 @@ public class MainApp {
 			String orbit_path = base_url + year + "_" + doy + sep+"COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + sep+"igsg" + doy + "0.21I";
 			Android.posEstimate(true, 0, 0,16, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, false, false,false,discardSet);
+					clock_path, orbit_path, ionex_path, true, false, false, false,true,discardSet);
 			break;
 
 		case 2:
