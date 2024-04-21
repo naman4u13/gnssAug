@@ -43,8 +43,8 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + sep+"COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + sep+"COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + sep+"igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0,16, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, false, false, false,true,discardSet);
+			Android.posEstimate(true, 0, 0,17, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, true, false,false, false,false,discardSet);
 			break;
 
 		case 2:

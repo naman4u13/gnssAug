@@ -880,7 +880,7 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "SVID","Time", "True", "PR", "Doppler", "Phase" };
+				String[] header = new String[] { "SVID","Time", "True", "PR", "Doppler", "Phase","Iono","Tropo","ClkRate" };
 				writer.writeNext(header);
 				i = 0;
 				for(String id : satListMap.keySet()) {
@@ -892,24 +892,33 @@ public class GraphPlotter extends ApplicationFrame {
 						double prRate = sat.getRangeRate();
 						double cp = sat.getPhase();
 						double tr = sat.getTrueRange();
+						double iono = sat.getIonoErr();
+						double tropo = sat.getTropoErr();
+						double clkRate = sat.getClkRate();
 						if ((t - t0) > 1.1) {
-							String[] entry = new String[6];
+							String[] entry = new String[9];
 							entry[0] = ""+id;
 							entry[1] = "" + (t0 + 1);
 							entry[2] = "" + null;
 							entry[3] = "" + null; 
 							entry[4] = "" + null; 
 							entry[5] = "" + null; 
+							entry[6] = "" + null; 
+							entry[7] = "" + null; 
+							entry[8] = "" + null; 
 							dataList.add(entry);
 							i++;
 						}
-						String[] entry = new String[6];
+						String[] entry = new String[9];
 						entry[0] = ""+id;
 						entry[1] = "" + t;
 						entry[2] = "" + tr;
 						entry[3] = "" + pr; 
 						entry[4] = "" + prRate; 
 						entry[5] = "" + cp; 
+						entry[6] = "" + iono; 
+						entry[7] = "" + tropo; 
+						entry[8] = "" + clkRate;
 						dataList.add(entry);
 						i++;
 						t0 = t;

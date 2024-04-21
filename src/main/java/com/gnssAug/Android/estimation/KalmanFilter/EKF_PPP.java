@@ -502,7 +502,7 @@ public class EKF_PPP extends KFDopplerParent {
 						{
 							isCS = true;
 							initialAmbCount++;
-							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength));
+							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength,unitLOS));
 						}
 						else
 						{
@@ -511,7 +511,7 @@ public class EKF_PPP extends KFDopplerParent {
 						}
 
 					}
-					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS);
+					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS,unitLOS);
 					csdList.add(csdObj);
 					csdSatList.add(sat);
 					break;
@@ -645,7 +645,7 @@ public class EKF_PPP extends KFDopplerParent {
 						{
 							isCS = true;
 							initialAmbCount++;
-							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength));
+							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength,unitLOS));
 						}
 						else
 						{
@@ -654,7 +654,7 @@ public class EKF_PPP extends KFDopplerParent {
 						}
 
 					}
-					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS);
+					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS,unitLOS);
 					csdList.add(csdObj);
 					csdSatList.add(sat);
 					break;
@@ -790,7 +790,7 @@ public class EKF_PPP extends KFDopplerParent {
 						{
 							isCS = true;
 							initialAmbCount++;
-							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength));
+							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength,unitLOS));
 						}
 						else
 						{
@@ -799,7 +799,7 @@ public class EKF_PPP extends KFDopplerParent {
 						}
 
 					}
-					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS);
+					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS,unitLOS);
 					csdList.add(csdObj);
 					csdSatList.add(sat);
 					break;
@@ -936,7 +936,7 @@ public class EKF_PPP extends KFDopplerParent {
 						{
 							isCS = true;
 							initialAmbCount++;
-							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength));
+							testing.add(new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS/wavelength,unitLOS));
 						}
 						else
 						{
@@ -945,7 +945,7 @@ public class EKF_PPP extends KFDopplerParent {
 						}
 
 					}
-					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS);
+					CycleSlipDetect csdObj = new CycleSlipDetect(sat, dopplerDR, carrierPhaseDR, ionoRate, isCS,wavelength,satVelCorr,i,approxCS,unitLOS);
 					csdList.add(csdObj);
 					csdSatList.add(sat);
 					break;

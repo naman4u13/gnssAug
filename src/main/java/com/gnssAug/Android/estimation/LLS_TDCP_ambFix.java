@@ -26,20 +26,19 @@ import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Weight;
 
-public class LLS_TDCP2 {
+public class LLS_TDCP_ambFix {
 
 	private final static double SpeedofLight = 299792458;
 	private static double[] residual = null;
 	private static double postVarOfUnitW;
 	private static HashMap<String, SimpleMatrix> Cxx_hat_Map = new HashMap<String, SimpleMatrix>();
 	private static SimpleMatrix Cyy = null;
-	private static HashMap<String, SimpleMatrix> Cxx_hat_updated = new HashMap<String, SimpleMatrix>();
-	private static SimpleMatrix Cyy_updated = null;
 	private static int commonSatCount;
 	private static double[] dop;
 	private static ArrayList<CycleSlipDetect> testedCsdList = null;
 	private static long ambDetectedCount = 0;
 	private static long ambRepairedCount = 0;
+
 	public static double[] getEstVel(ArrayList<Satellite> currentSatList, ArrayList<Satellite> prevSatList,
 			boolean isWLS, double[] refPos, boolean useIGS) throws Exception {
 		return process(currentSatList, prevSatList, isWLS, false, refPos, useIGS);
@@ -80,10 +79,10 @@ public class LLS_TDCP2 {
 
 					if (approxCS < 5 * wavelength) {
 						csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false, wavelength,
-								satVelCorr, i, approxCS));
+								satVelCorr, i, approxCS/wavelength, unitLOS));
 					} else if (approxCS < 100 * wavelength) {
 						csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, true, wavelength,
-								satVelCorr, i, approxCS));
+								satVelCorr, i, approxCS/wavelength, unitLOS));
 					}
 				}
 			}
@@ -122,27 +121,27 @@ public class LLS_TDCP2 {
 		}
 
 		double[] estState = null;
-		double[][] _weight = weight;
+
 		int index = 0;
-		int _n = n;
+
 		int ctr = 0;
 		while (index != -1) {
 
-			estState = estimateVel(testedCsdList, new SimpleMatrix(_weight), refPos, useIGS);
+			estState = estimateVel(testedCsdList, new SimpleMatrix(weight), refPos, useIGS);
 			index = qualityControl(weight, estState, testedCsdList, useAndroidW, refPos, useIGS);
 			if (index != -1) {
 				CycleSlipDetect csd = testedCsdList.remove(index);
 				csdList.get(csdList.indexOf(csd)).setCS(true);
-				_n = _n - 1;
+				n = n - 1;
 				int j = 0;
-				double[][] _tempweight = new double[_n][_n];
-				for (int i = 0; i < _n + 1; i++) {
+				double[][] _tempweight = new double[n][n];
+				for (int i = 0; i < n + 1; i++) {
 					if (i != index) {
-						_tempweight[j][j] = _weight[i][i];
+						_tempweight[j][j] = weight[i][i];
 						j++;
 					}
 				}
-				_weight = _tempweight;
+				weight = _tempweight;
 				ctr++;
 			}
 		}
@@ -294,7 +293,11 @@ public class LLS_TDCP2 {
 			W.insertIntoThis(n, n, doppler_Cyy.invert());
 
 		} else {
-			W = SimpleMatrix.diag(2 * n);
+
+			SimpleMatrix doppler_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);
+			SimpleMatrix tdcp_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
+			W.insertIntoThis(0, 0, tdcp_Cyy.invert());
+			W.insertIntoThis(n, n, doppler_Cyy.invert());
 		}
 
 		int ctr = 3 + m;
@@ -326,6 +329,7 @@ public class LLS_TDCP2 {
 
 			SimpleMatrix Ht = H.transpose();
 			SimpleMatrix HtWHinv = (Ht.mult(W).mult(H)).invert();
+			
 			SimpleMatrix x = HtWHinv.mult(Ht).mult(W).mult(z);
 			if (ambCount > 0) {
 				SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
@@ -360,7 +364,7 @@ public class LLS_TDCP2 {
 							acceptedILS = ratioTest.accept(ILSsol);
 							if (acceptedILS != null) {
 								double newSqDist = acceptedILS.getSquaredDistance();
-								if (acceptedILS.getSquaredDistance() < sqDist) {
+								if (newSqDist < sqDist) {
 									sqDist = newSqDist;
 									finalSol = new IntegerLeastSquareSolution(acceptedILS.getSolution(), newSqDist);
 									finalComb = IntStream.range(0, comb.length).map(j -> comb[j]).toArray();
@@ -432,8 +436,7 @@ public class LLS_TDCP2 {
 		SimpleMatrix z = new SimpleMatrix(n, 1);
 		// Jacobian or Design Matrix
 		SimpleMatrix H = new SimpleMatrix(n, 3 + m);
-		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, estEcefClk));
-		H.insertIntoThis(0, 0, unitLOS.scale(-1));
+
 		// Minimum 4 satellite are required to proceed
 		if (n >= 3 + m) {
 			// Iterate through each satellite, to compute LOS vector and Approx pseudorange
@@ -442,6 +445,10 @@ public class LLS_TDCP2 {
 				CycleSlipDetect csdObj = csdList.get(i);
 				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
 				String obsvCode = satList.get(i).getObsvCode();
+				SimpleMatrix unitLOS = csdObj.getUnitLOS();
+				SimpleMatrix negUnitLOS = unitLOS.scale(-1);
+				int index = i;
+				IntStream.range(0, 3).forEach(j -> H.set(index, j, negUnitLOS.get(j)));
 				for (int j = 0; j < m; j++) {
 					if (obsvCodeList[j].equals(obsvCode)) {
 						H.set(i, 3 + j, 1);
@@ -531,11 +538,11 @@ public class LLS_TDCP2 {
 	public static ArrayList<CycleSlipDetect> getCsdList() {
 		return testedCsdList;
 	}
-	
+
 	public static long getAmbDetectedCount() {
 		return ambDetectedCount;
 	}
-	
+
 	public static long getAmbRepairedCount() {
 		return ambRepairedCount;
 	}

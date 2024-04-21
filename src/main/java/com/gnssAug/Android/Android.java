@@ -31,7 +31,7 @@ import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 import com.gnssAug.Android.estimation.LLS_TDCP;
-import com.gnssAug.Android.estimation.LLS_TDCP2;
+import com.gnssAug.Android.estimation.LLS_TDCP_ambFix;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
@@ -93,7 +93,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -202,6 +202,8 @@ public class Android {
 							} else {
 								estVel = LinearLeastSquare.getEstVel(satList, isWLS, doAnalyze, doTest, outlierAnalyze,
 										estEcefClk, useIGS);
+//								final double data = estVel[4];
+//								satList.forEach(j->j.setClkRate(data));
 								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 							}
 							if (doAnalyze && estimatorType != 11) {
@@ -709,19 +711,19 @@ public class Android {
 					ArrayList<Satellite> currentSatList = satMap.get(currentTime);
 					ArrayList<Satellite> prevSatList = satMap.get(prevTime);
 					double[] refPos = LinearLeastSquare.getEstPos(currentSatList, true, useIGS);
-					double[] estVel = LLS_TDCP2. getEstVel(currentSatList, prevSatList,
+					double[] estVel = LLS_TDCP_ambFix. getEstVel(currentSatList, prevSatList,
 							true, doAnalyze, refPos,  useIGS);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
 					if (doAnalyze && estimatorType != 11) {
 						double tRx = currentTime / 1000.0;
-						double[] residual = LLS_TDCP2.getResidual();
-						SimpleMatrix Cyy = LLS_TDCP2.getCyy();
+						double[] residual = LLS_TDCP_ambFix.getResidual();
+						SimpleMatrix Cyy = LLS_TDCP_ambFix.getCyy();
 						satResMap
 								.computeIfAbsent(Measurement.Doppler,
 										k -> new HashMap<String, HashMap<String, ArrayList<SatResidual>>>())
 								.computeIfAbsent(estType, k -> new HashMap<String, ArrayList<SatResidual>>());
-						ArrayList<CycleSlipDetect> csdList = LLS_TDCP2.getCsdList();
+						ArrayList<CycleSlipDetect> csdList = LLS_TDCP_ambFix.getCsdList();
 						int n = csdList.size();
 						for (int j = 0; j < n; j++) {
 							CycleSlipDetect csd = csdList.get(j);
@@ -739,7 +741,7 @@ public class Android {
 						postVarOfUnitWeightMap
 								.computeIfAbsent(Measurement.Doppler, k -> new HashMap<String, ArrayList<Double>>())
 								.computeIfAbsent(estType, k -> new ArrayList<Double>())
-								.add(LLS_TDCP2.getPostVarOfUnitW());
+								.add(LLS_TDCP_ambFix.getPostVarOfUnitW());
 						State state = State.Velocity;
 //						Cxx_hat_map.computeIfAbsent(state, k -> new HashMap<String, ArrayList<SimpleMatrix>>())
 //								.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
@@ -757,9 +759,9 @@ public class Android {
 					
 				}
 				estVelMap.put(estType, modEstVelList);
-				System.out.println("Ambiguity Detected Count: "+LLS_TDCP2.getAmbDetectedCount());
-				System.out.println("Ambiguity Repaired Count: "+LLS_TDCP2.getAmbRepairedCount());
-				System.out.println("Ambiguity Repair Percentage: "+((LLS_TDCP2.getAmbRepairedCount()*100.0)/LLS_TDCP2.getAmbDetectedCount()));
+				System.out.println("Ambiguity Detected Count: "+LLS_TDCP_ambFix.getAmbDetectedCount());
+				System.out.println("Ambiguity Repaired Count: "+LLS_TDCP_ambFix.getAmbRepairedCount());
+				System.out.println("Ambiguity Repair Percentage: "+((LLS_TDCP_ambFix.getAmbRepairedCount()*100.0)/LLS_TDCP_ambFix.getAmbDetectedCount()));
 			}
 			
 			

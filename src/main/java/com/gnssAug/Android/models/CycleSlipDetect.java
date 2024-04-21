@@ -1,5 +1,7 @@
 package com.gnssAug.Android.models;
 
+import org.ejml.simple.SimpleMatrix;
+
 public class CycleSlipDetect {
 	
 	private Satellite sat;
@@ -11,7 +13,8 @@ public class CycleSlipDetect {
 	private double satVelCorr;
 	private int index;
 	private double approxCS;
-	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate,boolean isCS,double wavelength,double satVelCorr,int index,double approxCS) {
+	private SimpleMatrix unitLOS;
+	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate,boolean isCS,double wavelength,double satVelCorr,int index,double approxCS, SimpleMatrix unitLOS) {
 		super();
 		this.sat = sat;
 		this.dopplerDR = dopplerDR;
@@ -22,6 +25,7 @@ public class CycleSlipDetect {
 		this.satVelCorr = satVelCorr;
 		this.index = index;
 		this.approxCS = approxCS;
+		this.unitLOS = unitLOS;
 	}
 	public Satellite getSat() {
 		return sat;
@@ -76,6 +80,12 @@ public class CycleSlipDetect {
 	}
 	public void setApproxCS(double approxCS) {
 		this.approxCS = approxCS;
+	}
+	public SimpleMatrix getUnitLOS() {
+		return unitLOS;
+	}
+	public void setUnitLOS(SimpleMatrix unitLOS) {
+		this.unitLOS = unitLOS;
 	}
 	
 

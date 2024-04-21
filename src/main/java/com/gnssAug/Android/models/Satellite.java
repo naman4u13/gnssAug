@@ -24,7 +24,8 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private double tropoErr;
 	// Phase lock indicator
 	private boolean isPhaseLocked = false;
-	
+	// Experimental param
+	private double clkRate;
 	
 	
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
@@ -143,5 +144,13 @@ public class Satellite extends GNSSLog implements Cloneable {
 	}
 	public void setTropoErr(double tropoErr) {
 		this.tropoErr = tropoErr;
+	}
+	public void setClkRate(double clkRate)
+	{
+		this.clkRate = clkRate;
+	}
+	public double getClkRate()
+	{
+		return clkRate;
 	}
 }
