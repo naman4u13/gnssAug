@@ -262,6 +262,23 @@ public class Analyzer {
 		// GraphPlotter.graphIMU(imuMap);
 
 	}
+	
+	public static TreeMap<Long, double[]> getOriginalVel(ArrayList<double[]> ecefList, ArrayList<Long> time) throws Exception {
+		int n = ecefList.size();
+		if (n != time.size()) {
+			throw new Exception("FATAL ERROR while analyzing");
+		}
+		
+		TreeMap<Long, double[]> velMap = new TreeMap<Long, double[]>();
+		for (int i = 1; i < n; i++) {
+			long t = time.get(i);
+			double[] ecef1 = ecefList.get(i - 1);
+			double[] ecef2 = ecefList.get(i);
+			double[] vel = IntStream.range(0, 3).mapToDouble(j -> ecef2[j] - ecef1[j]).toArray();
+			velMap.put(t, vel);
+		}
+		return velMap;
+	}
 
 	public static TreeMap<Long, double[]> getVel(ArrayList<double[]> ecefList, ArrayList<Long> time) throws Exception {
 		int n = ecefList.size();

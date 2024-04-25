@@ -8,7 +8,7 @@ import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.Satellite;
 
-public class KFDopplerParent {
+public class EKFParent {
 	protected final double SpeedofLight = 299792458;
 	protected KFconfig kfObj;
 
@@ -25,8 +25,7 @@ public class KFDopplerParent {
 	protected TreeMap<Long, Long> satCountMap;
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
 
-	protected double[] prevVel;
-	protected SimpleMatrix prev_Cxx_dot_hat;
+	
 	
 	
 	public TreeMap<Long, double[]> getInnovationMap() {

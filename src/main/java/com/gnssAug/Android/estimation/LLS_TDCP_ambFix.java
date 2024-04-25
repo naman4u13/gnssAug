@@ -1,9 +1,11 @@
 package com.gnssAug.Android.estimation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
@@ -19,6 +21,7 @@ import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.models.TDCP;
+import com.gnssAug.helper.FixingSolution;
 import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
@@ -38,19 +41,21 @@ public class LLS_TDCP_ambFix {
 	private static ArrayList<CycleSlipDetect> testedCsdList = null;
 	private static long ambDetectedCount = 0;
 	private static long ambRepairedCount = 0;
+	protected static TreeMap<Long, Integer> ambDetectedCountMap = new TreeMap<Long, Integer>();
+	protected static TreeMap<Long, Integer> ambRepairedCountMap = new TreeMap<Long, Integer>();
 
 	public static double[] getEstVel(ArrayList<Satellite> currentSatList, ArrayList<Satellite> prevSatList,
-			boolean isWLS, double[] refPos, boolean useIGS) throws Exception {
-		return process(currentSatList, prevSatList, isWLS, false, refPos, useIGS);
+			boolean isWLS, double[] refPos, boolean useIGS,long currentTime) throws Exception {
+		return process(currentSatList, prevSatList, isWLS, false, refPos, useIGS,currentTime);
 	}
 
 	public static double[] getEstVel(ArrayList<Satellite> currentSatList, ArrayList<Satellite> prevSatList,
-			boolean isWLS, boolean doAnalyze, double[] refPos, boolean useIGS) throws Exception {
-		return process(currentSatList, prevSatList, isWLS, doAnalyze, refPos, useIGS);
+			boolean isWLS, boolean doAnalyze, double[] refPos, boolean useIGS,long currentTime) throws Exception {
+		return process(currentSatList, prevSatList, isWLS, doAnalyze, refPos, useIGS,currentTime);
 	}
 
 	public static double[] process(ArrayList<Satellite> currentsatList, ArrayList<Satellite> prevSatList, boolean isWLS,
-			boolean doAnalyze, double[] refPos, boolean useIGS) throws Exception {
+			boolean doAnalyze, double[] refPos, boolean useIGS,long currentTime) throws Exception {
 
 		ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
 
@@ -145,7 +150,7 @@ public class LLS_TDCP_ambFix {
 				ctr++;
 			}
 		}
-		estState = estimateVel(csdList, isWLS, refPos, useIGS, doAnalyze);
+		estState = estimateVel(csdList, isWLS, refPos, useIGS, doAnalyze,currentTime);
 
 		return estState;
 
@@ -258,7 +263,7 @@ public class LLS_TDCP_ambFix {
 	}
 
 	private static double[] estimateVel(ArrayList<CycleSlipDetect> csdList, boolean isWLS, double[] estEcefClk,
-			boolean useIGS, boolean doAnalyze) throws Exception {
+			boolean useIGS, boolean doAnalyze,long currentTime) throws Exception {
 		// Satellite count
 		int n = csdList.size();
 		int ambCount = 0;
@@ -269,6 +274,7 @@ public class LLS_TDCP_ambFix {
 				ambCount++;
 			}
 		}
+		ambDetectedCountMap.put(currentTime,ambCount);
 		ambDetectedCount += ambCount;
 		String[] obsvCodeList = useIGS ? (String[]) SatUtil.findObsvCodeArray(satList) : null;
 		int m = 1;
@@ -334,7 +340,11 @@ public class LLS_TDCP_ambFix {
 			if (ambCount > 0) {
 				SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
 				SimpleMatrix floatAmbCov = HtWHinv.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
-
+				System.out.println("Float Ambiguity");
+				System.out.println(floatAmb.toString());
+				System.out.println("Float Ambiguity Covariance");
+				System.out.println(floatAmbCov.toString());
+				System.out.println("Fixed Ambiguity Sequence");
 				RealMatrix Cxx_floatAmb_hat = new Array2DRowRealMatrix(Matrix.matrix2Array(floatAmbCov));
 				LambdaMethod lm = new LambdaMethod();
 
@@ -380,12 +390,14 @@ public class LLS_TDCP_ambFix {
 					}
 				}
 				if (finalSol != null) {
-					fixingSoln(finalComb, x, HtWHinv, finalSol, m);
+					System.out.println(Arrays.toString(finalComb));
+					FixingSolution.process(finalComb, x, HtWHinv, finalSol, m);
+					ambRepairedCountMap.put(currentTime,finalComb.length);
 					ambRepairedCount += finalComb.length;
 				}
 			}
 			if (doAnalyze) {
-				SimpleMatrix e_hat = z.minus(H.mult(x)).extractMatrix(0, n, 0, 1);
+				SimpleMatrix e_hat = (z.minus(H.mult(x))).extractMatrix(0, n, 0, 1);
 				residual = Matrix.matrix2ArrayVec(e_hat);
 				Cyy = W.invert();
 				SimpleMatrix P_H_perpendicular = Matrix.getPerpendicularProjection(H, W);
@@ -394,6 +406,7 @@ public class LLS_TDCP_ambFix {
 				double phase_redun = 0;
 				for (int i = 0; i < n; i++) {
 					phase_redun += redunMatrix.get(i, i);
+					residual[i] = residual[i]/csdList.get(i).getWavelength();
 				}
 				double globalTq = e_hat.transpose().mult(W.extractMatrix(0, n, 0, n)).mult(e_hat).get(0);
 				postVarOfUnitW = globalTq * GnssDataConfig.tdcp_priorVarOfUnitW / phase_redun;
@@ -470,46 +483,7 @@ public class LLS_TDCP_ambFix {
 
 	}
 
-	// Notation follow from ENGO 625 notes Fall 2023
-	private static void fixingSoln(int[] comb, SimpleMatrix x, SimpleMatrix Cxx_hat, IntegerLeastSquareSolution fixAmb,
-			int m) {
-		int n = x.getNumElements();
-
-		int l = comb.length;
-
-		SimpleMatrix a_hat = new SimpleMatrix(l, 1);
-		SimpleMatrix a_inv_hat = new SimpleMatrix(l, 1);
-		SimpleMatrix C_a = new SimpleMatrix(l, l);
-		HashSet<Integer> exclude = new HashSet<Integer>();
-		for (int i = 0; i < l; i++) {
-			a_hat.set(i, x.get(3 + m + comb[i]));
-			a_inv_hat.set(i, fixAmb.getSolution()[i]);
-			exclude.add(3 + m + comb[i]);
-			for (int j = 0; j < l; j++) {
-				C_a.set(i, j, Cxx_hat.get(3 + m + comb[i], 3 + m + comb[j]));
-			}
-		}
-		SimpleMatrix C_a_inv = C_a.invert();
-
-		for (int i = 0; i < n; i++) {
-			if (!exclude.contains(i)) {
-				SimpleMatrix C_ba = new SimpleMatrix(1, l);
-				SimpleMatrix b_hat = new SimpleMatrix(1, 1);
-				SimpleMatrix C_b_hat = new SimpleMatrix(1, 1);
-				b_hat.set(0, x.get(i));
-				C_b_hat.set(0, Cxx_hat.get(i, i));
-				for (int j = 0; j < l; j++) {
-					C_ba.set(0, j, Cxx_hat.get(3 + m + comb[j], i));
-				}
-				SimpleMatrix b_inv_hat = b_hat.minus(C_ba.mult(C_a_inv).mult((a_hat.minus(a_inv_hat))));
-				SimpleMatrix Cb_inv_hat = C_b_hat.minus(C_ba.mult(C_a_inv).mult(C_ba.transpose()));
-				x.set(i, b_inv_hat.get(0));
-				Cxx_hat.set(i, i, Cb_inv_hat.get(0));
-			}
-
-		}
-
-	}
+	
 
 	public static double getPostVarOfUnitW() {
 		return postVarOfUnitW;
@@ -546,4 +520,14 @@ public class LLS_TDCP_ambFix {
 	public static long getAmbRepairedCount() {
 		return ambRepairedCount;
 	}
+
+	public static TreeMap<Long, Integer> getAmbDetectedCountMap() {
+		return ambDetectedCountMap;
+	}
+
+	public static TreeMap<Long, Integer> getAmbRepairedCountMap() {
+		return ambRepairedCountMap;
+	}
+	
+	
 }

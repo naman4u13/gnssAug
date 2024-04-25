@@ -31,10 +31,12 @@ import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
-public class EKF_PPP extends KFDopplerParent {
+public class EKF_PPP extends EKFParent {
 
 	private final double SpeedofLight = 299792458;
 	private final double ionoErrCoeff = 40.3 * (1E16) * 20;
+	private double[] prevVel;
+	private SimpleMatrix prev_Cxx_dot_hat;
 	public EKF_PPP() {
 		kfObj = new KFconfig();
 	}

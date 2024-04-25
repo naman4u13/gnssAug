@@ -20,9 +20,10 @@ import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
-public class EKFDoppler extends KFDopplerParent {
+public class EKFDoppler extends EKFParent {
 
-	
+	private double[] prevVel;
+	private SimpleMatrix prev_Cxx_dot_hat;
 	public EKFDoppler() {
 		kfObj = new KFconfig();
 	}

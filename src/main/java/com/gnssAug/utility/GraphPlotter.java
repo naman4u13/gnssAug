@@ -37,7 +37,7 @@ import com.opencsv.CSVWriter;
 
 public class GraphPlotter extends ApplicationFrame {
 
-	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean isSatRes, boolean flag,
+	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean isSatRes, int flag,
 			boolean outlierAnalyze) {
 
 		super(name);
@@ -45,24 +45,34 @@ public class GraphPlotter extends ApplicationFrame {
 		ArrayList<JFreeChart> charts = new ArrayList<JFreeChart>();
 		if (isSatRes) {
 
-			if (flag) {
+			if (flag==0) {
 				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 
-			} else {
+			} else if(flag==1) {
 				charts.add(ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
 						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 
 			}
+			else
+			{
+				charts.add(ChartFactory.createScatterPlot(name + " vs CN0 dB", "CN0 dB(in Hz)",
+						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
+			}
 		} else {
 
-			if (flag) {
+			if (flag==0) {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
 						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
-			} else {
+			} else if(flag==1) {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
 						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
+			}
+			else
+			{
+				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "CN0 dB",
+						"CN0 dB(in Hz)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 			}
 		}
 		for (JFreeChart chart : charts) {
@@ -204,6 +214,22 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public GraphPlotter(String name, TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList)
+			throws IOException {
+		super(name);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
+				createDatasetAmbiguityCount(ambDetectedCountMap, ambRepairedCountMap,timeList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+	
 	public GraphPlotter(String name, HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
 			throws IOException {
 		super(name);
@@ -360,14 +386,26 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
+	public static void graphAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList) throws IOException {
+		
+			
+			GraphPlotter chart = new GraphPlotter("Ambiguity Count", ambDetectedCountMap,ambRepairedCountMap, timeList);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		
+	}
+
 	public static void graphPostUnitW(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data,
 			ArrayList<Long> timeList) throws IOException {
 		for (Measurement key : data.keySet()) {
 			String type;
 			if (key == Measurement.Pseudorange) {
 				type = "PseudoRange";
+			} else if (key == Measurement.Doppler) {
+				type = "Doppler ";
 			} else {
-				type = "Doppler";
+				type = "TDCP ";
 			}
 			HashMap<String, ArrayList<Double>> subData = data.get(key);
 			GraphPlotter chart = new GraphPlotter(type + " Posteriori Variance of Unit Weight", subData, timeList);
@@ -376,7 +414,7 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.setVisible(true);
 		}
 	}
-
+	
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
 			throws IOException {
 
@@ -406,7 +444,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 			boolean makeCSV = false;
 			if (makeCSV) {
-				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/" + chartNames[i] + ".csv";
+				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/"
+						+ chartNames[i] + ".csv";
 				File file = new File(filePath);
 				try {
 					// create FileWriter object with file as parameter
@@ -415,7 +454,7 @@ public class GraphPlotter extends ApplicationFrame {
 					CSVWriter writer = new CSVWriter(outputfile);
 					// create a List which contains String array
 					List<String[]> data = new ArrayList<String[]>();
-					String[] header = new String[] { "Time", "Proposed AKF","DBP Filter", "VRWD", "WLS" };
+					String[] header = new String[] { "Time", "Proposed AKF", "DBP Filter", "VRWD", "WLS" };
 					writer.writeNext(header);
 					for (int j = 0; j < timeList.size() - 1; j++) {
 						String[] entry = new String[header.length];
@@ -558,8 +597,10 @@ public class GraphPlotter extends ApplicationFrame {
 			String type;
 			if (key == Measurement.Pseudorange) {
 				type = "PseudoRange";
+			} else if (key == Measurement.Doppler) {
+				type = "Doppler ";
 			} else {
-				type = "Doppler";
+				type = "TDCP (in Cycles)";
 			}
 			String name = "Satellite-Residual";
 			if (isInnov) {
@@ -569,30 +610,41 @@ public class GraphPlotter extends ApplicationFrame {
 
 				// For Satellite Residuals
 				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true,
-						true, outlierAnaylze);
+						0, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
-				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, false,
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, 1,
 						outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, 2,
+						outlierAnaylze);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
 				// For Satellite measurement noise std dev
 
-				chart = new GraphPlotter(subSatResMap.get(subKey),
-						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, true, outlierAnaylze);
-				chart.pack();
-				RefineryUtilities.positionFrameRandomly(chart);
-				chart.setVisible(true);
-
-				chart = new GraphPlotter(subSatResMap.get(subKey),
-						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, false, outlierAnaylze);
-				chart.pack();
-				RefineryUtilities.positionFrameRandomly(chart);
-				chart.setVisible(true);
+//				chart = new GraphPlotter(subSatResMap.get(subKey),
+//						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, 0, outlierAnaylze);
+//				chart.pack();
+//				RefineryUtilities.positionFrameRandomly(chart);
+//				chart.setVisible(true);
+//
+//				chart = new GraphPlotter(subSatResMap.get(subKey),
+//						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, 1, outlierAnaylze);
+//				chart.pack();
+//				RefineryUtilities.positionFrameRandomly(chart);
+//				chart.setVisible(true);
+//				
+//				chart = new GraphPlotter(subSatResMap.get(subKey),
+//						type + " " + subKey + ": Satellite-Measurement Noise Std Dev", false, 2, outlierAnaylze);
+//				chart.pack();
+//				RefineryUtilities.positionFrameRandomly(chart);
+//				chart.setVisible(true);
 
 			}
 		}
@@ -618,7 +670,8 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2\\" + name + ".csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2\\"
+					+ name + ".csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -740,8 +793,10 @@ public class GraphPlotter extends ApplicationFrame {
 			String type;
 			if (key == Measurement.Pseudorange) {
 				type = "PseudoRange ";
-			} else {
+			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
+			} else {
+				type = "TDCP ";
 			}
 			for (String subKey : satCountMap.get(key).keySet()) {
 				type += subKey;
@@ -770,21 +825,22 @@ public class GraphPlotter extends ApplicationFrame {
 				throw new Exception("DOP list size does not match timeList size");
 			}
 			for (int i = 0; i < n; i++) {
-				
+
 				double[] dopDiag = dopList.get(i);
 				gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
 				pdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2]));
 				hdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1]));
 				vdopList.add(Math.sqrt(dopDiag[2]));
 				tdopList.add(Math.sqrt(dopDiag[3]));
-				dataList.add(new String[] {timeList.get(i)+"",satCountList.get(i)+"",gdopList.get(i)+"",pdopList.get(i)+"",hdopList.get(i)+"",vdopList.get(i)+"",tdopList.get(i)+""});
+				dataList.add(new String[] { timeList.get(i) + "", satCountList.get(i) + "", gdopList.get(i) + "",
+						pdopList.get(i) + "", hdopList.get(i) + "", vdopList.get(i) + "", tdopList.get(i) + "" });
 			}
 			dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
 			dopMap.computeIfAbsent("PDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, pdopList);
 			dopMap.computeIfAbsent("HDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, hdopList);
 			dopMap.computeIfAbsent("VDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, vdopList);
 			dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
-			
+
 		}
 
 		GraphPlotter chart = new GraphPlotter(dopMap, timeList, true);
@@ -799,7 +855,7 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		
+
 		boolean makeCSV = false;
 		if (makeCSV) {
 			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\Pixel4\\GPS_GAL_L1_BEI.csv";
@@ -810,8 +866,8 @@ public class GraphPlotter extends ApplicationFrame {
 				// create CSVWriter object filewriter object as parameter
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
-				
-				String[] header = new String[] { "Time","SatCount","GDOP","PDOP","HDOP","VDOP","TDOP" };
+
+				String[] header = new String[] { "Time", "SatCount", "GDOP", "PDOP", "HDOP", "VDOP", "TDOP" };
 				writer.writeNext(header);
 				writer.writeAll(dataList);
 				writer.close();
@@ -863,12 +919,9 @@ public class GraphPlotter extends ApplicationFrame {
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
 //			chart.setVisible(true);
-			
+
 		}
-		
-		
-		
-		
+
 		boolean makeCSV = false;
 		if (makeCSV) {
 			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/2021-04-29-US-SJC-2-SamsungS20Ultra-L5.csv";
@@ -880,10 +933,11 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "SVID","Time", "True", "PR", "Doppler", "Phase","Iono","Tropo","ClkRate" };
+				String[] header = new String[] { "SVID", "Time", "True", "PR", "Doppler", "Phase", "Iono", "Tropo",
+						"ClkRate" };
 				writer.writeNext(header);
 				i = 0;
-				for(String id : satListMap.keySet()) {
+				for (String id : satListMap.keySet()) {
 					TreeMap<Long, Satellite> satList = satListMap.get(id);
 					double t0 = satList.firstEntry().getKey();
 					for (Long t : satList.keySet()) {
@@ -897,34 +951,34 @@ public class GraphPlotter extends ApplicationFrame {
 						double clkRate = sat.getClkRate();
 						if ((t - t0) > 1.1) {
 							String[] entry = new String[9];
-							entry[0] = ""+id;
+							entry[0] = "" + id;
 							entry[1] = "" + (t0 + 1);
 							entry[2] = "" + null;
-							entry[3] = "" + null; 
-							entry[4] = "" + null; 
-							entry[5] = "" + null; 
-							entry[6] = "" + null; 
-							entry[7] = "" + null; 
-							entry[8] = "" + null; 
+							entry[3] = "" + null;
+							entry[4] = "" + null;
+							entry[5] = "" + null;
+							entry[6] = "" + null;
+							entry[7] = "" + null;
+							entry[8] = "" + null;
 							dataList.add(entry);
 							i++;
 						}
 						String[] entry = new String[9];
-						entry[0] = ""+id;
+						entry[0] = "" + id;
 						entry[1] = "" + t;
 						entry[2] = "" + tr;
-						entry[3] = "" + pr; 
-						entry[4] = "" + prRate; 
-						entry[5] = "" + cp; 
-						entry[6] = "" + iono; 
-						entry[7] = "" + tropo; 
+						entry[3] = "" + pr;
+						entry[4] = "" + prRate;
+						entry[5] = "" + cp;
+						entry[6] = "" + iono;
+						entry[7] = "" + tropo;
 						entry[8] = "" + clkRate;
 						dataList.add(entry);
 						i++;
 						t0 = t;
 					}
 				}
-			
+
 				writer.writeAll(dataList);
 				writer.close();
 			} catch (IOException err) {
@@ -1148,6 +1202,39 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
+	private XYDataset createDatasetAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		XYSeries ambDetect = new XYSeries("Ambiguity Detected");
+		XYSeries ambRepair = new XYSeries("Ambiguity Repaired");
+		int totalDetectCount = 0;
+		int totalRepairCount = 0;
+		long time0 = timeList.get(0);
+		for (int i=1;i<timeList.size();i++) {
+			long time = timeList.get(i);
+			totalDetectCount += ambDetectedCountMap.get(time);
+			ambDetect.add(time-time0, ambDetectedCountMap.get(time));
+			int repairCount = 0;
+			if(ambRepairedCountMap.get(time)!=null)
+			{
+				repairCount = ambRepairedCountMap.get(time);
+				totalRepairCount += repairCount;
+			}
+			
+			ambRepair.add(time-time0, repairCount);
+
+		}
+		ambDetect.setKey(ambDetect.getKey()+" : "+totalDetectCount);
+		ambRepair.setKey(ambRepair.getKey()+" : "+totalRepairCount);
+		
+		dataset.addSeries(ambDetect);
+		dataset.addSeries(ambRepair);
+		double repairPer = (totalRepairCount*100.0)/totalDetectCount;
+		repairPer = Math.round(repairPer * 100.0) / 100.0;
+		dataset.addSeries(new XYSeries("Repair Percentage : "+repairPer));
+		return dataset;
+
+	}
+	
 	private XYDataset createDatasetENU(HashMap<String, double[]> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
@@ -1236,8 +1323,8 @@ public class GraphPlotter extends ApplicationFrame {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
 		for (String key : dataMap.keySet()) {
-			 //for (String key : new String[] {  "Proposed Filter", "VRWD", "VRW", "PRW",
-			 //"WLS" }) {
+			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
+			// "WLS" }) {
 			final XYSeries series = new XYSeries(key);
 			ArrayList<double[]> list = dataMap.get(key);
 			for (int i = 0; i < list.size(); i++) {
@@ -1369,7 +1456,8 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(prRate_dr_series);
 		dataset.addSeries(phase_dr_series);
 
-		boolean makeCSV = false&&(satMap.get(satMap.firstEntry().getKey()).getObsvCode().charAt(0)=='G')&&(satMap.get(satMap.firstEntry().getKey()).getSvid()==30);
+		boolean makeCSV = false && (satMap.get(satMap.firstEntry().getKey()).getObsvCode().charAt(0) == 'G')
+				&& (satMap.get(satMap.firstEntry().getKey()).getSvid() == 30);
 		if (makeCSV) {
 			String filePath = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\GPS\\Ucalgary\\ENGO 638\\Presentation Plots\\Pixel4\\Pixel4_G30_DR.csv";
 			File file = new File(filePath);
@@ -1438,7 +1526,7 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(prRate_series);
 		dataset.addSeries(cp_series);
 		dataset.addSeries(tr_series);
-		
+
 		return dataset;
 	}
 
@@ -1473,7 +1561,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean isSatRes,
-			boolean flag, boolean outlierAnalyze) {
+			int flag, boolean outlierAnalyze) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
 		if (outlierAnalyze) {
@@ -1486,13 +1574,16 @@ public class GraphPlotter extends ApplicationFrame {
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
 					double x = 0;
-					if (flag) {
+					if (flag==0) {
 						double t = satData.getT();
 
 						x = t;
-					} else {
+					} else if(flag==1) {
 						double elevAngle = Math.toDegrees(satData.getElevAngle());
 						x = elevAngle;
+					}else  {
+						double CN0 = satData.getCN0();
+						x = CN0;
 					}
 					double data;
 					if (isSatRes) {
@@ -1522,16 +1613,19 @@ public class GraphPlotter extends ApplicationFrame {
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
 					double x = 0;
-					if (flag) {
+					if (flag==0) {
 						double t = satData.getT();
 						if (t - t0 > 1) {
 							series.add(t0, null);
 						}
 						t0 = t;
 						x = t;
-					} else {
+					} else if(flag==1) {
 						double elevAngle = Math.toDegrees(satData.getElevAngle());
 						x = elevAngle;
+					}else  {
+						double CN0 = satData.getCN0();
+						x = CN0;
 					}
 
 					double data;
@@ -1598,7 +1692,7 @@ public class GraphPlotter extends ApplicationFrame {
 		boolean makeCSV = false;
 		if (makeCSV) {
 			String eastFilePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_East.csv";
-			String northFilePath ="/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_North.csv";
+			String northFilePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20/Trajectory_North.csv";
 			File eastfile = new File(eastFilePath);
 			File northFile = new File(northFilePath);
 			try {
@@ -1611,7 +1705,7 @@ public class GraphPlotter extends ApplicationFrame {
 				// create a List which contains String array
 				List<String[]> eastDataList = new ArrayList<String[]>();
 				List<String[]> northDataList = new ArrayList<String[]>();
-				String[] header = new String[] { "True", "Proposed AKF","DBP Filter", "VRWD", "WLS"};
+				String[] header = new String[] { "True", "Proposed AKF", "DBP Filter", "VRWD", "WLS" };
 				eastWriter.writeNext(header);
 				northWriter.writeNext(header);
 				for (int i = 1; i < n; i++) {

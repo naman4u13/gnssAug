@@ -10,13 +10,15 @@ public class TDCP {
 	private SimpleMatrix unitLOS;
 	// Also means a Cycle Slip
 	private boolean isOutlier;
+	private double wavelength;
 	
-	public TDCP(Satellite sat, double deltaRange,double satVelCorr,SimpleMatrix unitLOS) {
+	public TDCP(Satellite sat, double deltaRange,double satVelCorr,SimpleMatrix unitLOS,double wavelength) {
 		super();
 		this.sat = sat;
 		this.deltaRange = deltaRange;
 		this.satVelCorr = satVelCorr;
 		this.unitLOS = unitLOS;
+		this.wavelength = wavelength;
 	}
 	public Satellite getSat() {
 		return sat;
@@ -47,6 +49,9 @@ public class TDCP {
 	}
 	public void setOutlier(boolean isOutlier) {
 		this.isOutlier = isOutlier;
+	}
+	public double getWavelength() {
+		return wavelength;
 	}
 	
 }

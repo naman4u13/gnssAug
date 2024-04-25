@@ -26,10 +26,11 @@ import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 import com.opencsv.CSVWriter;
 
-public class AKFDoppler extends KFDopplerParent {
+public class AKFDoppler extends EKFParent {
 
 	private HashMap<String, ArrayList<double[]>[][]> adaptVarMap = new HashMap<String, ArrayList<double[]>[][]>();
-
+	private double[] prevVel;
+	private SimpleMatrix prev_Cxx_dot_hat;
 	public AKFDoppler() {
 		kfObj = new KFconfig();
 	}

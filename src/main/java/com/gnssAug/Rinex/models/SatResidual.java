@@ -11,22 +11,25 @@ public class SatResidual {
 	private double noiseStdDev;
 	// derived from Outlier detection
 	private boolean isOutlier;
+	private double CN0;
 	
-	public SatResidual(double t, double elevAngle, double residual, boolean isOutlier) {
+	public SatResidual(double t, double elevAngle, double residual, boolean isOutlier,double CN0) {
 		super();
 		this.t = t;
 		this.elevAngle = elevAngle;
 		this.residual = residual;
 		this.isOutlier = isOutlier;
+		this.CN0 = CN0;
 	}
 
-	public SatResidual(double t, double elevAngle, double residual, boolean isOutlier,double noiseStdDev) {
+	public SatResidual(double t, double elevAngle, double residual, boolean isOutlier,double noiseStdDev,double CN0) {
 		super();
 		this.t = t;
 		this.elevAngle = elevAngle;
 		this.residual = residual;
 		this.isOutlier = isOutlier;
 		this.noiseStdDev = noiseStdDev;
+		this.CN0 = CN0;
 	}
 
 	public double getT() {
@@ -48,4 +51,9 @@ public class SatResidual {
 	public boolean isOutlier() {
 		return isOutlier;
 	}
+
+	public double getCN0() {
+		return CN0;
+	}
+	
 }

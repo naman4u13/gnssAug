@@ -202,7 +202,7 @@ public class IGS {
 											.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSVID(),
 													k -> new ArrayList<SatResidual>())
 											.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
-													sat.isOutlier()));
+													sat.isOutlier(),sat.getCNo()));
 
 								}
 								if (doTest) {
@@ -265,7 +265,7 @@ public class IGS {
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j],
-											sat.isOutlier()));
+											sat.isOutlier(),sat.getCNo()));
 
 						}
 						satCountMap.get(Measurement.Pseudorange).computeIfAbsent("EKF", k -> new ArrayList<Long>())
@@ -289,7 +289,7 @@ public class IGS {
 									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
-											sat.isOutlier()));
+											sat.isOutlier(),sat.getCNo()));
 
 						}
 

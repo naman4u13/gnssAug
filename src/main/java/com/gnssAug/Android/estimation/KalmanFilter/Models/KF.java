@@ -66,26 +66,32 @@ public class KF {
 	public void update(double[][] _z, SimpleMatrix R, double[][] _ze, SimpleMatrix H) {
 
 		SimpleMatrix z = new SimpleMatrix(_z);
-
 		SimpleMatrix ze = new SimpleMatrix(_ze);
-
-		SimpleMatrix Ht = H.transpose();
-
-		Cvv = ((H.mult(P).mult(Ht)).plus(R));
-		// Kalman Gain
-		K = P.mult(Ht).mult(Cvv.invert());
-
-		// Posterior State Estimate
-		x = x.plus((K.mult(z.minus(ze))));
-		SimpleMatrix KH = K.mult(H);
-		SimpleMatrix I = SimpleMatrix.identity(KH.numRows());
-		/*
-		 * Posterior Estimate Error Joseph Form to ensure Positive Definiteness P =
-		 * (I-KH)P(I-KH)' + KRK'
-		 */
-		P = ((I.minus(KH)).mult(P).mult((I.minus(KH)).transpose())).plus(K.mult(R).mult(K.transpose()));
+		update(z, R, ze, H);
 
 	}
+	
+	// Update Step
+		public void update(SimpleMatrix z, SimpleMatrix R, SimpleMatrix ze, SimpleMatrix H) {
+
+			
+			SimpleMatrix Ht = H.transpose();
+
+			Cvv = ((H.mult(P).mult(Ht)).plus(R));
+			// Kalman Gain
+			K = P.mult(Ht).mult(Cvv.invert());
+
+			// Posterior State Estimate
+			x = x.plus((K.mult(z.minus(ze))));
+			SimpleMatrix KH = K.mult(H);
+			SimpleMatrix I = SimpleMatrix.identity(KH.numRows());
+			/*
+			 * Posterior Estimate Error Joseph Form to ensure Positive Definiteness P =
+			 * (I-KH)P(I-KH)' + KRK'
+			 */
+			P = ((I.minus(KH)).mult(P).mult((I.minus(KH)).transpose())).plus(K.mult(R).mult(K.transpose()));
+
+		}
 
 	public SimpleMatrix getState() {
 		return x;

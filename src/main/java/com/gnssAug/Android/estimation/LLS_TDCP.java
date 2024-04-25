@@ -74,13 +74,13 @@ public class LLS_TDCP {
 						if(approxCS<5*wavelength)
 						{
 							
-							tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS));
+							tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS,wavelength));
 						}
 						
 					}
 					else
 					{
-						tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS));
+						tdcpList.add(new TDCP(current_sat, phaseDR, satVelCorr, unitLOS,wavelength));
 					}
 					
 					
@@ -282,6 +282,11 @@ public class LLS_TDCP {
 		
 		SimpleMatrix _dop = R.mult((Ht.mult(H)).invert()).mult(R.transpose());
 		dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
+		for (int i = 0; i < n; i++) {
+			TDCP tdcp = tdcpList.get(i);
+			residual[i] = residual[i]/tdcp.getWavelength();
+		}
+		
 	}
 
 	// Baarda's Iterative Data Snooping

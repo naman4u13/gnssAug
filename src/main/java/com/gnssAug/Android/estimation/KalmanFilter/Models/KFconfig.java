@@ -169,4 +169,30 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
+	public void configTDCP(double deltaT, int m,double[] refPos) throws Exception {
+		
+		int n = 3+m;
+		double[][] phi = new double[n][n];
+		
+		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
+		
+		double[] qENU = GnssDataConfig.qENU_velRandWalk;
+		// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
+		SimpleMatrix _Q = new SimpleMatrix(3+m,3+m);
+		IntStream.range(0, 3).forEach(i -> _Q.set(i,i,qENU[i]));
+		double _sg = 1e2;
+		IntStream.range(3, 3 + m).forEach(i -> _Q.set(i,i,_sg));
+		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
+		SimpleMatrix R = new SimpleMatrix(n, n);
+		R.insertIntoThis(0, 0, _R);
+		for (int i = 0; i < m; i++) {
+			R.set(3 + i, 3 + i, 1);
+		}
+	
+		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
+		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
+			throw new Exception("PositiveDefinite test Failed");
+		}
+		super.configure(phi, Q);
+	}
 }
