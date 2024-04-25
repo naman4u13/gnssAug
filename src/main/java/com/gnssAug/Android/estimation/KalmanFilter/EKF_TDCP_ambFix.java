@@ -25,15 +25,18 @@ import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.helper.Decorrel;
+
 import com.gnssAug.helper.FixingSolution;
 import com.gnssAug.helper.ILS_LAMBDA;
+import com.gnssAug.helper.lambda.Decorrel;
+import com.gnssAug.helper.lambda.Lambda;
+import com.gnssAug.helper.lambda.Ldldecom;
+import com.gnssAug.utility.ArrayIndexComparator;
 import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Weight;
-
 
 public class EKF_TDCP_ambFix extends EKFParent {
 	private long ambDetectedCount = 0;
@@ -158,9 +161,10 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				errCovMap.put(currentTime, errCov);
 				innovationMap.put(currentTime, innovation);
 			}
-//			if (!MatrixFeatures_DDRM.isPositiveSemidefinite(P.getMatrix())) {
-//				throw new Exception("PositiveDefinite test Failed");
-//			}
+			
+			if (!MatrixFeatures_DDRM.isPositiveDefinite(P.getMatrix())) {
+				throw new Exception("PositiveDefinite test Failed");
+			}
 			prevTime = currentTime;
 		}
 		return estStateMap;
@@ -244,14 +248,13 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				CycleSlipDetect csdObj = csdList.get(i);
 				double wavelength = csdObj.getWavelength();
 				double approxCS = Math.abs(innovation[i]);
-				if(approxCS>wavelength)
-				{
+				if (approxCS > wavelength) {
 					csdObj.setCS(true);
 					ambCount++;
 				}
-					
+
 			}
-			
+
 		} else {
 			testedSatList = new ArrayList<Satellite>();
 			ArrayList<CycleSlipDetect> testedCsdList = new ArrayList<CycleSlipDetect>();
@@ -263,7 +266,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				}
 			}
 			int tested_n = testedSatList.size();
-			
+
 			z = new SimpleMatrix(tested_n, 1);
 			H = new SimpleMatrix(tested_n, 3 + m);
 			SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.getUnitLOS(testedSatList, refPos));
@@ -287,7 +290,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 
 			// Testing for CS
 			performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true);
-			
+
 			// Resume full SatList or CSDList
 			for (int i = 0; i < n; i++) {
 				if (csdList.get(i).isCS()) {
@@ -333,6 +336,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		kfObj.update(z, R, ze, H);
 		x = kfObj.getState();
 		P = kfObj.getCovariance();
+		
 		if (ambCount > 0) {
 			SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
 			SimpleMatrix floatAmbCov = P.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
@@ -342,90 +346,134 @@ public class EKF_TDCP_ambFix extends EKFParent {
 			System.out.println(floatAmbCov.toString());
 			System.out.println("Fixed Ambiguity Sequence");
 			RealMatrix Cxx_floatAmb_hat = new Array2DRowRealMatrix(Matrix.matrix2Array(floatAmbCov));
+
+			Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
+			Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
+			SimpleMatrix afixed = new SimpleMatrix(floatAmb);
 			
-			CholeskyLDLDecomposition_F64<DMatrixRMaj> chol = DecompositionFactory_DDRM.cholLDL(ambCount);
-			if( !chol.decompose(floatAmbCov.getMatrix()))
-				   throw new RuntimeException("Cholesky failed!");
-			double[] diagonal = chol.getDiagonal();
-			
-			LambdaMethod lm = new LambdaMethod();
-
-			// Full ambiguity Resolution
-			int[] indirection = IntStream.range(0, ambCount).toArray();
-			IntegerLeastSquareSolution[] ILSsol = lm.solveILS(5, Matrix.matrix2ArrayVec(floatAmb), indirection,
-					Cxx_floatAmb_hat);
-			
-//			Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
-//			Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
-//			Decorrel decor = new Decorrel( Qahat, ahat);
-//			SimpleMatrix Qzhat = new SimpleMatrix(decor.getQzhat().getArray());
-//			SimpleMatrix zhat = new SimpleMatrix(decor.getzhat().getArray());
-//			SimpleMatrix D = new SimpleMatrix(decor.getD().getArray());
-//			double[] Ps = new double[D.numRows()];
-//	        NormalDistribution normalDistribution = new NormalDistribution();
-//			for (int i = 0;i < D.numRows();i++){
-//	            double cdf = normalDistribution.probability(-Double.MAX_VALUE, 0.5/Math.sqrt(D.get(i,i)));
-//	            if(i==0)
-//	            {
-//	            	Ps[i] =1*(2 * cdf - 1);
-//	            }
-//	            else
-//	            {
-//	            	Ps[i] =Ps[i-1]*(2 * cdf - 1);
-//	            }
-//	            
-//	        }
-//			if(ambCount>5)
-//			{
-//				System.out.println();
-//			}
-			if (ILSsol.length > 0) {
-				SimpleRatioAmbiguityAcceptance ratioTest = new SimpleRatioAmbiguityAcceptance(1.0 / 3.0);
-				IntegerLeastSquareSolution acceptedILS = ratioTest.accept(ILSsol);
-
-				IntegerLeastSquareSolution finalSol = acceptedILS;
-				int[] finalComb = indirection;
-				// Partial Ambiguity Resolution
-				if (finalSol == null && ambCount > 1) {
-					int count = ambCount - 1;
-					int[] arr = IntStream.range(0, ambCount).toArray();
-					while (acceptedILS == null && count > 0) {
-						ArrayList<int[]> combs = Combination.getCombination(arr, ambCount, count);
-
-						double sqDist = Double.MAX_VALUE;
-						for (int i = 0; i < combs.size(); i++) {
-							int[] comb = combs.get(i);
-							double[] newFloatAmb = IntStream.range(0, count).mapToDouble(j -> floatAmb.get(comb[j]))
-									.toArray();
-
-							ILSsol = lm.solveILS(5, newFloatAmb, comb, Cxx_floatAmb_hat);
-
-							acceptedILS = ratioTest.accept(ILSsol);
-							if (acceptedILS != null) {
-								double newSqDist = acceptedILS.getSquaredDistance();
-								if (newSqDist < sqDist) {
-									sqDist = newSqDist;
-									finalSol = new IntegerLeastSquareSolution(acceptedILS.getSolution(), newSqDist);
-									finalComb = IntStream.range(0, comb.length).map(j -> comb[j]).toArray();
-								}
-
-							}
-						}
-						if (finalSol != null) {
-
-							break;
-						}
-						count--;
-					}
-				}
-				if (finalSol != null) {
-					System.out.println(Arrays.toString(finalComb));
-					FixingSolution.process(finalComb, x, P, finalSol, m);
-					ambRepairedCountMap.put(currentTime, finalComb.length);
-					ambRepairedCount += finalComb.length;
-				}
+			Lambda lmd = new Lambda(ahat, Qahat, 6,"MU",(1/3.0),"NCANDS",10);
+			int nFixed = lmd.getNfixed();
+			if(nFixed==0&&ambCount>1)
+			{
+				lmd = new Lambda(ahat, Qahat, 5,"MU",(1/3.0),"NCANDS",10);
+				
+				afixed = new SimpleMatrix(lmd.getafixed().getArray());
+				nFixed = lmd.getNfixed();
+				
 			}
+			else
+			{
+				afixed = new SimpleMatrix(lmd.getafixed().getArray());
+			}
+//			double Pf_FIX = 0.01;
+//			Lambda lmd = new Lambda(ahat, Qahat, 6,"mu",1/3.0);
+//			nFixed = lmd.getNfixed();
+//			if (nFixed == 0&&ambCount>1) {
+//				lmd = new Lambda(ahat, Qahat, 5);
+//				double PsPAR = lmd.getPs();
+//				int nfixed = lmd.getNfixed();
+//				afixed = new SimpleMatrix(lmd.getafixed().getArray());
+//				if (1 - PsPAR > Pf_FIX) {
+//					double mu = Lambda.ratioinv(Pf_FIX, 1 - PsPAR, nfixed);
+//					double[] sqnorm = lmd.getSqnorm();
+//					if ((sqnorm[1] / sqnorm[2]) > mu) {
+//						afixed = new SimpleMatrix(floatAmb);
+//					}
+//				}
+//			}
+//			else {
+//				afixed = new SimpleMatrix(lmd.getafixed().getArray());
+//			}
+			
+			
+			if(nFixed!=0)
+			{
+				SimpleMatrix Cba = P.extractMatrix(0, 3+m, 3+m, 3+m+ambCount);
+				SimpleMatrix Cbb_hat = P.extractMatrix(0, 3+m, 0, 3+m);
+				SimpleMatrix b_hat  = x.extractMatrix(0,3+m,0,1);
+				SimpleMatrix Caa_inv = floatAmbCov.invert();
+				SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+				SimpleMatrix a_inv_hat = afixed.extractMatrix(0, ambCount, 0, 1);
+				
+				SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat))); 
+				SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
+				
+				x = new SimpleMatrix(3+m+ambCount,1);
+				x.insertIntoThis(0, 0, b_inv_hat);
+				x.insertIntoThis(3+m,0,a_inv_hat);
+				P = new SimpleMatrix(Cbb_inv_hat);
+				
+				ambRepairedCountMap.put(currentTime, nFixed);
+				ambRepairedCount += nFixed;
+				
+				
+			}
+
+			// Partial Ambiguity Resolution
+
+//			Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
+//			Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
+//			double [][] _D = new Ldldecom(Qahat).getD().getArray();
+//			double[] D = new double[ambCount];
+//			for(int i=0;i<ambCount;i++)
+//			{
+//				D[i] = _D[i][i];
+//			}
+//			ArrayIndexComparator comparator = new ArrayIndexComparator(D);
+//			Integer[] indexes = comparator.createIndexArray();
+//			Arrays.sort(indexes, comparator);
+//			int[] combination = new int[ambCount];
+//			for(int i=0;i<ambCount;i++)
+//			{
+//				combination[i] = indexes[i];
+//			}
+
+//			Decorrel decorr = new Decorrel(Qahat, ahat);
+//			Jama.Matrix indexMat = new Jama.Matrix(ambCount, 1, 0);
+//			for (int i = 0; i < ambCount; i++) {
+//				indexMat.set(i, 0, i + 1);
+//			}
+//			Jama.Matrix _z = decorr.getZ();
+//			indexMat = _z.transpose().times(indexMat);
+//			int[] combination = new int[ambCount];
+//			for (int i = 0; i < ambCount; i++) {
+//				combination[i] = (int) indexMat.get(i, 0) - 1;
+//			}
+			
+			
+//			int count = 0;
+//			IntegerLeastSquareSolution acceptedILS = null;
+//			LambdaMethod lm = new LambdaMethod();
+//			IntegerLeastSquareSolution finalSol = null;
+//			int[] finalComb = null;
+//			SimpleRatioAmbiguityAcceptance ratioTest = new SimpleRatioAmbiguityAcceptance(1.0 / 3.0);
+//			while (acceptedILS == null && count < ambCount) {
+//				int[] comb = Arrays.copyOfRange(combination, count, ambCount);
+//				double[] newFloatAmb = IntStream.range(count, ambCount).mapToDouble(j -> floatAmb.get(combination[j]))
+//						.toArray();
+//				
+//				IntegerLeastSquareSolution[] ILSsol = lm.solveILS(10, newFloatAmb, comb, Cxx_floatAmb_hat);
+//				acceptedILS = ratioTest.accept(ILSsol);
+//				if (acceptedILS != null) {
+//					finalSol = new IntegerLeastSquareSolution(acceptedILS.getSolution(),
+//							acceptedILS.getSquaredDistance());
+//					finalComb = IntStream.range(0, comb.length).map(j -> comb[j]).toArray();
+//					break;
+//
+//				}
+//				count++;
+//			}
+//			if (finalSol != null) {
+//				System.out.println(Arrays.toString(finalComb));
+//				FixingSolution.process(finalComb, x, P, finalSol, m);
+//				if (!MatrixFeatures_DDRM.isPositiveDefinite(P.getMatrix())) {
+//					System.err.println("PositiveDefinite test Failed");
+//				}
+//				ambRepairedCountMap.put(currentTime, finalComb.length);
+//				ambRepairedCount += finalComb.length;
+//			}
 		}
+
 		if (doAnalyze) {
 			SimpleMatrix residual = z.minus((H.mult(x)));
 			performAnalysis(residual, satList, R, H, currentTime, obsvCodeList);

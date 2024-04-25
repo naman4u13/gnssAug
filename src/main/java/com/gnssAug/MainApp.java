@@ -6,6 +6,8 @@ import java.util.Calendar;
 import java.util.Set;
 import java.util.TimeZone;
 
+import org.apache.commons.math3.distribution.NormalDistribution;
+
 import com.gnssAug.Android.Android;
 import com.gnssAug.IGS.IGS;
 
@@ -43,7 +45,7 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + sep+"COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + sep+"COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + sep+"igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0,18, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+			Android.posEstimate(true, 0, 0,17, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
 					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet);
 			break;
 
@@ -58,6 +60,16 @@ public class MainApp {
 			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
 					new String[] { "G5Q" }, 4, 1, 0, true, true, 2, true, false, false);
 			break;
+		case 3:
+			
+			double Ps = 1;
+	        NormalDistribution normalDistribution = new NormalDistribution();
+			double[] a = new double[] {1,0.2,0.3}; 
+			for (int i = 0;i < a.length;i++){
+                double cdf = normalDistribution.probability(-Double.MAX_VALUE, 0.5/a[i]);
+                Ps *= (2 * cdf - 1);
+            }
+			System.out.println();
 
 		}
 		Instant end = Instant.now();

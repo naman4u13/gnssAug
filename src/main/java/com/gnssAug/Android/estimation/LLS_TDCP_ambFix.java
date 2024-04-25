@@ -22,6 +22,7 @@ import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.models.TDCP;
 import com.gnssAug.helper.FixingSolution;
+import com.gnssAug.helper.lambda.Lambda;
 import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
@@ -345,56 +346,50 @@ public class LLS_TDCP_ambFix {
 				System.out.println("Float Ambiguity Covariance");
 				System.out.println(floatAmbCov.toString());
 				System.out.println("Fixed Ambiguity Sequence");
-				RealMatrix Cxx_floatAmb_hat = new Array2DRowRealMatrix(Matrix.matrix2Array(floatAmbCov));
-				LambdaMethod lm = new LambdaMethod();
-
-				// Full ambiguity Resolution
-				int[] indirection = IntStream.range(0, ambCount).toArray();
-				IntegerLeastSquareSolution[] ILSsol = lm.solveILS(5, Matrix.matrix2ArrayVec(floatAmb), indirection,
-						Cxx_floatAmb_hat);
-				SimpleRatioAmbiguityAcceptance ratioTest = new SimpleRatioAmbiguityAcceptance(1.0 / 3.0);
-				IntegerLeastSquareSolution acceptedILS = ratioTest.accept(ILSsol);
-				IntegerLeastSquareSolution finalSol = acceptedILS;
-				int[] finalComb = indirection;
-				// Partial Ambiguity Resolution
-				if (finalSol == null && ambCount > 1) {
-					int count = ambCount - 1;
-					int[] arr = IntStream.range(0, ambCount).toArray();
-					while (acceptedILS == null && count > 0) {
-						ArrayList<int[]> combs = Combination.getCombination(arr, ambCount, count);
-
-						double sqDist = Double.MAX_VALUE;
-						for (int i = 0; i < combs.size(); i++) {
-							int[] comb = combs.get(i);
-							double[] newFloatAmb = IntStream.range(0, count).mapToDouble(j -> floatAmb.get(comb[j]))
-									.toArray();
-
-							ILSsol = lm.solveILS(5, newFloatAmb, comb, Cxx_floatAmb_hat);
-
-							acceptedILS = ratioTest.accept(ILSsol);
-							if (acceptedILS != null) {
-								double newSqDist = acceptedILS.getSquaredDistance();
-								if (newSqDist < sqDist) {
-									sqDist = newSqDist;
-									finalSol = new IntegerLeastSquareSolution(acceptedILS.getSolution(), newSqDist);
-									finalComb = IntStream.range(0, comb.length).map(j -> comb[j]).toArray();
-								}
-
-							}
-						}
-						if (finalSol != null) {
-
-							break;
-						}
-						count--;
-					}
+				Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
+				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
+				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
+				
+				Lambda lmd = new Lambda(ahat, Qahat, 6,"MU",(1/3.0),"NCANDS",10);
+				int nFixed = lmd.getNfixed();
+				if(nFixed==0&&ambCount>1)
+				{
+					lmd = new Lambda(ahat, Qahat, 5,"MU",(1/3.0),"NCANDS",10);
+					
+					afixed = new SimpleMatrix(lmd.getafixed().getArray());
+					nFixed = lmd.getNfixed();
+					
 				}
-				if (finalSol != null) {
-					System.out.println(Arrays.toString(finalComb));
-					FixingSolution.process(finalComb, x, HtWHinv, finalSol, m);
-					ambRepairedCountMap.put(currentTime,finalComb.length);
-					ambRepairedCount += finalComb.length;
+				else
+				{
+					afixed = new SimpleMatrix(lmd.getafixed().getArray());
 				}
+				
+				if(nFixed!=0)
+				{
+					SimpleMatrix P = HtWHinv;
+					SimpleMatrix Cba = P.extractMatrix(0, 3+m, 3+m, 3+m+ambCount);
+					SimpleMatrix Cbb_hat = P.extractMatrix(0, 3+m, 0, 3+m);
+					SimpleMatrix b_hat  = x.extractMatrix(0,3+m,0,1);
+					SimpleMatrix Caa_inv = floatAmbCov.invert();
+					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+					SimpleMatrix a_inv_hat = afixed.extractMatrix(0, ambCount, 0, 1);
+					
+					SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat))); 
+					SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
+					
+					x = new SimpleMatrix(3+m+ambCount,1);
+					x.insertIntoThis(0, 0, b_inv_hat);
+					x.insertIntoThis(3+m,0,a_inv_hat);
+					P = new SimpleMatrix(Cbb_inv_hat);
+					
+					System.out.println(a_inv_hat.toString());
+					ambRepairedCountMap.put(currentTime, nFixed);
+					ambRepairedCount += nFixed;
+					
+					
+				}
+				
 			}
 			if (doAnalyze) {
 				SimpleMatrix e_hat = (z.minus(H.mult(x))).extractMatrix(0, n, 0, 1);
@@ -424,7 +419,11 @@ public class LLS_TDCP_ambFix {
 			}
 
 			// Velocity
-			IntStream.range(0, 3 + m).forEach(i -> estVel[i] = x.get(i, 0));
+			for(int i=0;i<3+m;i++)
+			{
+				estVel[i] = x.get(i, 0);
+			}
+			
 			return estVel;
 		}
 

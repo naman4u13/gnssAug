@@ -94,7 +94,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test5";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test8";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -906,7 +906,7 @@ public class Android {
 				// System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
-			Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(16, 17, 18));
+			Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(16, 17, 18,19));
 			if (tdcpEstSet.contains(estimatorType)) {
 				TreeMap<Long, double[]> trueOrgVelEcef = Analyzer.getOriginalVel(trueEcefList, timeList);
 				for (String key : estVelMap.keySet()) {
