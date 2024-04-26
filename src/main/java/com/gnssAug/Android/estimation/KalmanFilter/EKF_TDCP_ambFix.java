@@ -1,38 +1,18 @@
 package com.gnssAug.Android.estimation.KalmanFilter;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+
 import java.util.TreeMap;
 import java.util.stream.IntStream;
-
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
-import org.apache.commons.math3.distribution.NormalDistribution;
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.dense.row.MatrixFeatures_DDRM;
-import org.ejml.dense.row.factory.DecompositionFactory_DDRM;
-import org.ejml.interfaces.decomposition.CholeskyDecomposition_F64;
-import org.ejml.interfaces.decomposition.CholeskyLDLDecomposition_F64;
 import org.ejml.simple.SimpleMatrix;
-import org.hipparchus.linear.Array2DRowRealMatrix;
-import org.hipparchus.linear.RealMatrix;
-import org.orekit.estimation.measurements.gnss.IntegerLeastSquareSolution;
-import org.orekit.estimation.measurements.gnss.LambdaMethod;
-import org.orekit.estimation.measurements.gnss.SimpleRatioAmbiguityAcceptance;
-
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
-
-import com.gnssAug.helper.FixingSolution;
-import com.gnssAug.helper.ILS_LAMBDA;
-import com.gnssAug.helper.lambda.Decorrel;
 import com.gnssAug.helper.lambda.Lambda;
-import com.gnssAug.helper.lambda.Ldldecom;
-import com.gnssAug.utility.ArrayIndexComparator;
-import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
@@ -51,7 +31,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean innPhaseRate) throws Exception {
+			boolean innPhaseRate, boolean onlyDoppler) throws Exception {
 		boolean isWeighted = true;
 		int m = obsvCodeList.length;
 		int n = 3 + m;
@@ -84,19 +64,21 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		ambDetectedCountMap = new TreeMap<Long, Integer>();
 		ambRepairedCountMap = new TreeMap<Long, Integer>();
 		return iterate(SatMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze, isWeighted,
-				innPhaseRate);
+				innPhaseRate, onlyDoppler);
 	}
 
 	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean isWeighted, boolean innPhaseRate) throws Exception {
+			boolean isWeighted, boolean innPhaseRate, boolean onlyDoppler) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long prevTime = timeList.get(0);
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
-			System.out.println("\n\n Epoch : " + i);
+			if (!onlyDoppler) {
+				System.out.println("\n\n Epoch : " + i);
+			}
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
@@ -124,18 +106,23 @@ public class EKF_TDCP_ambFix extends EKFParent {
 						double satVelCorr = unitLOS.mult(satEci.minus(prev_satEci)).get(0);
 						double wavelength = SpeedofLight / current_sat.getCarrierFrequencyHz();
 						double approxCS = Math.abs(phaseDR - dopplerDR);
-						if (innPhaseRate) {
-							if (approxCS < 100 * wavelength) {
-								csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-										wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
-							}
+						if (onlyDoppler) {
+							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
+									wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
 						} else {
-							if (approxCS < 5 * wavelength) {
-								csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-										wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
-							} else if (approxCS < 100 * wavelength) {
-								csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, true,
-										wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+							if (innPhaseRate) {
+								if (approxCS < 100 * wavelength) {
+									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
+											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+								}
+							} else {
+								if (approxCS < 5 * wavelength) {
+									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
+											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+								} else if (approxCS < 100 * wavelength) {
+									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, true,
+											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+								}
 							}
 						}
 
@@ -144,7 +131,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 			}
 
 			runFilter(currentTime, deltaT, csdList, obsvCodeList, doAnalyze, doTest, outlierAnalyze, useIGS, i,
-					isWeighted, refPos, innPhaseRate);
+					isWeighted, refPos, innPhaseRate, onlyDoppler);
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
@@ -161,7 +148,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				errCovMap.put(currentTime, errCov);
 				innovationMap.put(currentTime, innovation);
 			}
-			
+
 			if (!MatrixFeatures_DDRM.isPositiveDefinite(P.getMatrix())) {
 				throw new Exception("PositiveDefinite test Failed");
 			}
@@ -173,7 +160,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 	// Innovation Based Testing
 	private void runFilter(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList, String[] obsvCodeList,
 			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, boolean useIGS, int ct, boolean isWeighted,
-			double[] refPos, boolean innPhaseRate) throws Exception {
+			double[] refPos, boolean innPhaseRate, boolean onlyDoppler) throws Exception {
 
 		// Satellite count
 		int n = csdList.size();
@@ -187,7 +174,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 
 		// Assign Q and F matrix
 		kfObj.configTDCP(deltaT, m, refPos);
-		;
+
 		kfObj.predict();
 		SimpleMatrix x = kfObj.getState();
 		SimpleMatrix z = new SimpleMatrix(n, 1);
@@ -209,8 +196,17 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		SimpleMatrix ze = H.mult(x);
 		innovation = Matrix.matrix2ArrayVec(z.minus(ze));
 
+		SimpleMatrix doppler_Cyy = null;
 		// Measurement Noise
-		SimpleMatrix doppler_Cyy = Weight.getNormCyy(satList, GnssDataConfig.doppler_priorVarOfUnitW);
+		if(isWeighted)
+		{
+			doppler_Cyy = Weight.getNormCyy(satList, GnssDataConfig.doppler_priorVarOfUnitW);
+		}
+		else
+		{
+			doppler_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);
+		}
+	
 		SimpleMatrix R = new SimpleMatrix(doppler_Cyy);
 
 		ArrayList<Satellite> testedSatList = new ArrayList<Satellite>(satList);
@@ -223,265 +219,201 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		}
 		// Perform Update Step
 		kfObj.update(z, R, ze, H);
-
-		// TDCP integration begins
 		x = kfObj.getState();
-		int ambCount = 0;
-		if (innPhaseRate) {
-			z = new SimpleMatrix(n, 1);
-			H = new SimpleMatrix(n, 3 + m);
-			unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, refPos));
+		SimpleMatrix P = kfObj.getCovariance();
+		if (!onlyDoppler) {
+			// TDCP integration begins
+
+			int ambCount = 0;
+			if (innPhaseRate) {
+				z = new SimpleMatrix(n, 1);
+				H = new SimpleMatrix(n, 3 + m);
+				unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, refPos));
+				H.insertIntoThis(0, 0, unitLOS.scale(-1));
+				for (int i = 0; i < n; i++) {
+					CycleSlipDetect csdObj = csdList.get(i);
+					z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
+					String obsvCode = satList.get(i).getObsvCode();
+					for (int j = 0; j < m; j++) {
+						if (obsvCodeList[j].equals(obsvCode)) {
+							H.set(i, 3 + j, 1);
+						}
+					}
+				}
+				ze = H.mult(x);
+				innovation = Matrix.matrix2ArrayVec(z.minus(ze));
+				for (int i = 0; i < n; i++) {
+					CycleSlipDetect csdObj = csdList.get(i);
+					double wavelength = csdObj.getWavelength();
+					double approxCS = Math.abs(innovation[i]);
+					if (approxCS > wavelength) {
+						csdObj.setCS(true);
+						ambCount++;
+					}
+
+				}
+
+			} else {
+				testedSatList = new ArrayList<Satellite>();
+				ArrayList<CycleSlipDetect> testedCsdList = new ArrayList<CycleSlipDetect>();
+
+				for (int i = 0; i < n; i++) {
+					if (!csdList.get(i).isCS()) {
+						testedSatList.add(csdList.get(i).getSat());
+						testedCsdList.add(csdList.get(i));
+					}
+				}
+				int tested_n = testedSatList.size();
+
+				z = new SimpleMatrix(tested_n, 1);
+				H = new SimpleMatrix(tested_n, 3 + m);
+				SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.getUnitLOS(testedSatList, refPos));
+				H.insertIntoThis(0, 0, testedUnitLOS.scale(-1));
+				for (int i = 0; i < tested_n; i++) {
+					CycleSlipDetect csdObj = testedCsdList.get(i);
+					z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
+					String obsvCode = testedSatList.get(i).getObsvCode();
+					for (int j = 0; j < m; j++) {
+						if (obsvCodeList[j].equals(obsvCode)) {
+							H.set(i, 3 + j, 1);
+						}
+					}
+				}
+
+				ze = H.mult(x);
+				innovation = Matrix.matrix2ArrayVec(z.minus(ze));
+				// Measurement Noise
+				SimpleMatrix tested_tdcp_Cyy = null;
+				if(isWeighted)
+				{
+					tested_tdcp_Cyy = Weight.getNormCyy(testedSatList, GnssDataConfig.tdcp_priorVarOfUnitW);
+				}
+				else
+				{
+					tested_tdcp_Cyy = SimpleMatrix.identity(testedSatList.size()).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
+				}
+				 
+				R = new SimpleMatrix(tested_tdcp_Cyy);
+
+				// Testing for CS
+				performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true);
+
+				// Resume full SatList or CSDList
+				for (int i = 0; i < n; i++) {
+					if (csdList.get(i).isCS()) {
+						ambCount++;
+					}
+				}
+			}
+			ambDetectedCountMap.put(currentTime, ambCount);
+			ambDetectedCount += ambCount;
+			SimpleMatrix x_new = new SimpleMatrix(3 + m + ambCount, 1);
+			x_new.insertIntoThis(0, 0, x);
+			P = kfObj.getCovariance();
+			SimpleMatrix P_new = new SimpleMatrix(3 + m + ambCount, 3 + m + ambCount);
+			P_new.insertIntoThis(0, 0, P);
+			kfObj.setState_ProcessCov(x_new, P_new);
+			for (int i = 0; i < ambCount; i++) {
+				P_new.set(3 + m + i, 3 + m + i, 1e12);
+			}
+			H = new SimpleMatrix(n, 3 + m + ambCount);
 			H.insertIntoThis(0, 0, unitLOS.scale(-1));
+			z = new SimpleMatrix(n, 1);
+			int ctr = 3 + m;
 			for (int i = 0; i < n; i++) {
 				CycleSlipDetect csdObj = csdList.get(i);
 				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
 				String obsvCode = satList.get(i).getObsvCode();
-				for (int j = 0; j < m; j++) {
-					if (obsvCodeList[j].equals(obsvCode)) {
-						H.set(i, 3 + j, 1);
-					}
-				}
-			}
-			ze = H.mult(x);
-			innovation = Matrix.matrix2ArrayVec(z.minus(ze));
-			for (int i = 0; i < n; i++) {
-				CycleSlipDetect csdObj = csdList.get(i);
 				double wavelength = csdObj.getWavelength();
-				double approxCS = Math.abs(innovation[i]);
-				if (approxCS > wavelength) {
-					csdObj.setCS(true);
-					ambCount++;
-				}
-
-			}
-
-		} else {
-			testedSatList = new ArrayList<Satellite>();
-			ArrayList<CycleSlipDetect> testedCsdList = new ArrayList<CycleSlipDetect>();
-
-			for (int i = 0; i < n; i++) {
-				if (!csdList.get(i).isCS()) {
-					testedSatList.add(csdList.get(i).getSat());
-					testedCsdList.add(csdList.get(i));
-				}
-			}
-			int tested_n = testedSatList.size();
-
-			z = new SimpleMatrix(tested_n, 1);
-			H = new SimpleMatrix(tested_n, 3 + m);
-			SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.getUnitLOS(testedSatList, refPos));
-			H.insertIntoThis(0, 0, testedUnitLOS.scale(-1));
-			for (int i = 0; i < tested_n; i++) {
-				CycleSlipDetect csdObj = testedCsdList.get(i);
-				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-				String obsvCode = testedSatList.get(i).getObsvCode();
 				for (int j = 0; j < m; j++) {
 					if (obsvCodeList[j].equals(obsvCode)) {
 						H.set(i, 3 + j, 1);
+						if (csdObj.isCS()) {
+							H.set(i, ctr, wavelength);
+							ctr++;
+						}
 					}
 				}
 			}
-
-			ze = H.mult(x);
+			ze = H.mult(x_new);
 			innovation = Matrix.matrix2ArrayVec(z.minus(ze));
-			// Measurement Noise
-			SimpleMatrix tested_tdcp_Cyy = Weight.getNormCyy(testedSatList, GnssDataConfig.tdcp_priorVarOfUnitW);
-			R = new SimpleMatrix(tested_tdcp_Cyy);
-
-			// Testing for CS
-			performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true);
-
-			// Resume full SatList or CSDList
-			for (int i = 0; i < n; i++) {
-				if (csdList.get(i).isCS()) {
-					ambCount++;
-				}
-			}
-		}
-		ambDetectedCountMap.put(currentTime, ambCount);
-		ambDetectedCount += ambCount;
-		SimpleMatrix x_new = new SimpleMatrix(3 + m + ambCount, 1);
-		x_new.insertIntoThis(0, 0, x);
-		SimpleMatrix P = kfObj.getCovariance();
-		SimpleMatrix P_new = new SimpleMatrix(3 + m + ambCount, 3 + m + ambCount);
-		P_new.insertIntoThis(0, 0, P);
-		kfObj.setState_ProcessCov(x_new, P_new);
-		for (int i = 0; i < ambCount; i++) {
-			P_new.set(3 + m + i, 3 + m + i, 1e12);
-		}
-		H = new SimpleMatrix(n, 3 + m + ambCount);
-		H.insertIntoThis(0, 0, unitLOS.scale(-1));
-		z = new SimpleMatrix(n, 1);
-		int ctr = 3 + m;
-		for (int i = 0; i < n; i++) {
-			CycleSlipDetect csdObj = csdList.get(i);
-			z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-			String obsvCode = satList.get(i).getObsvCode();
-			double wavelength = csdObj.getWavelength();
-			for (int j = 0; j < m; j++) {
-				if (obsvCodeList[j].equals(obsvCode)) {
-					H.set(i, 3 + j, 1);
-					if (csdObj.isCS()) {
-						H.set(i, ctr, wavelength);
-						ctr++;
-					}
-				}
-			}
-		}
-		ze = H.mult(x_new);
-		innovation = Matrix.matrix2ArrayVec(z.minus(ze));
-		SimpleMatrix tdcp_Cyy = Weight.getNormCyy(satList, GnssDataConfig.tdcp_priorVarOfUnitW);
-		R = new SimpleMatrix(tdcp_Cyy);
-		// Perform Update Step
-		kfObj.update(z, R, ze, H);
-		x = kfObj.getState();
-		P = kfObj.getCovariance();
-		
-		if (ambCount > 0) {
-			SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
-			SimpleMatrix floatAmbCov = P.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
-			System.out.println("Float Ambiguity");
-			System.out.println(floatAmb.toString());
-			System.out.println("Float Ambiguity Covariance");
-			System.out.println(floatAmbCov.toString());
-			System.out.println("Fixed Ambiguity Sequence");
-			RealMatrix Cxx_floatAmb_hat = new Array2DRowRealMatrix(Matrix.matrix2Array(floatAmbCov));
-
-			Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
-			Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
-			SimpleMatrix afixed = new SimpleMatrix(floatAmb);
-			
-			Lambda lmd = new Lambda(ahat, Qahat, 6,"MU",(1/3.0),"NCANDS",10);
-			int nFixed = lmd.getNfixed();
-			if(nFixed==0&&ambCount>1)
+			SimpleMatrix tdcp_Cyy =  null;
+			if(isWeighted)
 			{
-				lmd = new Lambda(ahat, Qahat, 5,"MU",(1/3.0),"NCANDS",10);
-				
-				afixed = new SimpleMatrix(lmd.getafixed().getArray());
-				nFixed = lmd.getNfixed();
-				
+				tdcp_Cyy = Weight.getNormCyy(satList, GnssDataConfig.tdcp_priorVarOfUnitW);
 			}
 			else
 			{
-				afixed = new SimpleMatrix(lmd.getafixed().getArray());
+				tdcp_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
 			}
-//			double Pf_FIX = 0.01;
-//			Lambda lmd = new Lambda(ahat, Qahat, 6,"mu",1/3.0);
-//			nFixed = lmd.getNfixed();
-//			if (nFixed == 0&&ambCount>1) {
-//				lmd = new Lambda(ahat, Qahat, 5);
-//				double PsPAR = lmd.getPs();
-//				int nfixed = lmd.getNfixed();
-//				afixed = new SimpleMatrix(lmd.getafixed().getArray());
-//				if (1 - PsPAR > Pf_FIX) {
-//					double mu = Lambda.ratioinv(Pf_FIX, 1 - PsPAR, nfixed);
-//					double[] sqnorm = lmd.getSqnorm();
-//					if ((sqnorm[1] / sqnorm[2]) > mu) {
-//						afixed = new SimpleMatrix(floatAmb);
-//					}
-//				}
-//			}
-//			else {
-//				afixed = new SimpleMatrix(lmd.getafixed().getArray());
-//			}
-			
-			
-			if(nFixed!=0)
-			{
-				SimpleMatrix Cba = P.extractMatrix(0, 3+m, 3+m, 3+m+ambCount);
-				SimpleMatrix Cbb_hat = P.extractMatrix(0, 3+m, 0, 3+m);
-				SimpleMatrix b_hat  = x.extractMatrix(0,3+m,0,1);
-				SimpleMatrix Caa_inv = floatAmbCov.invert();
-				SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
-				SimpleMatrix a_inv_hat = afixed.extractMatrix(0, ambCount, 0, 1);
-				
-				SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat))); 
-				SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
-				
-				x = new SimpleMatrix(3+m+ambCount,1);
-				x.insertIntoThis(0, 0, b_inv_hat);
-				x.insertIntoThis(3+m,0,a_inv_hat);
-				P = new SimpleMatrix(Cbb_inv_hat);
-				
-				ambRepairedCountMap.put(currentTime, nFixed);
-				ambRepairedCount += nFixed;
-				
-				
+			R = new SimpleMatrix(tdcp_Cyy);
+			// Perform Update Step
+			kfObj.update(z, R, ze, H);
+			x = kfObj.getState();
+			P = kfObj.getCovariance();
+
+			if (ambCount > 0) {
+				SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
+				SimpleMatrix floatAmbCov = P.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
+				System.out.println("Float Ambiguity");
+				System.out.println(floatAmb.toString());
+				System.out.println("Float Ambiguity Covariance");
+				System.out.println(floatAmbCov.toString());
+
+				Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
+				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
+				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
+
+				Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
+				int nFixed = lmd.getNfixed();
+				double Ps = lmd.getPs();
+				if (nFixed == 0 && ambCount > 1) {
+					lmd = new Lambda(ahat, Qahat, 5, "MU", (1 / 3.0), "NCANDS", 10);
+					Ps = lmd.getPs();
+					afixed = new SimpleMatrix(lmd.getafixed().getArray());
+					nFixed = lmd.getNfixed();
+
+				} else {
+					afixed = new SimpleMatrix(lmd.getafixed().getArray());
+				}
+
+				if (nFixed != 0) {
+					SimpleMatrix Cba = P.extractMatrix(0, 3 + m, 3 + m, 3 + m + ambCount);
+					SimpleMatrix Cbb_hat = P.extractMatrix(0, 3 + m, 0, 3 + m);
+					SimpleMatrix b_hat = x.extractMatrix(0, 3 + m, 0, 1);
+					SimpleMatrix Caa_inv = floatAmbCov.invert();
+					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+					SimpleMatrix a_inv_hat = afixed.extractMatrix(0, ambCount, 0, 1);
+					SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat)));
+					SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
+					x = new SimpleMatrix(3 + m + ambCount, 1);
+					x.insertIntoThis(0, 0, b_inv_hat);
+					x.insertIntoThis(3 + m, 0, a_inv_hat);
+					P = new SimpleMatrix(Cbb_inv_hat);
+					System.out.println("Fixed Ambiguity Sequence");
+					System.out.println(a_inv_hat.toString());
+					System.out.println(" N Fixed : "+nFixed );
+					System.out.println(" Failure Rate : "+(1-Ps));
+					ambRepairedCountMap.put(currentTime, nFixed);
+					ambRepairedCount += nFixed;
+
+				}
+
 			}
 
-			// Partial Ambiguity Resolution
-
-//			Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
-//			Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
-//			double [][] _D = new Ldldecom(Qahat).getD().getArray();
-//			double[] D = new double[ambCount];
-//			for(int i=0;i<ambCount;i++)
-//			{
-//				D[i] = _D[i][i];
-//			}
-//			ArrayIndexComparator comparator = new ArrayIndexComparator(D);
-//			Integer[] indexes = comparator.createIndexArray();
-//			Arrays.sort(indexes, comparator);
-//			int[] combination = new int[ambCount];
-//			for(int i=0;i<ambCount;i++)
-//			{
-//				combination[i] = indexes[i];
-//			}
-
-//			Decorrel decorr = new Decorrel(Qahat, ahat);
-//			Jama.Matrix indexMat = new Jama.Matrix(ambCount, 1, 0);
-//			for (int i = 0; i < ambCount; i++) {
-//				indexMat.set(i, 0, i + 1);
-//			}
-//			Jama.Matrix _z = decorr.getZ();
-//			indexMat = _z.transpose().times(indexMat);
-//			int[] combination = new int[ambCount];
-//			for (int i = 0; i < ambCount; i++) {
-//				combination[i] = (int) indexMat.get(i, 0) - 1;
-//			}
-			
-			
-//			int count = 0;
-//			IntegerLeastSquareSolution acceptedILS = null;
-//			LambdaMethod lm = new LambdaMethod();
-//			IntegerLeastSquareSolution finalSol = null;
-//			int[] finalComb = null;
-//			SimpleRatioAmbiguityAcceptance ratioTest = new SimpleRatioAmbiguityAcceptance(1.0 / 3.0);
-//			while (acceptedILS == null && count < ambCount) {
-//				int[] comb = Arrays.copyOfRange(combination, count, ambCount);
-//				double[] newFloatAmb = IntStream.range(count, ambCount).mapToDouble(j -> floatAmb.get(combination[j]))
-//						.toArray();
-//				
-//				IntegerLeastSquareSolution[] ILSsol = lm.solveILS(10, newFloatAmb, comb, Cxx_floatAmb_hat);
-//				acceptedILS = ratioTest.accept(ILSsol);
-//				if (acceptedILS != null) {
-//					finalSol = new IntegerLeastSquareSolution(acceptedILS.getSolution(),
-//							acceptedILS.getSquaredDistance());
-//					finalComb = IntStream.range(0, comb.length).map(j -> comb[j]).toArray();
-//					break;
-//
-//				}
-//				count++;
-//			}
-//			if (finalSol != null) {
-//				System.out.println(Arrays.toString(finalComb));
-//				FixingSolution.process(finalComb, x, P, finalSol, m);
-//				if (!MatrixFeatures_DDRM.isPositiveDefinite(P.getMatrix())) {
-//					System.err.println("PositiveDefinite test Failed");
-//				}
-//				ambRepairedCountMap.put(currentTime, finalComb.length);
-//				ambRepairedCount += finalComb.length;
-//			}
+			if (doAnalyze) {
+				SimpleMatrix residual = z.minus((H.mult(x)));
+				performAnalysis(residual, satList, R, H, currentTime, obsvCodeList);
+			}
+			x = x.extractMatrix(0, 3 + m, 0, 1);
+			P = P.extractMatrix(0, 3 + m, 0, 3 + m);
+			kfObj.setState_ProcessCov(x, P);
+		} else {
+			if (doAnalyze) {
+				SimpleMatrix residual = z.minus((H.mult(x)));
+				performAnalysis(residual, testedSatList, R, H, currentTime, obsvCodeList);
+			}
 		}
-
-		if (doAnalyze) {
-			SimpleMatrix residual = z.minus((H.mult(x)));
-			performAnalysis(residual, satList, R, H, currentTime, obsvCodeList);
-		}
-		x = x.extractMatrix(0, 3 + m, 0, 1);
-		P = P.extractMatrix(0, 3 + m, 0, 3 + m);
-		kfObj.setState_ProcessCov(x, P);
-
 	}
 
 	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,

@@ -231,7 +231,7 @@ public class Lambda {
                 {
                 	ncands=1;
                 }
-               
+                Ps = parsearch.getPs();
                 zfixed = parsearch.getzfixed();
                 break;
             case ILS_SSEARCH_RT:

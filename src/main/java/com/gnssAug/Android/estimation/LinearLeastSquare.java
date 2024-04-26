@@ -520,7 +520,9 @@ public class LinearLeastSquare {
 				H = H.concatColumns(C);
 				SimpleMatrix Ht = H.transpose();
 				SimpleMatrix W = new SimpleMatrix(weight);
-				SimpleMatrix HtWHinv  = (Ht.mult(W).mult(H)).invert();
+				SimpleMatrix HtWHinv   =(Ht.mult(W).mult(H)).invert();
+				
+				
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);
 				// updating Rx state vector, by adding deltaX vector

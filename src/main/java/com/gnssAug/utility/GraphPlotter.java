@@ -924,7 +924,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/2021-04-29-US-SJC-2-SamsungS20Ultra-L5.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/open_sky_static_Samsung_Galaxy_S20+_5G_L1.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -934,7 +934,7 @@ public class GraphPlotter extends ApplicationFrame {
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
 				String[] header = new String[] { "SVID", "Time", "True", "PR", "Doppler", "Phase", "Iono", "Tropo",
-						"ClkRate" };
+						"ClkRate","ElevAngle","CN0" };
 				writer.writeNext(header);
 				i = 0;
 				for (String id : satListMap.keySet()) {
@@ -949,8 +949,10 @@ public class GraphPlotter extends ApplicationFrame {
 						double iono = sat.getIonoErr();
 						double tropo = sat.getTropoErr();
 						double clkRate = sat.getClkRate();
+						double elevAng = sat.getElevAzm()[0];
+						double cn0 = sat.getCn0DbHz();
 						if ((t - t0) > 1.1) {
-							String[] entry = new String[9];
+							String[] entry = new String[11];
 							entry[0] = "" + id;
 							entry[1] = "" + (t0 + 1);
 							entry[2] = "" + null;
@@ -960,10 +962,12 @@ public class GraphPlotter extends ApplicationFrame {
 							entry[6] = "" + null;
 							entry[7] = "" + null;
 							entry[8] = "" + null;
+							entry[9] = "" + null;
+							entry[10] = "" + null;
 							dataList.add(entry);
 							i++;
 						}
-						String[] entry = new String[9];
+						String[] entry = new String[11];
 						entry[0] = "" + id;
 						entry[1] = "" + t;
 						entry[2] = "" + tr;
@@ -973,6 +977,8 @@ public class GraphPlotter extends ApplicationFrame {
 						entry[6] = "" + iono;
 						entry[7] = "" + tropo;
 						entry[8] = "" + clkRate;
+						entry[9] = "" + elevAng;
+						entry[10] = "" + cn0;
 						dataList.add(entry);
 						i++;
 						t0 = t;

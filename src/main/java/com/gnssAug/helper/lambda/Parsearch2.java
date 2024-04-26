@@ -17,7 +17,7 @@ public class Parsearch2 {
 	private double[] sqnorm = null;
 	private Matrix Qzpar = null;
 	private Matrix Zpar = null;
-
+	private double Ps = Double.NaN;
 	private int nfixed = 0;
 	private Matrix zfixed = null;
 
@@ -64,6 +64,10 @@ public class Parsearch2 {
 			return null;
 		}
 	}
+	
+	public double getPs(){
+        return Ps;
+    }
 
 	public double getMu() {
 		return mu;
@@ -90,6 +94,8 @@ public class Parsearch2 {
 		zfixed = zhat;
 		nfixed = 0;
 		int k = 1;
+		Ps = 1;
+        NormalDistribution normalDistribution = new NormalDistribution();
 		while ((k <= n) && zpar == null) {
 			Ssearch ssearch = new Ssearch(zhat.getMatrix(k - 1, n - 1, new int[] { 0 }),
 					L.getMatrix(k - 1, n - 1, k - 1, n - 1), D.getMatrix(k - 1, n - 1, k - 1, n - 1), ncands);
@@ -116,6 +122,10 @@ public class Parsearch2 {
 						zfixed.setMatrix(k - 1, n - 1, 0, ncands - 1, zpar);
 					}
 					nfixed = n - k + 1;
+					for (int i = k - 1;i < D.getColumnDimension();i++){
+		                double cdf = normalDistribution.probability(-Double.MAX_VALUE, 0.5/Math.sqrt(D.get(i,i)));
+		                Ps *= (2 * cdf - 1);
+		            }
 					return;
 				} else {
 					zpar = null;

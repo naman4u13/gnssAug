@@ -1,29 +1,15 @@
 package com.gnssAug.Android.estimation;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
-
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.ejml.simple.SimpleMatrix;
-import org.hipparchus.linear.Array2DRowRealMatrix;
-import org.hipparchus.linear.RealMatrix;
-import org.orekit.estimation.measurements.gnss.IntegerLeastSquareSolution;
-import org.orekit.estimation.measurements.gnss.LambdaMethod;
-import org.orekit.estimation.measurements.gnss.SimpleRatioAmbiguityAcceptance;
-
 import com.gnssAug.Android.constants.GnssDataConfig;
-import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.Android.models.TDCP;
-import com.gnssAug.helper.FixingSolution;
 import com.gnssAug.helper.lambda.Lambda;
-import com.gnssAug.utility.Combination;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
@@ -345,17 +331,18 @@ public class LLS_TDCP_ambFix {
 				System.out.println(floatAmb.toString());
 				System.out.println("Float Ambiguity Covariance");
 				System.out.println(floatAmbCov.toString());
-				System.out.println("Fixed Ambiguity Sequence");
+				
 				Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
 				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
 				
 				Lambda lmd = new Lambda(ahat, Qahat, 6,"MU",(1/3.0),"NCANDS",10);
 				int nFixed = lmd.getNfixed();
+				double Ps = lmd.getPs();
 				if(nFixed==0&&ambCount>1)
 				{
 					lmd = new Lambda(ahat, Qahat, 5,"MU",(1/3.0),"NCANDS",10);
-					
+					Ps = lmd.getPs();
 					afixed = new SimpleMatrix(lmd.getafixed().getArray());
 					nFixed = lmd.getNfixed();
 					
@@ -382,8 +369,10 @@ public class LLS_TDCP_ambFix {
 					x.insertIntoThis(0, 0, b_inv_hat);
 					x.insertIntoThis(3+m,0,a_inv_hat);
 					P = new SimpleMatrix(Cbb_inv_hat);
-					
+					System.out.println("Fixed Ambiguity Sequence");
 					System.out.println(a_inv_hat.toString());
+					System.out.println(" N Fixed : "+nFixed );
+					System.out.println(" Failure Rate : "+(1-Ps));
 					ambRepairedCountMap.put(currentTime, nFixed);
 					ambRepairedCount += nFixed;
 					

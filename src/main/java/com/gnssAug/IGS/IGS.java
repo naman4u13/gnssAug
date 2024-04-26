@@ -80,17 +80,17 @@ public class IGS {
 			Antenna antenna = null;
 			IONEX ionex = null;
 			
-			String base_path = "C:\\Users\\naman.agarwal\\OneDrive - University of Calgary\\input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
+			String base_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
 
-			String nav_path = base_path + "\\BRDC00IGS_R_20201000000_01D_MN.rnx\\BRDC00IGS_R_20201000000_01D_MN.rnx";
+			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
 			String obs_path = base_path
-					+ "\\LROC00FRA_R_20211190000_01D_30S_MO.crx\\LROC00FRA_R_20211190000_01D_30S_MO.rnx";
+					+ "/LROC00FRA_R_20211190000_01D_30S_MO.crx/LROC00FRA_R_20211190000_01D_30S_MO.rnx";
 
-			String antenna_path = base_path + "\\complementary\\igs14.atx\\igs14.atx";
+			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
-			String antenna_csv_path = base_path + "\\complementary\\antenna.csv";
-			String path = "C:\\\\Users\\\\naman.agarwal\\\\Documents\\\\GNSS\\\\gnss_output\\\\IGS_rinex_output\\test2";
+			String antenna_csv_path = base_path + "/complementary/antenna.csv";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/test3";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -506,8 +506,7 @@ public class IGS {
 		final double spin = 7.2921151467E-5;
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
-		File orekitData = new File(
-				"C:\\Users\\naman.agarwal\\Documents\\orekit\\");
+		File orekitData = new File("/Users/naman.agarwal/Documents/orekit/orekit-data-master/orekit-data-master");
 		/*
 		 * File orekitData = new File(
 		 * "C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master"
