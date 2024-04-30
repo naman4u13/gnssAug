@@ -70,9 +70,9 @@ public class Android_Static {
 	private static Geoid geoid = null;
 
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
-			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String bias_path,
-			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet,String mobName) {
+			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String bias_path, String clock_path,
+			String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
+			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 			ArrayList<Long> timeList = new ArrayList<Long>();
@@ -89,7 +89,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"+mobName+"_WLS";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
+					+ mobName + "test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -106,7 +107,6 @@ public class Android_Static {
 
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
-			
 			GNSS_Log.process(gnss_log_path);
 			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
 			ArrayList<IMUsensor> imuList = GNSS_Log.getImuList();
@@ -130,9 +130,10 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-
-				
-
+				if(gtIndex>2000)
+				{
+					break;
+				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
@@ -149,6 +150,7 @@ public class Android_Static {
 					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception
+
 					e.printStackTrace();
 					continue;
 				}
@@ -277,7 +279,7 @@ public class Android_Static {
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
 				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11))) {
-					estTypes = new int[] { 5,6,7,12 };
+					estTypes = new int[] { 5, 6, 7, 12 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -817,14 +819,13 @@ public class Android_Static {
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
-		
-		
+
 			for (String key : estPosMap.keySet()) {
 				ArrayList<Double>[] posErrList = new ArrayList[6];
 				IntStream.range(0, 6).forEach(i -> posErrList[i] = new ArrayList<Double>());
 				ArrayList<double[]> estPosList = estPosMap.get(key);
 				int n = estPosList.size();
-				
+
 				ArrayList<double[]> enuPosList = new ArrayList<double[]>();
 
 				for (int i = 0; i < n; i++) {
@@ -868,7 +869,7 @@ public class Android_Static {
 			}
 
 			for (String key : estVelMap.keySet()) {
-				
+
 				ArrayList<Double>[] velErrList = new ArrayList[6];
 				ArrayList<double[]> estVelList = null;
 				ArrayList<double[]> enuVelList = null;
@@ -876,11 +877,10 @@ public class Android_Static {
 				enuVelList = new ArrayList<double[]>();
 				estVelList = estVelMap.get(key);
 				int n = estVelList.size();
-				
+
 				for (int i = 0; i < n; i++) {
 					double[] estVel = estVelList.get(i);
-					if (estVel == null)
-					{
+					if (estVel == null) {
 						continue;
 					}
 					double[] trueVel = new double[3];
@@ -900,7 +900,6 @@ public class Android_Static {
 					velErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 
 				}
-				
 
 				GraphVelMap.put(key, enuVelList);
 
@@ -912,8 +911,6 @@ public class Android_Static {
 				System.out.println(" U - " + MathUtil.RMS(velErrList[2]));
 				System.out.println(" 3d Error - " + MathUtil.RMS(velErrList[3]));
 				System.out.println(" 2d Error - " + MathUtil.RMS(velErrList[4]));
-
-				
 
 			}
 			System.out.println("\n\nPost Variance of Unit Weight Calculations");
@@ -960,14 +957,13 @@ public class Android_Static {
 			}
 			if (mapDeltaRanges) {
 				ArrayList<double[]> trueEcefList = new ArrayList<double[]>(satMap.size());
-				for(int i=0;i<satMap.size();i++)
-				{
+				for (int i = 0; i < satMap.size(); i++) {
 					trueEcefList.add(trueEcef);
 				}
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
-				
+
 			} else {
-				
+
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true);
@@ -985,7 +981,6 @@ public class Android_Static {
 
 				}
 			}
-			
 
 		} catch (
 

@@ -670,7 +670,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2\\"
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/Measurements/2021-03-10-US-SVL-1_SamsungS20Ultra_L1"
 					+ name + ".csv";
 			File file = new File(filePath);
 			try {
@@ -924,7 +924,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/open_sky_static_Samsung_Galaxy_S20+_5G_L1.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/NoCorrections/2021-03-10-US-SVL-1_SamsungS20Ultra_L5.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter

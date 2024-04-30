@@ -119,7 +119,7 @@ public class Analyzer {
 
 		GraphPlotter.graphTrueError("Error in Range(in metre)", rangeMap);
 		
-		//GraphPlotter.graphTrueError("Error in Phase(in metre)", phaseMap);
+		GraphPlotter.graphTrueError("Error in Phase(in metre)", phaseMap);
 
 		if (outlierAnalyze) {
 			// Creating a temp doppler sat res because true velocity list does not contain

@@ -23,16 +23,16 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (1) {
 		case 1:
-			String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
-			// String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
-			String basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/decimeter/train/2021-04-29-US-MTV-1/SamsungS20Ultra";
+			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
+			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
+			String basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/decimeter/train/2021-03-10-US-SVL-1/SamsungS20Ultra";
 			// "C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google Decimeter
 			// Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
 			// "C:\\D drive\\Study\\Google Decimeter
 			// Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
-			Set<String> discardSet = true ? Set.of("C33") : Set.of("C11", "G12", "G2", "G30");// C33
+			Set<String> discardSet = false ? Set.of("E11", "C23", "E25" ,"E7", "E8") :Set.of(""); //Set.of("C11", "G12", "G2", "G30");// C33
 			String[] strList = basePath.split("/");
 			String[] date = strList[strList.length - 2].split("-");
 			int year = Integer.parseInt(date[0]);
@@ -68,7 +68,7 @@ public class MainApp {
 		case 3:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			obsvCodeList = new String[] {"G1C","E1C","C2I"};
-			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Static/Test_20210713_T-A-SIS-01_open_sky_static_assisted_4h/RxX_Samsung_Galaxy_S21/RawData/gnss_log_2021_07_13_09_40_47.txt";
+			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Static/Test_20210713_T-A-SIS-01_open_sky_static_assisted_4h/RxX_Samsung_Galaxy_S20+_5G/RawData/gnss_log_2021_07_13_09_40_48.txt";
 
 			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
@@ -85,9 +85,12 @@ public class MainApp {
 			clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			ionex_path = base_url + year + "_" + doy + sep + "igsg" + doy + "0.21I";
+			// Open Sky
 			double[] trueEcef = new double[] {4183777.518, 862857.121, 4721221.153};
-			Android_Static.posEstimate(true, 0, 0,2, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,false, false,false,discardSet,mobName);
+			// Urban Static
+			//double[] trueEcef = new double[] {4183748.339, 862806.185, 4721229.282};
+			Android_Static.posEstimate(true, 0, 0,18, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 
 		}
 		Instant end = Instant.now();

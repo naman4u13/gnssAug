@@ -32,7 +32,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
 			boolean innPhaseRate, boolean onlyDoppler) throws Exception {
-		boolean isWeighted = true;
+		boolean isWeighted = false;
 		int m = obsvCodeList.length;
 		int n = 3 + m;
 		SimpleMatrix x = new SimpleMatrix(n, 1);
@@ -78,7 +78,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		for (int i = 1; i < timeList.size(); i++) {
 			if (!onlyDoppler) {
 				System.out.println("\n\n Epoch : " + i);
-			}
+		}
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
@@ -134,6 +134,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 					isWeighted, refPos, innPhaseRate, onlyDoppler);
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
+			
 			double[] estState = new double[x_size];
 			IntStream.range(0, x_size).forEach(j -> estState[j] = x.get(j));
 			// Add position estimate to the list
@@ -198,7 +199,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 
 		SimpleMatrix doppler_Cyy = null;
 		// Measurement Noise
-		if(isWeighted)
+		if(true)
 		{
 			doppler_Cyy = Weight.getNormCyy(satList, GnssDataConfig.doppler_priorVarOfUnitW);
 		}
@@ -364,11 +365,13 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
 
-				Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
+				Lambda lmd = new Lambda(ahat, Qahat, 6, "P0", 0.01, "NCANDS", 10);
+				//Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
 				int nFixed = lmd.getNfixed();
 				double Ps = lmd.getPs();
 				if (nFixed == 0 && ambCount > 1) {
-					lmd = new Lambda(ahat, Qahat, 5, "MU", (1 / 3.0), "NCANDS", 10);
+					//lmd = new Lambda(ahat, Qahat, 5, "MU", (1 / 3.0), "NCANDS", 10);
+					lmd = new Lambda(ahat, Qahat, 5,"P0", 0.99, "NCANDS", 10);
 					Ps = lmd.getPs();
 					afixed = new SimpleMatrix(lmd.getafixed().getArray());
 					nFixed = lmd.getNfixed();

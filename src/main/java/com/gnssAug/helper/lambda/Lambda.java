@@ -221,7 +221,8 @@ public class Lambda {
                 zfixed = bootstrap.getafixed();
                 break;
             case PAR:
-                Parsearch2 parsearch = new Parsearch2(zhat,Qzhat,Z,L,D,mu,ncands);
+                //Parsearch2 parsearch2 = new Parsearch2(zhat,Qzhat,Z,L,D,mu,ncands);
+                Parsearch parsearch=  new Parsearch( zhat, Qzhat, Z, L, D, P0, ncands);
                 Matrix zpar = parsearch.getzpar();
                 sqnorm = parsearch.getSqnorm();
                 Qzhat = parsearch.getQzpar(); //此处变量是否为Qzpar更好?
@@ -241,12 +242,14 @@ public class Lambda {
                 if(FFRT){
                     if(1 - Ps > P0){
                         mu = ratioinv(P0,1-Ps,n);
+                        System.out.println("MU : "+mu);
                     }else{
                         mu = 1;
                     }
                 }
+                System.out.println("Ratio : "+(sqnorm[0]/sqnorm[1]));
                 if(sqnorm[0]/sqnorm[1] > mu){
-                    zfixed = zhat;
+                	zfixed = zhat;
                     nfixed = 0;
                     ncands = 1;
                 }
