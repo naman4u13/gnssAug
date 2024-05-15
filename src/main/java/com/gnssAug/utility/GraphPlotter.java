@@ -30,6 +30,7 @@ import org.jfree.ui.RefineryUtilities;
 
 import com.gnssAug.Android.constants.AndroidSensor;
 import com.gnssAug.Android.constants.Measurement;
+import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.models.SatResidual;
@@ -45,32 +46,28 @@ public class GraphPlotter extends ApplicationFrame {
 		ArrayList<JFreeChart> charts = new ArrayList<JFreeChart>();
 		if (isSatRes) {
 
-			if (flag==0) {
+			if (flag == 0) {
 				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 
-			} else if(flag==1) {
+			} else if (flag == 1) {
 				charts.add(ChartFactory.createScatterPlot(name + " vs Elevation Angle", "Elevation-Angle(in degrees)",
 						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 
-			}
-			else
-			{
-				charts.add(ChartFactory.createScatterPlot(name + " vs CN0 dB", "CN0 dB(in Hz)",
-						name + "(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
+			} else {
+				charts.add(ChartFactory.createScatterPlot(name + " vs CN0 dB", "CN0 dB(in Hz)", name + "(in m or m/s)",
+						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 			}
 		} else {
 
-			if (flag==0) {
+			if (flag == 0) {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "GPS-time",
 						"Noise Std-Dev(in m or m/s)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
-			} else if(flag==1) {
+			} else if (flag == 1) {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev vs Elevation Angle",
 						"Elevation-Angle(in degrees)", "Noise Std-Dev(in m or m/s)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
-			}
-			else
-			{
+			} else {
 				charts.add(ChartFactory.createScatterPlot("Satellite-Measurement Noise Std Dev", "CN0 dB",
 						"CN0 dB(in Hz)", createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 			}
@@ -85,6 +82,32 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 
 	}
+	
+	public GraphPlotter(HashMap<String,ArrayList<CycleSlipDetect>> satCSmap,int flag) {
+		super("Cycle Slip Detection and Repair");
+		String title = "Cycle Slip Detection and Repair";
+		JFreeChart chart;
+		if (flag == 0) {
+			chart = ChartFactory.createScatterPlot(title, "GPS-time", "TDCP (in Cycles)",
+					createDatasetCycleSlip(satCSmap, flag));
+
+		} else if (flag == 1) {
+			chart = ChartFactory.createScatterPlot(title + " vs Elevation Angle", "Elevation-Angle(in degrees)",
+					"TDCP (in Cycles)", createDatasetCycleSlip(satCSmap, flag));
+
+		} else {
+			chart = ChartFactory.createScatterPlot(title + " vs CN0 dB", "CN0 dB(in Hz)", "TDCP (in Cycles)",
+					createDatasetCycleSlip(satCSmap, flag));
+		}
+
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		
+		setContentPane(chartPanel);
+
+	}
+
 
 	public GraphPlotter(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n, String name, boolean isHorizontal) {
 		super(name + " Trajectory");
@@ -214,13 +237,13 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList)
-			throws IOException {
+	public GraphPlotter(String name, TreeMap<Long, Integer> ambDetectedCountMap,
+			TreeMap<Long, Integer> ambRepairedCountMap, ArrayList<Long> timeList) throws IOException {
 		super(name);
 		// TODO Auto-generated constructor stub
 
 		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
-				createDatasetAmbiguityCount(ambDetectedCountMap, ambRepairedCountMap,timeList));
+				createDatasetAmbiguityCount(ambDetectedCountMap, ambRepairedCountMap, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -229,7 +252,7 @@ public class GraphPlotter extends ApplicationFrame {
 		setContentPane(chartPanel);
 
 	}
-	
+
 	public GraphPlotter(String name, HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
 			throws IOException {
 		super(name);
@@ -386,14 +409,14 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public static void graphAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList) throws IOException {
-		
-			
-			GraphPlotter chart = new GraphPlotter("Ambiguity Count", ambDetectedCountMap,ambRepairedCountMap, timeList);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
-		
+	public static void graphAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap,
+			TreeMap<Long, Integer> ambRepairedCountMap, ArrayList<Long> timeList) throws IOException {
+
+		GraphPlotter chart = new GraphPlotter("Ambiguity Count", ambDetectedCountMap, ambRepairedCountMap, timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
 	}
 
 	public static void graphPostUnitW(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data,
@@ -414,7 +437,7 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.setVisible(true);
 		}
 	}
-	
+
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
 			throws IOException {
 
@@ -646,6 +669,57 @@ public class GraphPlotter extends ApplicationFrame {
 //				RefineryUtilities.positionFrameRandomly(chart);
 //				chart.setVisible(true);
 
+			}
+		}
+
+	}
+
+	public static void graphCycleSlip(HashMap<String, ArrayList<CycleSlipDetect>> satCSmap) {
+
+		// For Satellite Residuals
+		for(int i=0;i<3;i++) {
+		GraphPlotter chart = new GraphPlotter(satCSmap, i);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+		}
+		
+		boolean makeCSV = false;
+		if (makeCSV) {
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/CycleSlip/RxX_Samsung_Galaxy_S20+_5G2.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "SVID", "Time", "Angle", "CN0", "Error","isCS","isRepaired","FloatAmb","IntegerAmb" };
+				writer.writeNext(header);
+				for (String key : satCSmap.keySet()) {
+					ArrayList<CycleSlipDetect> csdList = satCSmap.get(key);
+					for (int i=0;i<csdList.size();i++) {
+						String[] entry = new String[9];
+						CycleSlipDetect csdObj = csdList.get(i);
+						Satellite sat = csdObj.getSat();
+						entry[0] = sat.getObsvCode().charAt(0)+""+sat.getSvid();
+						entry[1] = (csdObj.getTime()*1e-3) + "";
+						entry[2] = Math.toDegrees(sat.getElevAzm()[0]) + "";
+						entry[3] = sat.getCn0DbHz() + "";
+						entry[4] =  (csdObj.getCarrierPhaseDR()-csdObj.getClkDrift()-csdObj.getTrueDR())/csdObj.getWavelength()+"";
+						entry[5] = csdObj.isCS()?"1":"0";
+						entry[6] = csdObj.isRepaired()?"1":"0";
+						entry[7] = csdObj.getFloatAmb()+"";
+						entry[8] = csdObj.getIntAmb()+"";
+						dataList.add(entry);
+					}
+				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
 			}
 		}
 
@@ -934,7 +1008,7 @@ public class GraphPlotter extends ApplicationFrame {
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
 				String[] header = new String[] { "SVID", "Time", "True", "PR", "Doppler", "Phase", "Iono", "Tropo",
-						"ClkRate","ElevAngle","CN0" };
+						"ClkRate", "ElevAngle", "CN0" };
 				writer.writeNext(header);
 				i = 0;
 				for (String id : satListMap.keySet()) {
@@ -1208,39 +1282,39 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
-	private XYDataset createDatasetAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap, TreeMap<Long, Integer> ambRepairedCountMap,ArrayList<Long> timeList) {
+	private XYDataset createDatasetAmbiguityCount(TreeMap<Long, Integer> ambDetectedCountMap,
+			TreeMap<Long, Integer> ambRepairedCountMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		XYSeries ambDetect = new XYSeries("Ambiguity Detected");
 		XYSeries ambRepair = new XYSeries("Ambiguity Repaired");
 		int totalDetectCount = 0;
 		int totalRepairCount = 0;
 		long time0 = timeList.get(0);
-		for (int i=1;i<timeList.size();i++) {
+		for (int i = 1; i < timeList.size(); i++) {
 			long time = timeList.get(i);
 			totalDetectCount += ambDetectedCountMap.get(time);
-			ambDetect.add(time-time0, ambDetectedCountMap.get(time));
+			ambDetect.add(time - time0, ambDetectedCountMap.get(time));
 			int repairCount = 0;
-			if(ambRepairedCountMap.get(time)!=null)
-			{
+			if (ambRepairedCountMap.get(time) != null) {
 				repairCount = ambRepairedCountMap.get(time);
 				totalRepairCount += repairCount;
 			}
-			
-			ambRepair.add(time-time0, repairCount);
+
+			ambRepair.add(time - time0, repairCount);
 
 		}
-		ambDetect.setKey(ambDetect.getKey()+" : "+totalDetectCount);
-		ambRepair.setKey(ambRepair.getKey()+" : "+totalRepairCount);
-		
+		ambDetect.setKey(ambDetect.getKey() + " : " + totalDetectCount);
+		ambRepair.setKey(ambRepair.getKey() + " : " + totalRepairCount);
+
 		dataset.addSeries(ambDetect);
 		dataset.addSeries(ambRepair);
-		double repairPer = (totalRepairCount*100.0)/totalDetectCount;
+		double repairPer = (totalRepairCount * 100.0) / totalDetectCount;
 		repairPer = Math.round(repairPer * 100.0) / 100.0;
-		dataset.addSeries(new XYSeries("Repair Percentage : "+repairPer));
+		dataset.addSeries(new XYSeries("Repair Percentage : " + repairPer));
 		return dataset;
 
 	}
-	
+
 	private XYDataset createDatasetENU(HashMap<String, double[]> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 		dataset.addSeries(new XYSeries(""));
@@ -1566,8 +1640,8 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
-	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean isSatRes,
-			int flag, boolean outlierAnalyze) {
+	private XYDataset createDatasetSatRes(HashMap<String, ArrayList<SatResidual>> dataMap, boolean isSatRes, int flag,
+			boolean outlierAnalyze) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
 		if (outlierAnalyze) {
@@ -1580,14 +1654,14 @@ public class GraphPlotter extends ApplicationFrame {
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
 					double x = 0;
-					if (flag==0) {
+					if (flag == 0) {
 						double t = satData.getT();
 
 						x = t;
-					} else if(flag==1) {
+					} else if (flag == 1) {
 						double elevAngle = Math.toDegrees(satData.getElevAngle());
 						x = elevAngle;
-					}else  {
+					} else {
 						double CN0 = satData.getCN0();
 						x = CN0;
 					}
@@ -1619,17 +1693,17 @@ public class GraphPlotter extends ApplicationFrame {
 				for (int i = 0; i < dataList.size(); i++) {
 					SatResidual satData = dataList.get(i);
 					double x = 0;
-					if (flag==0) {
+					if (flag == 0) {
 						double t = satData.getT();
 						if (t - t0 > 1) {
 							series.add(t0, null);
 						}
 						t0 = t;
 						x = t;
-					} else if(flag==1) {
+					} else if (flag == 1) {
 						double elevAngle = Math.toDegrees(satData.getElevAngle());
 						x = elevAngle;
-					}else  {
+					} else {
 						double CN0 = satData.getCN0();
 						x = CN0;
 					}
@@ -1658,6 +1732,62 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(new XYSeries("Q75: " + q75));
 			dataset.addSeries(new XYSeries("Q95: " + q95));
 		}
+
+		return dataset;
+	}
+	
+	private XYDataset createDatasetCycleSlip(HashMap<String,ArrayList<CycleSlipDetect>> dataMap, int flag) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		
+			final XYSeries inlier = new XYSeries("inlier");
+			final XYSeries detect = new XYSeries("CS Detect");
+			final XYSeries repair = new XYSeries("CS Repair");
+			for (String key : dataMap.keySet()) {
+				ArrayList<CycleSlipDetect> dataList = dataMap.get(key);
+
+				double t0 = 0;
+				for (int i = 0; i < dataList.size(); i++) {
+					CycleSlipDetect csdObj = dataList.get(i);
+					Satellite sat = csdObj.getSat();
+					double x = 0;
+					if (flag == 0) {
+						double t = csdObj.getTime()*1e-3;
+						x = t;
+					} else if (flag == 1) {
+						double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
+						x = elevAngle;
+					} else {
+						double CN0 = sat.getCn0DbHz();
+						x = CN0;
+					}
+					double data;
+					data = (csdObj.getCarrierPhaseDR()-csdObj.getClkDrift()-csdObj.getTrueDR())/csdObj.getWavelength();
+					if (csdObj.isCS()) {
+						if(csdObj.isRepaired())
+						{
+							repair.add(x,data);
+						}
+						else
+						{
+							detect.add(x,data);
+						}
+						
+					} else {
+						inlier.add(x, data);
+					}
+
+				}
+
+			}
+			repair.setKey(repair.getKey()+" ("+repair.getItemCount()+")");
+			detect.setKey(detect.getKey()+" ("+detect.getItemCount()+")");
+			inlier.setKey(inlier.getKey()+" ("+inlier.getItemCount()+")");
+			dataset.addSeries(repair);
+			dataset.addSeries(detect);
+			dataset.addSeries(inlier);
+			
+			
 
 		return dataset;
 	}

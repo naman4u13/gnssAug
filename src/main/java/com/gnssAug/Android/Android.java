@@ -36,7 +36,7 @@ import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
-import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
+
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
@@ -94,7 +94,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/SamsungS20Ultra_innovation_Phase_prediction";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -626,13 +626,13 @@ public class Android {
 
 			}
 
-			if (estimatorType == 15) {
-				TreeMap<Long, double[]> estStateMap;
-				EKFParent ekf;
-				ekf = new EKF_PPP();
-				estStateMap = ((EKF_PPP) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest,
-						outlierAnalyze);
-			}
+//			if (estimatorType == 15) {
+//				TreeMap<Long, double[]> estStateMap;
+//				EKFParent ekf;
+//				ekf = new EKF_PPP();
+//				estStateMap = ((EKF_PPP) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest,
+//						outlierAnalyze);
+//			}
 
 			if (estimatorType == 16) {
 				String estType = "LS TDCP";
@@ -742,7 +742,7 @@ public class Android {
 						+ ((LLS_TDCP_ambFix.getAmbRepairedCount() * 100.0) / LLS_TDCP_ambFix.getAmbDetectedCount()));
 			}
 			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
-
+				HashMap<String,ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String,ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
 				boolean onlyDoppler = false;
@@ -755,7 +755,7 @@ public class Android {
 				}
 				EKF_TDCP_ambFix ekf = new EKF_TDCP_ambFix();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
-						doTest, outlierAnalyze, innPhaseRate, onlyDoppler);
+						doTest, outlierAnalyze, innPhaseRate, onlyDoppler,trueEcefList);
 
 				useDoppler = true;
 				int n = timeList.size();
@@ -784,6 +784,7 @@ public class Android {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						double[] innovation = ekf.getInnovationMap().get(time);
+						ArrayList<CycleSlipDetect> csdList = ekf.getCsdListMap().get(time);
 						int m = satList.size();
 						double tRx = time / 1000.0;
 						// double[] measNoise = ekf.getMeasNoiseMap().get(time);
@@ -802,6 +803,19 @@ public class Android {
 											sat.isOutlier(), sat.getCn0DbHz()));
 
 						}
+						for(int j=0;j<csdList.size();j++)
+						{
+							CycleSlipDetect csdObj = csdList.get(j);
+							Satellite sat = csdObj.getSat();
+							String obsvCode = sat.getObsvCode();
+							for (int k = 0; k < obsvCodeList.length; k++) {
+								if (obsvCodeList[k].equals(obsvCode)) {
+									csdObj.setClkDrift(estVel[3+k]);
+								}
+							}
+							satCSmap.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
+											k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
+						}
 						satCountMap.get(Measurement.TDCP).computeIfAbsent(estName, k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
 						Cxx_hat_map.get(State.Velocity).computeIfAbsent(estName, k -> new ArrayList<SimpleMatrix>())
@@ -816,6 +830,10 @@ public class Android {
 				}
 				if (doAnalyze && estimatorType != 11) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
+					if(estimatorType==18||estimatorType==19)
+					{
+						GraphPlotter.graphCycleSlip(satCSmap);
+					}
 				}
 				if (!onlyDoppler) {
 					GraphPlotter.graphAmbiguityCount(ekf.getAmbDetectedCountMap(), ekf.getAmbRepairedCountMap(),

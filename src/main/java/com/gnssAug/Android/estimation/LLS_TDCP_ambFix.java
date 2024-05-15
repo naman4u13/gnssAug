@@ -71,10 +71,10 @@ public class LLS_TDCP_ambFix {
 
 					if (approxCS < 5 * wavelength) {
 						csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false, wavelength,
-								satVelCorr, i, approxCS/wavelength, unitLOS));
+								satVelCorr, unitLOS,currentTime));
 					} else if (approxCS < 100 * wavelength) {
 						csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, true, wavelength,
-								satVelCorr, i, approxCS/wavelength, unitLOS));
+								satVelCorr, unitLOS,currentTime));
 					}
 				}
 			}

@@ -23,7 +23,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (1) {
+		switch (3) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -32,7 +32,7 @@ public class MainApp {
 			// Challenge\\decimeter\\train\\2021-04-29-US-SJC-2\\SamsungS20Ultra";
 			// "C:\\D drive\\Study\\Google Decimeter
 			// Challenge\\decimeter\\train\\2021-04-29-US-MTV-1\\Pixel4";
-			Set<String> discardSet = false ? Set.of("E11", "C23", "E25" ,"E7", "E8") :Set.of(""); //Set.of("C11", "G12", "G2", "G30");// C33
+			Set<String> discardSet = false ? Set.of("E11", "E25" ,"E7", "E8") :Set.of(""); //Set.of("C11", "G12", "G2", "G30");// C33
 			String[] strList = basePath.split("/");
 			String[] date = strList[strList.length - 2].split("-");
 			int year = Integer.parseInt(date[0]);
@@ -50,7 +50,7 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + sep + "igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0, 18, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+			Android.posEstimate(true, 0, 0, 19, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
 					clock_path, orbit_path, ionex_path, true, true, true, false, false, discardSet);
 			break;
 
@@ -70,7 +70,7 @@ public class MainApp {
 			obsvCodeList = new String[] {"G1C","E1C","C2I"};
 			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Static/Test_20210713_T-A-SIS-01_open_sky_static_assisted_4h/RxX_Samsung_Galaxy_S20+_5G/RawData/gnss_log_2021_07_13_09_40_48.txt";
 
-			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
+			discardSet = true ? Set.of("C22") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);
@@ -89,9 +89,17 @@ public class MainApp {
 			double[] trueEcef = new double[] {4183777.518, 862857.121, 4721221.153};
 			// Urban Static
 			//double[] trueEcef = new double[] {4183748.339, 862806.185, 4721229.282};
-			Android_Static.posEstimate(true, 0, 0,18, obsvCodeList,basePath, trueEcef, bias_path,
+			Android_Static.posEstimate(true, 0, 0,19, obsvCodeList,basePath, trueEcef, bias_path,
 					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
-
+		case 4:
+			double Ps = 1;
+			NormalDistribution normalDistribution = new NormalDistribution();
+	        double[] arr = new double[] {0.1};
+	        for (int i = 0;i <arr.length;i++){
+	            double cdf = normalDistribution.probability(-Double.MAX_VALUE, 0.5/arr[i]);
+	            Ps *= (2 * cdf - 1);
+	        }
+	        System.out.println();
 		}
 		Instant end = Instant.now();
 		System.out.println("EXECUTION TIME -  " + Duration.between(start, end));

@@ -1,7 +1,7 @@
 package com.gnssAug.Android.estimation.KalmanFilter;
 
 import java.util.ArrayList;
-
+import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
@@ -14,6 +14,7 @@ import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.helper.lambda.Lambda;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Weight;
@@ -26,12 +27,13 @@ public class EKF_TDCP_ambFix extends EKFParent {
 		kfObj = new KFconfig();
 	}
 
-	protected TreeMap<Long, Integer> ambDetectedCountMap;
-	protected TreeMap<Long, Integer> ambRepairedCountMap;
+	private TreeMap<Long, Integer> ambDetectedCountMap;
+	private TreeMap<Long, Integer> ambRepairedCountMap;
+	private TreeMap<Long,ArrayList<CycleSlipDetect>> csdListMap;
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean innPhaseRate, boolean onlyDoppler) throws Exception {
+			boolean innPhaseRate, boolean onlyDoppler,ArrayList<double[]> truePosEcefList) throws Exception {
 		boolean isWeighted = false;
 		int m = obsvCodeList.length;
 		int n = 3 + m;
@@ -59,21 +61,23 @@ public class EKF_TDCP_ambFix extends EKFParent {
 			satCountMap = new TreeMap<Long, Long>();
 			satListMap = new TreeMap<Long, ArrayList<Satellite>>();
 			measNoiseMap = new TreeMap<Long, double[]>();
+			csdListMap = new TreeMap<Long,ArrayList<CycleSlipDetect>>();
 
 		}
 		ambDetectedCountMap = new TreeMap<Long, Integer>();
 		ambRepairedCountMap = new TreeMap<Long, Integer>();
 		return iterate(SatMap, timeList, useIGS, obsvCodeList, doAnalyze, doTest, outlierAnalyze, isWeighted,
-				innPhaseRate, onlyDoppler);
+				innPhaseRate, onlyDoppler,truePosEcefList);
 	}
 
 	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean isWeighted, boolean innPhaseRate, boolean onlyDoppler) throws Exception {
+			boolean isWeighted, boolean innPhaseRate, boolean onlyDoppler,ArrayList<double[]> truePosEcefList) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long prevTime = timeList.get(0);
+		double[] prevTruePos = truePosEcefList.get(0);
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			if (!onlyDoppler) {
@@ -84,6 +88,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
+			double[] currentTruePos = truePosEcefList.get(i);
 			double[] refPos = LinearLeastSquare.getEstPos(currSatList, true, useIGS);
 			int n_curr = currSatList.size();
 			int n_prev = prevSatList.size();
@@ -106,22 +111,23 @@ public class EKF_TDCP_ambFix extends EKFParent {
 						double satVelCorr = unitLOS.mult(satEci.minus(prev_satEci)).get(0);
 						double wavelength = SpeedofLight / current_sat.getCarrierFrequencyHz();
 						double approxCS = Math.abs(phaseDR - dopplerDR);
+						double trueDR = MathUtil.getEuclidean(currentTruePos, current_sat.getSatEci())-MathUtil.getEuclidean(prevTruePos, prev_sat.getSatEci());
 						if (onlyDoppler) {
 							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-									wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+									wavelength, satVelCorr, unitLOS,currentTime-timeList.get(0),trueDR));
 						} else {
 							if (innPhaseRate) {
 								if (approxCS < 100 * wavelength) {
 									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+											wavelength, satVelCorr, unitLOS,currentTime-timeList.get(0),trueDR));
 								}
 							} else {
 								if (approxCS < 5 * wavelength) {
 									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+											wavelength, satVelCorr,  unitLOS,currentTime-timeList.get(0),trueDR));
 								} else if (approxCS < 100 * wavelength) {
-									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, true,
-											wavelength, satVelCorr, i, approxCS / wavelength, unitLOS));
+									csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
+											wavelength, satVelCorr,  unitLOS,currentTime-timeList.get(0),trueDR));
 								}
 							}
 						}
@@ -148,12 +154,14 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				SimpleMatrix errCov = R.mult(P).mult(R.transpose());
 				errCovMap.put(currentTime, errCov);
 				innovationMap.put(currentTime, innovation);
+				csdListMap.put(currentTime, csdList);
 			}
 
 			if (!MatrixFeatures_DDRM.isPositiveDefinite(P.getMatrix())) {
 				throw new Exception("PositiveDefinite test Failed");
 			}
 			prevTime = currentTime;
+			prevTruePos = currentTruePos;
 		}
 		return estStateMap;
 	}
@@ -320,24 +328,6 @@ public class EKF_TDCP_ambFix extends EKFParent {
 			H = new SimpleMatrix(n, 3 + m + ambCount);
 			H.insertIntoThis(0, 0, unitLOS.scale(-1));
 			z = new SimpleMatrix(n, 1);
-			int ctr = 3 + m;
-			for (int i = 0; i < n; i++) {
-				CycleSlipDetect csdObj = csdList.get(i);
-				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-				String obsvCode = satList.get(i).getObsvCode();
-				double wavelength = csdObj.getWavelength();
-				for (int j = 0; j < m; j++) {
-					if (obsvCodeList[j].equals(obsvCode)) {
-						H.set(i, 3 + j, 1);
-						if (csdObj.isCS()) {
-							H.set(i, ctr, wavelength);
-							ctr++;
-						}
-					}
-				}
-			}
-			ze = H.mult(x_new);
-			innovation = Matrix.matrix2ArrayVec(z.minus(ze));
 			SimpleMatrix tdcp_Cyy =  null;
 			if(isWeighted)
 			{
@@ -348,6 +338,29 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				tdcp_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
 			}
 			R = new SimpleMatrix(tdcp_Cyy);
+			double[] sysout_var = new double[ambCount];
+			String[] sysout_svid = new String[ambCount];
+			int ctr = 3 + m;
+			for (int i = 0; i < n; i++) {
+				CycleSlipDetect csdObj = csdList.get(i);
+				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
+				String obsvCode = satList.get(i).getObsvCode();
+				double wavelength = csdObj.getWavelength();
+				for (int j = 0; j < m; j++) {
+					if (obsvCodeList[j].equals(obsvCode)) {
+						H.set(i, 3 + j, 1);
+					}
+				}
+				if (csdObj.isCS()) {
+					sysout_var[ctr-3-m] = R.get(i,i)/Math.pow(wavelength,2);
+					sysout_svid[ctr-3-m] = obsvCode.charAt(0)+""+satList.get(i).getSvid();
+					H.set(i, ctr, wavelength);
+					ctr++;
+				}
+			}
+			ze = H.mult(x_new);
+			innovation = Matrix.matrix2ArrayVec(z.minus(ze));
+			
 			// Perform Update Step
 			kfObj.update(z, R, ze, H);
 			x = kfObj.getState();
@@ -360,7 +373,10 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				System.out.println(floatAmb.toString());
 				System.out.println("Float Ambiguity Covariance");
 				System.out.println(floatAmbCov.toString());
-
+				System.out.println("SVIDs:");
+				System.out.println(Arrays.toString(sysout_svid));
+				System.out.println("TDCP variance:");
+				System.out.println(Arrays.toString(sysout_var));
 				Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
 				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
@@ -379,7 +395,7 @@ public class EKF_TDCP_ambFix extends EKFParent {
 				} else {
 					afixed = new SimpleMatrix(lmd.getafixed().getArray());
 				}
-
+				System.out.println(" Failure Rate : "+(1-Ps));
 				if (nFixed != 0) {
 					SimpleMatrix Cba = P.extractMatrix(0, 3 + m, 3 + m, 3 + m + ambCount);
 					SimpleMatrix Cbb_hat = P.extractMatrix(0, 3 + m, 0, 3 + m);
@@ -396,10 +412,27 @@ public class EKF_TDCP_ambFix extends EKFParent {
 					System.out.println("Fixed Ambiguity Sequence");
 					System.out.println(a_inv_hat.toString());
 					System.out.println(" N Fixed : "+nFixed );
-					System.out.println(" Failure Rate : "+(1-Ps));
+					
 					ambRepairedCountMap.put(currentTime, nFixed);
 					ambRepairedCount += nFixed;
-
+					
+					int count =0;
+					for(int i=0;i<n;i++)
+					{
+						CycleSlipDetect csdObj = csdList.get(i);
+						if(csdObj.isCS())
+						{
+							double val = a_inv_hat.get(count);
+							if(notNaNOrInfinity(val) && (int) val == val)
+							{
+								csdObj.setRepaired(true);
+								csdObj.setIntAmb(val);
+							}
+							csdObj.setFloatAmb(a_hat.get(count));
+							count++;
+						}
+					}
+					
 				}
 
 			}
@@ -543,5 +576,12 @@ public class EKF_TDCP_ambFix extends EKFParent {
 	public TreeMap<Long, Integer> getAmbRepairedCountMap() {
 		return ambRepairedCountMap;
 	}
+	
+	public TreeMap<Long, ArrayList<CycleSlipDetect>> getCsdListMap() {
+		return csdListMap;
+	}
 
+	private boolean notNaNOrInfinity(double d) {
+	    return !(Double.isNaN(d) || Double.isInfinite(d));
+	}
 }

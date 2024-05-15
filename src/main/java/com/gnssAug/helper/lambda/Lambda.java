@@ -222,7 +222,7 @@ public class Lambda {
                 break;
             case PAR:
                 //Parsearch2 parsearch2 = new Parsearch2(zhat,Qzhat,Z,L,D,mu,ncands);
-                Parsearch parsearch=  new Parsearch( zhat, Qzhat, Z, L, D, P0, ncands);
+                Parsearch3 parsearch=  new Parsearch3( zhat, Qzhat, Z, L, D, P0, ncands);
                 Matrix zpar = parsearch.getzpar();
                 sqnorm = parsearch.getSqnorm();
                 Qzhat = parsearch.getQzpar(); //此处变量是否为Qzpar更好?
@@ -232,6 +232,7 @@ public class Lambda {
                 {
                 	ncands=1;
                 }
+                
                 Ps = parsearch.getPs();
                 zfixed = parsearch.getzfixed();
                 break;
