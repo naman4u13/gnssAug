@@ -465,9 +465,9 @@ public class GraphPlotter extends ApplicationFrame {
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 
-			boolean makeCSV = false;
+			boolean makeCSV = true;
 			if (makeCSV) {
-				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/"
+				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/T-A-SIS-10_urban_static/"
 						+ chartNames[i] + ".csv";
 				File file = new File(filePath);
 				try {
@@ -477,13 +477,19 @@ public class GraphPlotter extends ApplicationFrame {
 					CSVWriter writer = new CSVWriter(outputfile);
 					// create a List which contains String array
 					List<String[]> data = new ArrayList<String[]>();
-					String[] header = new String[] { "Time", "Proposed AKF", "DBP Filter", "VRWD", "WLS" };
+					String[] header = new String[] { "Time", "Proposed AKF", "DBP Filter", "VRWD","PRW", "WLS" };
 					writer.writeNext(header);
 					for (int j = 0; j < timeList.size() - 1; j++) {
 						String[] entry = new String[header.length];
 						entry[0] = timeList.get(j) + "";
 						for (int k = 1; k < header.length; k++) {
+							try {
 							entry[k] = subDataMap.get(header[k])[j] + "";
+							}
+							catch (Exception e) {
+								// TODO: handle exception
+								System.out.println("");
+							}
 						}
 						data.add(entry);
 					}
@@ -744,7 +750,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/Measurements/2021-03-10-US-SVL-1_SamsungS20Ultra_L1"
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/T-A-SIS-09_suburban_bike_assisted/Xiaomi_Mi_10T_Pro_"
 					+ name + ".csv";
 			File file = new File(filePath);
 			try {

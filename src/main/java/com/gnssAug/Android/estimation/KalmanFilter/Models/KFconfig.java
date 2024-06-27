@@ -168,6 +168,30 @@ public class KFconfig extends KF {
 		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);
 	}
+	
+	public void configAKFStatic(double deltaT,  int m) throws Exception {
+		int n = 3 + m;
+		double[][] phi = new double[n][n];
+		double[][] _Q = new double[n][n];
+		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
+
+		double[] qENU = GnssDataConfig.qENU_posRandWalk;
+
+		// qECEF_std can have negative element
+		IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i] * deltaT);
+		
+		for (int i = 3; i < 3 + m; i++) {
+			_Q[i][i] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
+			
+		}
+		SimpleMatrix Q = new SimpleMatrix(_Q);
+		
+		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
+
+			throw new Exception("PositiveDefinite test Failed");
+		}
+		super.configure(phi, Q);
+	}
 
 	public void configTDCP(double deltaT, int m,double[] refPos) throws Exception {
 		

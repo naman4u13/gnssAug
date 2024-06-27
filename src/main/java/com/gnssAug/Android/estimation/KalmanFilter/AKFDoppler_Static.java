@@ -26,13 +26,11 @@ import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 import com.opencsv.CSVWriter;
 
-public class AKFDoppler extends EKFParent {
+public class AKFDoppler_Static extends EKFParent {
 
 	private HashMap<String, ArrayList<double[]>[][]> adaptVarMap = new HashMap<String, ArrayList<double[]>[][]>();
 	private HashMap<String, ArrayList<double[]>[][]> adaptVarMapCont = new HashMap<String, ArrayList<double[]>[][]>();
-	private double[] prevVel;
-	private SimpleMatrix prev_Cxx_dot_hat;
-	public AKFDoppler() {
+	public AKFDoppler_Static() {
 		kfObj = new KFconfig();
 	}
 
@@ -87,17 +85,14 @@ public class AKFDoppler extends EKFParent {
 		int m = obsvCodeList.length;
 		int x_size = 3 + m;
 		long time = timeList.get(0);
-		prevVel = LinearLeastSquare.getEstVel(SatMap.get(time), isWeighted, true, doTest_vel, false,
-				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
-		prev_Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
+		
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - time) / 1e3;
 			ArrayList<Satellite> satList = SatMap.get(currentTime);
-			SimpleMatrix Cxx_dot_hat = predictTotalState(X, satList, deltaT, useIGS, doTest_vel, isWeighted,
-					obsvCodeList);
-			runFilter(X, currentTime, deltaT, satList, obsvCodeList, Cxx_dot_hat, doAnalyze, useIGS, i, isWeighted,
+			
+			runFilter(X, currentTime, deltaT, satList, obsvCodeList, doAnalyze, useIGS, i, isWeighted,
 					isAdapt);
 			SimpleMatrix P = kfObj.getCovariance();
 			double[] estState = new double[x_size];
@@ -122,7 +117,7 @@ public class AKFDoppler extends EKFParent {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/2021-04-29-US-SJC-2/SamsungS20Ultra_AKF.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/T-A-SIS-10_urban_static/Xiaomi_Mi_10T_Pro_AKF.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -140,9 +135,7 @@ public class AKFDoppler extends EKFParent {
 							ArrayList<double[]> dataList = dataArray[i][j];
 							
 							if (dataList != null) {
-								double num = dataList.stream().mapToDouble(k -> k[0]).sum();
-								double denom = dataList.stream().mapToDouble(k -> k[1]).sum();
-								double var = num / denom;
+								
 								for (double[] data : dataList) {
 
 									String[] entry = new String[7];
@@ -171,30 +164,11 @@ public class AKFDoppler extends EKFParent {
 		return estStateMap;
 	}
 
-	private SimpleMatrix predictTotalState(SimpleMatrix X, ArrayList<Satellite> satList, double deltaT, boolean useIGS,
-			boolean doTest_vel, boolean isWeighted, String[] obsvCodeList) throws Exception {
-		double[] vel = LinearLeastSquare.getEstVel(SatUtil.createCopy(satList), isWeighted, true, doTest_vel, false,
-				new double[] { X.get(0), X.get(1), X.get(2) }, useIGS);
-		SimpleMatrix Cxx_dot_hat = LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
-		Object[] resettedVar = SatUtil.resetVar(Measurement.Doppler, obsvCodeList, vel, Cxx_dot_hat);
-		vel = (double[]) resettedVar[0];
-		Cxx_dot_hat = (SimpleMatrix) resettedVar[1];
-		double[] avg_vel = new double[vel.length];
-		for (int i = 0; i < vel.length; i++) {
-			avg_vel[i] = (vel[i] + prevVel[i]) * 0.5;
-			X.set(i, X.get(i) + (prevVel[i] * deltaT));
-		}
-
-		SimpleMatrix avg_Cxx_dot_hat = Cxx_dot_hat.plus(prev_Cxx_dot_hat).scale(0.5);
-		prevVel = Arrays.copyOf(vel, vel.length);
-		SimpleMatrix temp = prev_Cxx_dot_hat;
-		prev_Cxx_dot_hat = new SimpleMatrix(Cxx_dot_hat);
-		return temp;
-	}
+	
 
 	// Innovation Based Testing
 	private void runFilter(SimpleMatrix X, long currentTime, double deltaT, ArrayList<Satellite> satList,
-			String[] obsvCodeList, SimpleMatrix Cxx_dot_hat, boolean doAnalyze, boolean useIGS, int ct,
+			String[] obsvCodeList, boolean doAnalyze, boolean useIGS, int ct,
 			boolean isWeighted, boolean isAdapt) throws Exception {
 
 		boolean useAndroidW = false;
@@ -206,7 +180,7 @@ public class AKFDoppler extends EKFParent {
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 		SimpleMatrix priorX = new SimpleMatrix(X);
 		// Assign Q and F matrix
-		kfObj.configDoppler(deltaT, Cxx_dot_hat, m, X);
+		kfObj.configAKFStatic(deltaT, m);
 		kfObj.predict();
 
 		double[] estPos = new double[] { X.get(0), X.get(1), X.get(2) };

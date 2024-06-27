@@ -44,6 +44,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth;
+import com.gnssAug.Android.fileParser.GroundTruth_GSA;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
@@ -72,7 +73,7 @@ public class Android {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
 			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
-			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet) {
+			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, boolean isGSA) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 			HashMap<String, ArrayList<HashMap<String, Double>>> ErrMap = new HashMap<String, ArrayList<HashMap<String, Double>>>();
@@ -94,7 +95,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/SamsungS20Ultra_innovation_Phase_prediction";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -108,10 +109,19 @@ public class Android {
 			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
 			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
 			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
-			ArrayList<double[]> rxLLH = GroundTruth.processCSV(GTcsv);
+			ArrayList<double[]> rxGT = new ArrayList<double[]>();
+			if (isGSA) {
+				// Its ECEF not LLH
+				rxGT = GroundTruth_GSA.processCSV(GTcsv);
+			} else {
+				rxGT = GroundTruth.processCSV(GTcsv);
+			}
+
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
-			derivedMap = DerivedCSV.processCSV(derived_csv_path);
+			if (derived_csv_path != null) {
+				derivedMap = DerivedCSV.processCSV(derived_csv_path);
+			}
 			GNSS_Log.process(gnss_log_path);
 			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
 			ArrayList<IMUsensor> imuList = GNSS_Log.getImuList();
@@ -131,21 +141,45 @@ public class Android {
 					.gettRx();
 			for (long tRxMilli : gnssLogMaps.keySet()) {
 
-				if (gtIndex >= rxLLH.size()) {
+				if (gtIndex >= rxGT.size()) {
 					break;
 				}
 				HashMap<String, ArrayList<GNSSLog>> gnssLogMap = gnssLogMaps.get(tRxMilli);
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if ((Math.abs(tRxMilli - (rxLLH.get(gtIndex)[0] * 1000))) > 1 || weekNo != rxLLH.get(gtIndex)[1]) {
+
+				if ((Math.abs(tRxMilli - (rxGT.get(gtIndex)[0] * 1000))) > 1000 || weekNo != rxGT.get(gtIndex)[1]) {
 					System.err.println("FATAL ERROR - GT timestamp does not match");
-					continue;
+					if(isGSA)
+					{
+						while(((tRxMilli - (rxGT.get(gtIndex)[0] * 1000)))>0)
+						{
+							gtIndex++;
+						}
+						if(((tRxMilli - (rxGT.get(gtIndex)[0] * 1000)))<0)
+						{
+							continue;
+						}
+					}
+					else
+					{
+						continue;
+					}
 				}
 
-				double[] trueUserLLH = new double[] { rxLLH.get(gtIndex)[2], rxLLH.get(gtIndex)[3],
-						rxLLH.get(gtIndex)[4] };
-				double trueVelRms = rxLLH.get(gtIndex)[5];
+				double[] trueUserLLH = null;
+
+				double[] truePosEcef = null;
+				if (isGSA) {
+					truePosEcef = new double[] { rxGT.get(gtIndex)[2], rxGT.get(gtIndex)[3], rxGT.get(gtIndex)[4] };
+					trueUserLLH = LatLonUtil.ecef2lla(truePosEcef);
+
+				} else {
+					trueUserLLH = new double[] { rxGT.get(gtIndex)[2], rxGT.get(gtIndex)[3], rxGT.get(gtIndex)[4] };
+					truePosEcef = LatLonUtil
+							.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
+				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
@@ -165,8 +199,7 @@ public class Android {
 					e.printStackTrace();
 					continue;
 				}
-				double[] truePosEcef = LatLonUtil
-						.lla2ecef(new double[] { trueUserLLH[0], trueUserLLH[1], trueUserLLH[2] - 61 }, true);
+
 				for (Satellite sat : satList) {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(truePosEcef, sat.getSatEci()));
 
@@ -295,7 +328,7 @@ public class Android {
 				int[] estTypes = new int[] { estimatorType };
 				String estName = "";
 				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11))) {
-					estTypes = new int[] { 12 };
+					estTypes = new int[] { 5, 6, 12 };
 				}
 				for (int type : estTypes) {
 					switch (type) {
@@ -742,7 +775,7 @@ public class Android {
 						+ ((LLS_TDCP_ambFix.getAmbRepairedCount() * 100.0) / LLS_TDCP_ambFix.getAmbDetectedCount()));
 			}
 			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
-				HashMap<String,ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String,ArrayList<CycleSlipDetect>>();
+				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
 				boolean onlyDoppler = false;
@@ -755,7 +788,7 @@ public class Android {
 				}
 				EKF_TDCP_ambFix ekf = new EKF_TDCP_ambFix();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
-						doTest, outlierAnalyze, innPhaseRate, onlyDoppler,trueEcefList);
+						doTest, outlierAnalyze, innPhaseRate, onlyDoppler, trueEcefList);
 
 				useDoppler = true;
 				int n = timeList.size();
@@ -803,18 +836,17 @@ public class Android {
 											sat.isOutlier(), sat.getCn0DbHz()));
 
 						}
-						for(int j=0;j<csdList.size();j++)
-						{
+						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
 							Satellite sat = csdObj.getSat();
 							String obsvCode = sat.getObsvCode();
 							for (int k = 0; k < obsvCodeList.length; k++) {
 								if (obsvCodeList[k].equals(obsvCode)) {
-									csdObj.setClkDrift(estVel[3+k]);
+									csdObj.setClkDrift(estVel[3 + k]);
 								}
 							}
 							satCSmap.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
-											k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
+									k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
 						}
 						satCountMap.get(Measurement.TDCP).computeIfAbsent(estName, k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
@@ -830,8 +862,7 @@ public class Android {
 				}
 				if (doAnalyze && estimatorType != 11) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
-					if(estimatorType==18||estimatorType==19)
-					{
+					if (estimatorType == 18 || estimatorType == 19) {
 						GraphPlotter.graphCycleSlip(satCSmap);
 					}
 				}
@@ -1126,7 +1157,7 @@ public class Android {
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true);
-					GraphPlotter.graphENU(GraphVelMap, timeList, false);
+					//GraphPlotter.graphENU(GraphVelMap, timeList, false);
 				} else {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));

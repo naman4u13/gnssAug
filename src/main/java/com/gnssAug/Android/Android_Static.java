@@ -34,6 +34,7 @@ import com.gnssAug.Android.estimation.LLS_TDCP;
 import com.gnssAug.Android.estimation.LLS_TDCP_ambFix;
 import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
+import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler_Static;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
@@ -88,8 +89,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
-					+ mobName + "_innovation_phase_prediction";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-10_urban_static/"
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -525,8 +526,8 @@ public class Android_Static {
 								doTest, outlierAnalyze);
 					} else {
 						estName = "Proposed AKF";
-						ekf = new AKFDoppler();
-						estStateMap = ((AKFDoppler) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
+						ekf = new AKFDoppler_Static();
+						estStateMap = ((AKFDoppler_Static) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 								doTest, true);
 					}
 
@@ -721,7 +722,10 @@ public class Android_Static {
 			ArrayList<double[]> trueEcefList = new ArrayList<double[]>(satMap.size());
 			for (int i = 0; i < satMap.size(); i++) {
 				trueEcefList.add(trueEcef);
+				
 			}
+			// Get True Velocity
+			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(trueEcefList, timeList);
 			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
 				HashMap<String,ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String,ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
@@ -880,6 +884,8 @@ public class Android_Static {
 				System.out.println(" 3d Error - " + MathUtil.RMS(posErrList[3]));
 				System.out.println(" 2d Error - " + MathUtil.RMS(posErrList[4]));
 				System.out.println(" Haversine Distance - " + MathUtil.RMS(posErrList[5]));
+				
+				
 
 			}
 
@@ -978,7 +984,7 @@ public class Android_Static {
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true);
-					GraphPlotter.graphENU(GraphVelMap, timeList, false);
+//					GraphPlotter.graphENU(GraphVelMap, timeList, false);
 				} else {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
@@ -991,6 +997,10 @@ public class Android_Static {
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 
 				}
+			}
+			if (doAnalyze) {
+				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
+						outlierAnalyze, useDoppler);
 			}
 
 		} catch (
