@@ -293,6 +293,12 @@ public class EKFDoppler extends EKFParent {
 			satListMap.put(currentTime, testedSatList);
 		}
 		measNoiseMap.put(currentTime, measNoise);
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			sat.setPrVar(R.get(i,i));
+			
+		}
+
 
 	}
 

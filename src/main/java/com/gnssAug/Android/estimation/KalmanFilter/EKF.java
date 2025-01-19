@@ -313,6 +313,12 @@ public class EKF {
 				}
 			}
 		}
+		
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			sat.setPrVar(R.get(i,i));
+			
+		}
 		HashMap<Measurement, ArrayList<Satellite>> satMap = new HashMap<Measurement, ArrayList<Satellite>>();
 		HashMap<Measurement, ArrayList<Satellite>> testedSatMap = new HashMap<Measurement, ArrayList<Satellite>>();
 		for (Measurement meas : measArr) {
@@ -417,6 +423,8 @@ public class EKF {
 			long currentTime, int n, String[] obsvCodeList, boolean doTest, boolean outlierAnalyze, boolean useDoppler,
 			boolean useEstVel, int ct) {
 
+		
+		
 		SimpleMatrix x = kfObj.getState();
 		int n_pr = testedSatMap.get(Measurement.Pseudorange).size();
 		int n_doppler = 0;
@@ -495,7 +503,7 @@ public class EKF {
 		} else {
 			satListMap.put(currentTime, testedSatMap);
 		}
-
+		
 	}
 
 	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int size, int m,

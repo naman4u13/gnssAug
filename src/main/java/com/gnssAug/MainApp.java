@@ -25,7 +25,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (4) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -52,8 +52,8 @@ public class MainApp {
 			String clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			String orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			String ionex_path = base_url + year + "_" + doy + sep + "igsg" + doy + "0.21I";
-			Android.posEstimate(true, 0, 0, 11, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,true, false, false, discardSet,false);
+			Android.posEstimate(true, 0, 0, 12, obsvCodeList, derived_csv_path, gnss_log_path, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,true, true, false, discardSet,false);
 			break;
 
 		case 2:
@@ -92,8 +92,8 @@ public class MainApp {
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			
 			
-			Android_Static.posEstimate(true, 0, 0,11, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,14, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,true, true,false,discardSet,mobName);
 			break;
 		case 4:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
@@ -116,8 +116,8 @@ public class MainApp {
 			orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			ionex_path = base_url + year + "_" + doy + sep + "igsg" + doy + "0.21I";
 			
-			Android.posEstimate(true, 0, 0, 11, obsvCodeList, null, basePath, GTcsv, bias_path,
-					clock_path, orbit_path, ionex_path, true, true, true, false, false, discardSet,true);
+			Android.posEstimate(true, 0, 0, 14, obsvCodeList, null, basePath, GTcsv, bias_path,
+					clock_path, orbit_path, ionex_path, true, true, true, true, false, discardSet,true);
 			break;
 		}
 		Instant end = Instant.now();

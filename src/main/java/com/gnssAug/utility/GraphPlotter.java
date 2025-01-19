@@ -465,7 +465,7 @@ public class GraphPlotter extends ApplicationFrame {
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 
-			boolean makeCSV = true;
+			boolean makeCSV = false;
 			if (makeCSV) {
 				String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/T-A-SIS-10_urban_static/"
 						+ chartNames[i] + ".csv";
@@ -1230,7 +1230,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false && isElevAngle;
 		if (makeCSV) {
-			String filePath = "C:\\Users\\naman.agarwal\\Documents\\IPIN_images\\VRWD_CorrectQ_Outliers.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ION-GNSS-2024/Plots/T-A-SIS-09_suburban_bike_assisted/AKF_Outliers.csv";
 			File file = new File(filePath);
 
 			try {

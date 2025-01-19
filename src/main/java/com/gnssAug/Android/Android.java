@@ -577,7 +577,7 @@ public class Android {
 						estName = "Proposed AKF";
 						ekf = new AKFDoppler();
 						estStateMap = ((AKFDoppler) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
-								doTest, true);
+								doTest, true,outlierAnalyze);
 					}
 
 					// Doppler is used but no velocity is computed therefore useDoppler is set as
