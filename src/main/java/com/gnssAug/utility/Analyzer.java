@@ -104,7 +104,7 @@ public class Analyzer {
 				double cn0  = sat.getCn0DbHz();
 				
 				rangeMap.computeIfAbsent(satCode, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
-						new double[] { (range - trueRange)/Math.sqrt(sat.getPrVar()), elevAngle,cn0 });
+						new double[] { (range - trueRange), elevAngle,cn0 });
 				
 				phaseMap.computeIfAbsent(satCode, k -> new TreeMap<Integer, double[]>()).put(timeDiff,
 						new double[] { (phase - trueRange), elevAngle,cn0 });

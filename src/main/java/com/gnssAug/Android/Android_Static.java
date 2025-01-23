@@ -89,7 +89,7 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-10_urban_static/"
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
 					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
@@ -130,10 +130,10 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if(gtIndex>2000)
-				{
-					break;
-				}
+//				if(gtIndex>2000)
+//				{
+//					break;
+//				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
@@ -622,7 +622,7 @@ public class Android_Static {
 					ArrayList<Satellite> currentSatList = satMap.get(currentTime);
 					ArrayList<Satellite> prevSatList = satMap.get(prevTime);
 					double[] refPos = LinearLeastSquare.getEstPos(currentSatList, true, useIGS);
-					double[] estVel = LLS_TDCP.getEstVel(currentSatList, prevSatList, true, doAnalyze, doTest,
+					double[] estVel = LLS_TDCP.getEstVel(currentSatList, prevSatList, false, doAnalyze, doTest,
 							outlierAnalyze, refPos, useIGS, true);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;

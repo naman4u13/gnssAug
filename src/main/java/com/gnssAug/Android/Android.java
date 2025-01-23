@@ -95,7 +95,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-04-29-US-SJC-2/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -149,7 +149,7 @@ public class Android {
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
 
-				if ((Math.abs(tRxMilli - (rxGT.get(gtIndex)[0] * 1000))) > 1000 || weekNo != rxGT.get(gtIndex)[1]) {
+				if ((Math.abs(tRxMilli - (rxGT.get(gtIndex)[0] * 1000))) > 1 || weekNo != rxGT.get(gtIndex)[1]) {
 					System.err.println("FATAL ERROR - GT timestamp does not match");
 					if(isGSA)
 					{
@@ -677,7 +677,7 @@ public class Android {
 					ArrayList<Satellite> currentSatList = satMap.get(currentTime);
 					ArrayList<Satellite> prevSatList = satMap.get(prevTime);
 					double[] refPos = LinearLeastSquare.getEstPos(currentSatList, true, useIGS);
-					double[] estVel = LLS_TDCP.getEstVel(currentSatList, prevSatList, true, doAnalyze, doTest,
+					double[] estVel = LLS_TDCP.getEstVel(currentSatList, prevSatList, false, doAnalyze, doTest,
 							outlierAnalyze, refPos, useIGS, true);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
@@ -1157,7 +1157,7 @@ public class Android {
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true);
-					//GraphPlotter.graphENU(GraphVelMap, timeList, false);
+					GraphPlotter.graphENU(GraphVelMap, timeList, false);
 				} else {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
