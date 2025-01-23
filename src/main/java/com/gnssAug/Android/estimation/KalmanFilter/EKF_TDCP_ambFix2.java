@@ -12,7 +12,8 @@ import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
-import com.gnssAug.helper.lambda.Lambda;
+import com.gnssAug.helper.lambdaNew.Lambda;
+import com.gnssAug.helper.lambdaNew.models.LambdaResult;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
@@ -377,24 +378,14 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				System.out.println(Arrays.toString(sysout_svid));
 				System.out.println("TDCP variance:");
 				System.out.println(Arrays.toString(sysout_var));
-				Jama.Matrix ahat = new Jama.Matrix(Matrix.matrix2Array(floatAmb));
-				Jama.Matrix Qahat = new Jama.Matrix(Matrix.matrix2Array(floatAmbCov));
-				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
-
-				Lambda lmd = new Lambda(ahat, Qahat, 6, "P0", 0.01, "NCANDS", 10);
+				double[] ahat = Matrix.matrix2ArrayVec(floatAmb);
+				double[][] Qahat = Matrix.matrix2Array(floatAmbCov);
+				double[] afixed = Matrix.matrix2ArrayVec(floatAmb);
+				LambdaResult lmd = Lambda.LAMBDA(ahat, Qahat, 10);
 				//Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
-				int nFixed = lmd.getNfixed();
-				double Ps = lmd.getPs();
-				if (nFixed == 0 && ambCount > 1) {
-					//lmd = new Lambda(ahat, Qahat, 5, "MU", (1 / 3.0), "NCANDS", 10);
-					lmd = new Lambda(ahat, Qahat, 5,"P0", 0.99, "NCANDS", 10);
-					Ps = lmd.getPs();
-					afixed = new SimpleMatrix(lmd.getafixed().getArray());
-					nFixed = lmd.getNfixed();
-
-				} else {
-					afixed = new SimpleMatrix(lmd.getafixed().getArray());
-				}
+				int nFixed = lmd.getNFixed();
+				double Ps = lmd.getSuccessRate();
+				afixed = lmd.getAFix();
 				System.out.println(" Failure Rate : "+(1-Ps));
 				if (nFixed != 0) {
 					SimpleMatrix Cba = P.extractMatrix(0, 3 + m, 3 + m, 3 + m + ambCount);
@@ -402,7 +393,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 					SimpleMatrix b_hat = x.extractMatrix(0, 3 + m, 0, 1);
 					SimpleMatrix Caa_inv = floatAmbCov.invert();
 					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
-					SimpleMatrix a_inv_hat = afixed.extractMatrix(0, ambCount, 0, 1);
+					SimpleMatrix a_inv_hat = new SimpleMatrix(1, afixed.length, true, afixed);
 					SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat)));
 					SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
 					x = new SimpleMatrix(3 + m + ambCount, 1);

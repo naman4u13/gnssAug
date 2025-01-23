@@ -92,8 +92,8 @@ public class MainApp {
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			
 			
-			Android_Static.posEstimate(true, 0, 0,16, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,false, false,false,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,18, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 			break;
 		case 4:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };

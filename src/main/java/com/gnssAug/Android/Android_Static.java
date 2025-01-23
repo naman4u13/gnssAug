@@ -38,6 +38,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler_Static;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
@@ -738,7 +739,7 @@ public class Android_Static {
 					estName = " Doppler EKF";
 					onlyDoppler = true;
 				}
-				EKF_TDCP_ambFix ekf = new EKF_TDCP_ambFix();
+				EKF_TDCP_ambFix2 ekf = new EKF_TDCP_ambFix2();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze, innPhaseRate, onlyDoppler,trueEcefList);
 

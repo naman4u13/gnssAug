@@ -333,7 +333,7 @@ public class Estimators {
 	 *         vector (RealVector). - nFixed: Number of fixed ambiguity components.
 	 *         - srPAR: Success rate of the ambiguity subset.
 	 */
-	
+
 	public static Object[] estimatorPAR(RealVector aHat, RealMatrix LMat, double[] dVec, int nCands, double minSR,
 			double alphaBIE) {
 		int n = aHat.getDimension();
@@ -412,52 +412,136 @@ public class Estimators {
 		}
 		return -1; // Should not occur if threshold logic is correct
 	}
-	
-	
-	public static Object[] estimatorIAFFRT(RealVector a_hat, RealMatrix L_mat, RealVector d_vec, double maxFR, Double mu_RATIO) {
-        int nn = a_hat.getDimension(); // Problem dimensionality
 
-        // Check if maxFR is not set, use the default 0.1%
-        if (maxFR <= 0) {
-            maxFR = 0.1 / 100.0; // Default max failure rate is 0.1%
-        }
+	public static Object[] estimatorIAFFRT(RealVector a_hat, RealMatrix L_mat, RealVector d_vec, double maxFR,
+			Double mu_RATIO) {
+		int nn = a_hat.getDimension(); // Problem dimensionality
 
-        // If mu_RATIO is provided, consider an arbitrary ratio test
-        if (mu_RATIO != null) {
-            maxFR = 0; // Arbitrary ratio tests ignore the failure rate
-        }
+		// Check if maxFR is not set, use the default 0.1%
+		if (maxFR <= 0) {
+			maxFR = 0.1 / 100.0; // Default max failure rate is 0.1%
+		}
 
-        // Step 1: Compute the two best solutions using ILS estimator
-        Object[] ilsOutput = estimatorILS(a_hat, L_mat, d_vec.toArray(), 2);
-        RealVector[] a_fix_temp = (RealVector[]) ilsOutput[0]; // Array of RealVectors
-        double[] sqnorm_temp = (double[]) ilsOutput[1]; // Squared norms of the solutions
+		// If mu_RATIO is provided, consider an arbitrary ratio test
+		if (mu_RATIO != null) {
+			maxFR = 0; // Arbitrary ratio tests ignore the failure rate
+		}
 
-        // Step 2: Compute Success Rate (SR) and Failure Rate (FR)
-        double SR = (double) SuccessRate.computeSR_IBexact(d_vec.toArray())[0];
-        double FR = 1.0 - SR;
+		// Step 1: Compute the two best solutions using ILS estimator
+		Object[] ilsOutput = estimatorILS(a_hat, L_mat, d_vec.toArray(), 2);
+		RealVector[] a_fix_temp = (RealVector[]) ilsOutput[0]; // Array of RealVectors
+		double[] sqnorm_temp = (double[]) ilsOutput[1]; // Squared norms of the solutions
 
-        // Step 3: Check the Failure Rate (FR) against the maximum threshold
-        if (FR < maxFR) {
-            // If FR is below the threshold, return the best ILS solution
-            return new Object[] {a_fix_temp[0], sqnorm_temp[0], nn};
-        } else {
-            // If FR exceeds the threshold, compute the mu-value
-            double mu_value;
-            if (mu_RATIO != null) {
-                mu_value = mu_RATIO; // Arbitrary ratio test
-            } else {
-                mu_value = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, FR, nn); // Fixed-FR ratio test
-            }
+		// Step 2: Compute Success Rate (SR) and Failure Rate (FR)
+		double SR = (double) SuccessRate.computeSR_IBexact(d_vec.toArray())[0];
+		double FR = 1.0 - SR;
 
-            // Step 4: Perform the Ratio Test based on the computed mu-value
-            if (sqnorm_temp[0] / sqnorm_temp[1] > mu_value) {
-                // If the ratio test fails, return the float solution
-                return new Object[] {a_hat, 0, 0};
-            } else {
-                // If the ratio test passes, return the best ILS solution
-                return new Object[] {a_fix_temp[0], sqnorm_temp[0], nn};
-            }
-        }
-    }
+		// Step 3: Check the Failure Rate (FR) against the maximum threshold
+		if (FR < maxFR) {
+			// If FR is below the threshold, return the best ILS solution
+			return new Object[] { a_fix_temp[0], sqnorm_temp[0], nn };
+		} else {
+			// If FR exceeds the threshold, compute the mu-value
+			double mu_value;
+			if (mu_RATIO != null) {
+				mu_value = mu_RATIO; // Arbitrary ratio test
+			} else {
+				mu_value = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, FR, nn); // Fixed-FR ratio test
+			}
+
+			// Step 4: Perform the Ratio Test based on the computed mu-value
+			if (sqnorm_temp[0] / sqnorm_temp[1] > mu_value) {
+				// If the ratio test fails, return the float solution
+				return new Object[] { a_hat, 0, 0 };
+			} else {
+				// If the ratio test passes, return the best ILS solution
+				return new Object[] { a_fix_temp[0], sqnorm_temp[0], nn };
+			}
+		}
+	}
+
+	public static Object[] estimatorPAR_RatioTest(RealVector aHat, RealMatrix LMat, double[] dVec, int nCands,
+			double minSR, double alphaBIE) {
+		int n = aHat.getDimension();
+
+		// Default parameter values
+		if (nCands <= 0)
+			nCands = 1;
+		if (minSR <= 0)
+			minSR = 0.995;
+		if (alphaBIE < 0 || alphaBIE > 1)
+			alphaBIE = 0;
+
+		// Compute success rates
+		Object[] srResult = SuccessRate.computeSR_IBexact(dVec);
+		double srIB = (double) srResult[0];
+		double[] srCumul = (double[]) srResult[1];
+
+		// Determine largest subset above success rate threshold
+		int kkPAR;
+		double srPAR;
+		int nFixed;
+
+		// Partial AR
+		kkPAR = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, srCumul, minSR);
+		if (kkPAR == -1) {
+			// No AR
+			return new Object[] { aHat, 0, srIB };
+		}
+		srPAR = srCumul[kkPAR];
+		nFixed = n - kkPAR;
+
+		// Find fixed solution for subset with sufficiently high success rate
+		RealVector aFixPAR;
+		if (alphaBIE > 0 && alphaBIE < 1) {
+			double chi2BIE = 2 * GammaIncompleteInverse.gammaincinv(1 - alphaBIE, nFixed / 2.0);
+			aFixPAR = (RealVector) estimatorBIE(aHat.getSubVector(kkPAR, n - kkPAR),
+					LMat.getSubMatrix(kkPAR, n - 1, kkPAR, n - 1),
+					new ArrayRealVector(Arrays.copyOfRange(dVec, kkPAR, n)), chi2BIE)[0];
+		} else {
+			aFixPAR = (RealVector) estimatorILS(aHat.getSubVector(kkPAR, n - kkPAR),
+					LMat.getSubMatrix(kkPAR, n - 1, kkPAR, n - 1), Arrays.copyOfRange(dVec, kkPAR, n), nCands)[0];
+		}
+
+		// Compute conditioned float solution for the unresolved subset
+		RealMatrix lSub = LMat.getSubMatrix(kkPAR, n - 1, 0, kkPAR - 1);
+		RealMatrix lDiag = LMat.getSubMatrix(kkPAR, n - 1, kkPAR, n - 1);
+		RealVector residual = aHat.getSubVector(kkPAR, n - kkPAR).subtract(aFixPAR);
+
+		DecompositionSolver solver = new LUDecomposition(lDiag.transpose()).getSolver();
+		RealVector adjustment = solver.solve(residual);
+		RealVector aCondPAR = aHat.getSubVector(0, kkPAR).subtract(lSub.transpose().operate(adjustment));
+
+		// Combine conditioned and fixed solutions
+		RealVector aPAR = new ArrayRealVector(n);
+		aPAR.setSubVector(0, aCondPAR);
+		aPAR.setSubVector(kkPAR, aFixPAR);
+
+		return new Object[] { aPAR, nFixed, srPAR };
+	}
+
+	private static int findFirstAboveThreshold_RatioTest(RealVector aHat, RealMatrix LMat, double[] dVec,
+			double[] srCumul, double minSR) {
+
+		double maxFR = 0.1 / 100.0;
+		int n = aHat.getDimension();
+		for (int i = 0; i < n; i++) {
+			if (srCumul[i] >= minSR) {
+				return i;
+			}
+			Object[] ilsSoln = estimatorILS(aHat.getSubVector(i, n - i), LMat.getSubMatrix(i, n - 1, i, n - 1),
+					Arrays.copyOfRange(dVec, i, n), 2);
+			double mu_value = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n - 1); // Fixed-FR ratio
+
+			double[] sqNorms = (double[]) ilsSoln[1];
+			// Step 4: Perform the Ratio Test based on the computed mu-value
+			if (sqNorms[0] / sqNorms[1] < mu_value) {
+				// If the ratio test passes, return the index
+				return i;
+			}
+
+		}
+		return -1; // Should not occur if threshold logic is correct
+	}
 
 }

@@ -122,18 +122,18 @@ public class TransformZ {
 	    // Initialize iZt_mat as identity if null
 	    if (iZt_mat == null) {
 	        iZt_mat = MatrixUtils.createRealIdentityMatrix(n);
-	    }
-
-	    // Default values for ii_min and ii_max
-	    if (ii_min == null || ii_min < 2) {
 	        ii_min = 2;
-	    }
-	    if (ii_max == null || ii_max > n) {
 	        ii_max = n;
 	    }
-
-	    // Ensure indices are valid
-	    if (ii_min > ii_max || ii_min < 2 || ii_max > n) {
+	    // Default values for ii_min and ii_max
+	    else if (ii_min == null) {
+	        ii_min = 2;
+	        ii_max = n;
+	    }
+	    else if (ii_max == null) {
+	        ii_max = n;
+	    }
+	    else if(ii_min > ii_max || ii_min < 2 || ii_max > n) {
 	        throw new IllegalArgumentException("Invalid values for ii_min and ii_max.");
 	    }
 

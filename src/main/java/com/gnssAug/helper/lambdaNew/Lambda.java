@@ -23,7 +23,7 @@ public class Lambda {
 			throw new IllegalArgumentException(
 					"ATTENTION: float ambiguity vector and its variance-covariance matrix are both needed in input!");
 		}
-		if (method < 0 || method > 9) {
+		if (method < 0 || method > 10) {
 			method = 3; // By default, we use ILS estimator (search-and-shrink)
 		}
 
@@ -56,9 +56,9 @@ public class Lambda {
 		double betaIAB = 0.5;
 		double alphaBIE = 1e-6;
 
-		if (method == 3 || method == 4 || method == 5) {
+		if (method == 3 || method == 4 || method == 5|| method == 10) {
 			nCands = optionalParams.length > 0 ? (int) optionalParams[0] : 1;
-			if (method == 5) {
+			if (method == 5||method == 10) {
 				minSR = optionalParams.length > 1 ? (double) optionalParams[1] : 0.99;
 			}
 		} else if (method == 6) {
@@ -105,6 +105,7 @@ public class Lambda {
 			Object[] parResult = Estimators.estimatorPAR(z_hat, decorrelated.getLz_mat(), decorrelated.getDz_vec().toArray(), nCands, minSR,0);
 			z_fix = (RealVector)parResult[0];
 			nFixed = (int) parResult[1];
+			SR = (double) parResult[2];
 			break;
 
 //		case 6: // Compute VIB
@@ -131,6 +132,13 @@ public class Lambda {
 			z_fix = (RealVector) Estimators.estimatorBIE(z_hat, decorrelated.getLz_mat(), decorrelated.getDz_vec(), chi2_BIE)[0];
 			break;
 
+		case 10: // Compute PAR Ratio Test
+			Object[] parResult_RT = Estimators.estimatorPAR_RatioTest(z_hat, decorrelated.getLz_mat(), decorrelated.getDz_vec().toArray(), nCands, minSR,0);
+			z_fix = (RealVector)parResult_RT[0];
+			nFixed = (int) parResult_RT[1];
+			SR = (double) parResult_RT[2];
+			break;
+
 		default:
 			throw new IllegalArgumentException("ATTENTION: the method selected is not available! Use 0-9.");
 		}
@@ -149,7 +157,7 @@ public class Lambda {
 
 		//--------------------------------------------------------------------------   
 		// Squared norm of ambiguity residuals
-		if (Arrays.asList(1, 2, 5, 6, 8, 9).contains(method)) {
+		if (Arrays.asList(1, 2, 5, 6, 8, 9,10).contains(method)) {
 			
 			 // Compute the residual vector: z_hat - z_fix
 	        RealVector residual = z_hat.subtract(z_fix);
