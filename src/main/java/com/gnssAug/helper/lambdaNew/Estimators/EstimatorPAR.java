@@ -1,0 +1,201 @@
+package com.gnssAug.helper.lambdaNew.Estimators;
+import org.ejml.simple.SimpleMatrix;
+
+import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
+import com.gnssAug.helper.lambdaNew.SuccessRate;
+import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
+
+import java.util.Arrays;
+
+
+
+/**
+ * LAMBDA 4.0 | Partial Ambiguity Resolution (PAR) estimation based on ILS
+ * This class provides a method to compute a partial 'fixed' solution based on the best integer 
+ * least-squares solutions for the most precise subset, given a minimum success rate threshold.
+ * Multiple best candidates can be selected for the integer-fixed subset, conditioning the remaining components accordingly.
+ *
+ * -------------------------------------------------------------------------
+ * INPUTS:
+ *   aHat        Ambiguity float vector (column)
+ *   LMat        LtDL-decomposition matrix L (lower unitriangular)
+ *   dVec        LtDL-decomposition matrix D (diagonal elements)
+ *   nCands      Number of best integer solutions          [DEFAULT = 1]
+ *   minSR       Minimum success rate threshold             [DEFAULT = 99.5%]
+ *   alphaBIE    Use BIE estimator instead if alpha > 0    [DEFAULT = 0]
+ *
+ * OUTPUTS:
+ *   aPAR        Partially 'fixed' solution given a minimum success rate
+ *   nFixed      Number of fixed ambiguity (most precise) components
+ *   SR_PAR      Success rate of ambiguity (most precise) subset 
+ *
+ * DEPENDENCIES:
+ *   computeSR_IBexact
+ *   estimatorILS
+ *   estimatorBIE
+ *
+ * REFERENCES:
+ *   none
+ *
+ * -------------------------------------------------------------------------
+ * Copyright: Geoscience & Remote Sensing department @ TUDelft | 01/06/2024
+ * Contact email:    LAMBDAtoolbox-CITG-GRS@tudelft.nl
+ * -------------------------------------------------------------------------
+ * Created by
+ *   01/06/2024  - Lotfi Massarweh
+ *       Implementation for LAMBDA 4.0 toolbox, based on LAMBDA 3.0
+ *
+ * Modified by
+ *   dd/mm/yyyy  - Name Surname author - email address
+ *       >> Changes made in this new version
+ * -------------------------------------------------------------------------
+ */
+public class EstimatorPAR {
+
+    /**
+     * Computes a partially 'fixed' solution based on integer least-squares solutions.
+     *
+     * @param aHat    Ambiguity float vector (column)
+     * @param LMat    LtDL-decomposition matrix L (lower unitriangular)
+     * @param dVec    LtDL-decomposition matrix D (diagonal elements)
+     * @param nCands  Number of best integer solutions          [DEFAULT = 1]
+     * @param minSR   Minimum success rate threshold             [DEFAULT = 0.995]
+     * @param alphaBIE Use BIE estimator instead if alpha > 0    [DEFAULT = 0]
+     * @return        PARResult object containing aPAR, nFixed, SR_PAR
+     * @throws IllegalArgumentException if number of inputs is insufficient
+     */
+    public static PARResult estimatorPAR(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, 
+                                         Integer nCands, Double minSR, Double alphaBIE) {
+        // Problem dimensionality
+        int nn = aHat.numRows();
+        
+        // Check number of input arguments and set default values if necessary
+        if (aHat == null || LMat == null || dVec == null) {
+            throw new IllegalArgumentException("ATTENTION: number of inputs is insufficient!");
+        }
+        
+        if (nCands == null) {
+            nCands = 1;          // Number of integer candidates for the partial fix
+        }
+        
+        if (minSR == null) {
+            minSR = 0.995;       // Default minimum success rate threshold
+        }
+        
+        if (alphaBIE == null) {
+            alphaBIE = 0.0;      // By default, use ILS estimator
+        }
+        
+        // Compute success rate for IB (exact formulation)
+        SRResult srResult = SuccessRate.computeSR_IBexact(dVec);
+        double SR_IB = srResult.getSR();
+        double[] SR_IB_cumul = srResult.getSR_cumul();
+        
+        int kk_PAR;
+        double SR_PAR;
+        int nFixed;
+        SimpleMatrix aPAR;
+        
+        // Check largest subset above SR threshold
+        if (SR_IB >= minSR) {
+            // Full AR       (fixed solution)
+            kk_PAR = 1;
+            SR_PAR = SR_IB;
+            nFixed = nn;
+        } else {
+            // Find the first index where cumulative SR meets or exceeds minSR
+            kk_PAR = -1;
+            for (int i = 0; i < SR_IB_cumul.length; i++) {
+                if (SR_IB_cumul[i] >= minSR) {
+                    kk_PAR = i + 1; // MATLAB indices start at 1
+                    break;
+                }
+            }
+            
+            if (kk_PAR != -1) {
+                // Partial AR    (fixed solution)
+                SR_PAR = SR_IB_cumul[kk_PAR - 1];
+                nFixed = nn - (kk_PAR - 1);
+            } else {
+                // No AR         (float solution)
+                aPAR  = aHat;
+                SR_PAR = SR_IB;
+                nFixed = 0;
+                return new PARResult(aPAR, nFixed, SR_PAR);
+            }
+        }
+        
+        // Find fixed solution of subset {II} with sufficiently high success rate
+        SimpleMatrix a_fix_PAR;
+        if (alphaBIE > 0.0 && alphaBIE < 1.0) {
+            double Chi2_BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1 - alphaBIE, nFixed / 2.0);
+            // NOTE: This uses the inverse of the regularized gamma function from Apache Commons Math
+            // Ensure that Apache Commons Math library is included in the project dependencies
+            
+            // Call BIE-estimator (recursive implementation)
+            SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
+            SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
+            double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
+            EstimatorBIEResult bieResult = EstimatorBIE.estimatorBIE(aHat_subset, LMat_subset, dVec_subset, Chi2_BIE,null);
+            a_fix_PAR = bieResult.getaBIE();
+            // NOTE: this is an experimental PAR (BIE) approach still based on the 
+            // SR criterion. We suggest to use "minSR = 0.50" & "alphaBIE = 1e-6", 
+            // or to check the alternative implementation in 'estimatorPAR_BIE.m'
+        } else {
+            // Call ILS-estimator (search-and-shrink)
+            SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
+            SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
+            double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
+            ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
+            a_fix_PAR = ilsResult.getAFix();
+        }
+        
+        // Float solution of subset {I}, conditioned onto the fixed subset {II}
+        SimpleMatrix LMat_condition = LMat.extractMatrix(kk_PAR - 1, nn, 0, kk_PAR - 1);
+        SimpleMatrix LMat_subset_transpose = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn).transpose();
+        SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
+        SimpleMatrix term = aHat_subset.minus(a_fix_PAR);
+        
+        SimpleMatrix inv_LMat = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn).transpose().invert();
+        SimpleMatrix multiplication = LMat_subset_transpose.mult(inv_LMat).mult(term);
+        SimpleMatrix a_cond_PAR = aHat.extractMatrix(0, kk_PAR - 1, 0, 1).minus(multiplication);
+        
+        // Return PAR solution(s)
+        aPAR = a_cond_PAR.combine(0, a_cond_PAR.numCols(), a_fix_PAR);
+        
+        return new PARResult(aPAR, nFixed, SR_PAR);
+    }
+    
+
+    
+    /**
+     * Class to hold the results of the PAR estimation.
+     */
+    public static class PARResult {
+        private SimpleMatrix aPAR;
+        private int nFixed;
+        private double SR_PAR;
+        
+        public PARResult(SimpleMatrix aPAR, int nFixed, double SR_PAR) {
+            this.aPAR = aPAR;
+            this.nFixed = nFixed;
+            this.SR_PAR = SR_PAR;
+        }
+
+        public SimpleMatrix getaPAR() {
+            return aPAR;
+        }
+
+        public int getnFixed() {
+            return nFixed;
+        }
+
+        public double getSR_PAR() {
+            return SR_PAR;
+        }
+    }
+    
+    
+}

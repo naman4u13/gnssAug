@@ -1,28 +1,89 @@
 package com.gnssAug.helper.lambdaNew;
+
 import org.apache.commons.math3.special.Erf;
+
 public class SuccessRate {
-	
-	public static Object[] computeSR_IBexact(double[] dVec) {
-        int n = dVec.length;
 
-        double[] srVect = new double[n];
-        double[] srCumul = new double[n];
+	/**
+	 * Container class for the success rate results.
+	 */
+	public static class SRResult {
+		private double SR;
+		private double[] SR_cumul;
+		private double[] SR_vect;
 
-        // Success rate of each conditioned component
-        for (int i = 0; i < n; i++) {
-            srVect[i] = Erf.erf(1.0 / Math.sqrt(8.0 * dVec[i]));
-        }
+		/**
+		 * Constructor for SRResult.
+		 *
+		 * @param SR       Success rate for Full AR (FAR)
+		 * @param SR_cumul Success rate for Partial AR (PAR) with incremental subsets
+		 * @param SR_vect  Success rate for each individual (conditioned) component
+		 */
+		public SRResult(double SR, double[] SR_cumul, double[] SR_vect) {
+			this.SR = SR;
+			this.SR_cumul = SR_cumul;
+			this.SR_vect = SR_vect;
+		}
 
-        // Cumulative success rate (Partial AR) for incremental subsets (last-to-first order)
-        srCumul[n - 1] = srVect[n - 1];
-        for (int i = n - 2; i >= 0; i--) {
-            srCumul[i] = srCumul[i + 1] * srVect[i];
-        }
+		/**
+		 * Gets the success rate for Full AR (FAR).
+		 *
+		 * @return SR
+		 */
+		public double getSR() {
+			return SR;
+		}
 
-        // Success rate for Full AR (FAR)
-        double sr = srCumul[0];
+		/**
+		 * Gets the success rate for Partial AR (PAR) with incremental subsets.
+		 *
+		 * @return SR_cumul
+		 */
+		public double[] getSR_cumul() {
+			return SR_cumul;
+		}
 
-        return new Object[] {sr,srCumul,srVect};
-    }
+		/**
+		 * Gets the success rate for each individual (conditioned) component.
+		 *
+		 * @return SR_vect
+		 */
+		public double[] getSR_vect() {
+			return SR_vect;
+		}
+	}
+
+	/**
+	 * Computes the success rate based on an Integer Bootstrapping analytical
+	 * formula (exact).
+	 *
+	 * @param dVec Conditional variances vector
+	 * @return SRResult containing SR, SR_cumul, and SR_vect
+	 */
+	public static SRResult computeSR_IBexact(double[] dVec) {
+		// Problem dimensionality
+		int nn = dVec.length;
+
+		// Success rate of each (conditioned) component using IB analytical formula
+		double[] SR_vect = new double[nn];
+		for (int i = 0; i < nn; i++) {
+			SR_vect[i] = Erf.erf(1.0 / Math.sqrt(8.0 * dVec[i]));
+			// SR_vect[i] = 2 * normCDF(0.5 / Math.sqrt(dVec[i])) - 1; // Slower & needs
+			// toolbox!
+		}
+
+		// Success rate (Partial AR) for incremental subsets assuming last-to-first
+		double[] SR_cumul = new double[nn];
+		double cumulativeProduct = 1.0;
+		for (int i = nn - 1; i >= 0; i--) {
+			cumulativeProduct *= SR_vect[i];
+			SR_cumul[i] = cumulativeProduct;
+		}
+
+		// Success-rate for the Full AR (FAR)
+		double SR = SR_cumul[0];
+
+		return new SRResult(SR, SR_cumul, SR_vect);
+	}
 
 }

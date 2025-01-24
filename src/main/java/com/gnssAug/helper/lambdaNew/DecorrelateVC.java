@@ -1,85 +1,135 @@
 package com.gnssAug.helper.lambdaNew;
-import org.apache.commons.math3.linear.*; // For matrix operations
 
-import com.gnssAug.helper.lambdaNew.models.*;
+
+
+import org.ejml.simple.SimpleMatrix;
+
+import com.gnssAug.helper.lambdaNew.DecomposeLtDL.DecompositionResult;
+import com.gnssAug.helper.lambdaNew.TransformZ.TransformResult;
 
 public class DecorrelateVC {
 
-	/**
-     * Decorrelate the ambiguity variance-covariance matrix by a Z-transformation.
+    /**
+     * Decorrelate the ambiguity vc-matrix by a Z-transformation.
+     * This function computes a decorrelation of the ambiguity vc-matrix, which 
+     * is firstly decomposed in its LtDL form, and the latter is updated based 
+     * on an admissible Z-transformation (reduction and ordering of conditional 
+     * variances). This transformation matrix (unimodular) is also provided in
+     * output as inv(Z'), later used for a straightforward back-transformation.
      *
-     * @param Qa_hat Variance-covariance matrix of the original ambiguities.
-     * @param a_hat  Ambiguity float vector (optional). Pass null if not needed.
-     * @return A result object containing the decorrelated matrices and vectors.
+     * @param qaHat      Variance-covariance matrix of the original ambiguities
+     * @param aHat       Ambiguity float vector (column)                 [OPTIONAL]
+     * @return DecorrelateVCResult containing:
+     *         QzHat      Variance-covariance matrix of the decorrelated ambiguities
+     *         LzMat      New LtDL-decomposition matrix L (lower unitriangular)
+     *         dzVec      New LtDL-decomposition matrix D (diagonal elements)
+     *         iZtMat     Inverse transpose of Z-transformation matrix (unimodular)
+     *         ZMat       Z-transformation matrix (unimodular)            [OPTIONAL]
+     *         zHat       Decorrelated ambiguity float vector (column)    [OPTIONAL]
      */
-	
-	public static DecorrelateResult decorrelateVC(double[][] Qa_hat, double[] a_hat) {
-		return decorrelateVC(MatrixUtils.createRealMatrix(Qa_hat), MatrixUtils.createRealVector(a_hat));
-		
-	}
-    public static DecorrelateResult decorrelateVC(RealMatrix Qa_hat, RealVector a_hat) {
-        // Step 1: Perform LtDL decomposition on Qa_hat
-        LtDLDecompositionResult decomposition = DecomposeLtDL.decomposeLtDL(Qa_hat);
-        RealMatrix La_mat = decomposition.getL();
-        RealVector da_vec = decomposition.getD();
+    public static DecorrelateVCResult decorrelateVC(SimpleMatrix qaHat, SimpleMatrix aHat) {
+        // Compute LtDL-decomposition    | Qa_hat = La_mat' * diag(da_vec) * La_mat
+        DecompositionResult ltDl = DecomposeLtDL.decomposeLtDL(qaHat);
+        SimpleMatrix laMat = ltDl.getLMat();
+        double[] daVec = ltDl.getDVec();
 
-        // Step 2: Perform Z-transformation to reduce and order conditional variances
-        TransformZResult zTransform = TransformZ.transformZ(La_mat, da_vec,null);
-        RealMatrix Lz_mat = zTransform.getL();
-        RealVector dz_vec = zTransform.getD();
-        RealMatrix iZt_mat = zTransform.getIZt();
+        // Compute Z-transformation      | Reduction & ordering of cond. variances
+        TransformResult zTrans = TransformZ.transformZ(laMat, daVec,null);
+        SimpleMatrix lzMat = zTrans.getLmat();
+        double[] dzVec = zTrans.getdVec();
+        SimpleMatrix iZtMat = zTrans.getiZtMat();
 
-        // Step 3: Compute Qz_hat = Lz_mat' * diag(dz_vec) * Lz_mat
-        RealMatrix Qz_hat = Lz_mat.transpose()
-                .multiply(diagonalMatrixFromVector(dz_vec))
-                .multiply(Lz_mat);
-
-        // Optional outputs
-        RealMatrix Z_mat = null;
-        RealVector z_hat = null;
-
-        if (a_hat != null) {
-            // Retrieve the Z-transformation matrix: Z_mat = round(inv(iZt_mat.transpose()))
-            Z_mat = new LUDecomposition(iZt_mat.transpose()).getSolver().getInverse();
-            Z_mat = roundMatrix(Z_mat);
-
-            // Transform the ambiguity float vector: z_hat = Z_mat' * a_hat
-            z_hat = Z_mat.transpose().operate(a_hat);
+        // Apply Z-transformation        | Qa_hat = iZt_mat * Qz_hat * iZt_mat'
+        // Qz_hat = Lz_mat' * (dz_vec' .* Lz_mat)
+        SimpleMatrix dzVecDiag = new SimpleMatrix(dzVec.length, dzVec.length);
+       
+        for (int i = 0; i < dzVec.length; i++) {
+            dzVecDiag.set(i, i, dzVec[i]);
         }
 
-        // Return all outputs encapsulated in a result object
-        return new DecorrelateResult(Qz_hat, Lz_mat, dz_vec, iZt_mat, Z_mat, z_hat);
+        SimpleMatrix qzHat = lzMat.transpose().mult(dzVecDiag).mult(lzMat);
+        SimpleMatrix zMat = null;
+        SimpleMatrix zHat = null;
+
+        // If provided, Z-transform also the ambiguity float vector
+        if (aHat != null) {	
+            
+            
+            // Retrieve the Z-transformation matrix
+            zMat = iZtMat.invert().transpose();
+            // Assuming rounding to nearest integer for unimodular
+            zMat = roundMatrix(new SimpleMatrix(zMat));
+
+            // Transform the ambiguity float vector
+            zHat = zMat.transpose().mult(aHat);
+        }
+
+        return new DecorrelateVCResult(qzHat, lzMat, dzVec, iZtMat, zMat, zHat);
     }
 
     /**
-     * Helper method to create a diagonal matrix from a vector.
+     * Rounds each element of the matrix to the nearest integer.
      *
-     * @param vector The input vector.
-     * @return A diagonal matrix with the vector elements as diagonal entries.
+     * @param matrix The matrix to be rounded.
+     * @return A new matrix with each element rounded.
      */
-    private static RealMatrix diagonalMatrixFromVector(RealVector vector) {
-        int n = vector.getDimension();
-        RealMatrix diagMatrix = MatrixUtils.createRealDiagonalMatrix(vector.toArray());
-        return diagMatrix;
-    }
-
-    /**
-     * Helper method to round all elements of a matrix.
-     *
-     * @param matrix The input matrix.
-     * @return A matrix with all elements rounded to the nearest integer.
-     */
-    private static RealMatrix roundMatrix(RealMatrix matrix) {
-        int rows = matrix.getRowDimension();
-        int cols = matrix.getColumnDimension();
-        RealMatrix roundedMatrix = MatrixUtils.createRealMatrix(rows, cols);
-
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                roundedMatrix.setEntry(i, j, Math.round(matrix.getEntry(i, j)));
+    private static SimpleMatrix roundMatrix(SimpleMatrix matrix) {
+        SimpleMatrix rounded = new SimpleMatrix(matrix.numRows(), matrix.numCols());
+        for (int i = 0; i < matrix.numRows(); i++) {
+            for (int j = 0; j < matrix.numCols(); j++) {
+                rounded.set(i, j, Math.round(matrix.get(i, j)));
             }
         }
+        return rounded;
+    }
 
-        return roundedMatrix;
+
+}
+
+/**
+ * Class to hold the result of the decorrelateVC method.
+ */
+class DecorrelateVCResult {
+    private SimpleMatrix qzHat;
+    private SimpleMatrix lzMat;
+    private double[] dzVec;
+    private SimpleMatrix iZtMat;
+    private SimpleMatrix zMat;
+    private SimpleMatrix zHat;
+
+    public DecorrelateVCResult(SimpleMatrix qzHat, SimpleMatrix lzMat, double[] dzVec,
+                               SimpleMatrix iZtMat, SimpleMatrix zMat, SimpleMatrix zHat) {
+        this.qzHat = qzHat;
+        this.lzMat = lzMat;
+        this.dzVec = dzVec;
+        this.iZtMat = iZtMat;
+        this.zMat = zMat;
+        this.zHat = zHat;
+    }
+
+    public SimpleMatrix getQzHat() {
+        return qzHat;
+    }
+
+    public SimpleMatrix getLzMat() {
+        return lzMat;
+    }
+
+    public double[] getDzVec() {
+        return dzVec;
+    }
+
+    public SimpleMatrix getIZtMat() {
+        return iZtMat;
+    }
+
+    public SimpleMatrix getZMat() {
+        return zMat;
+    }
+
+    public SimpleMatrix getZHat() {
+        return zHat;
     }
 }
+
+

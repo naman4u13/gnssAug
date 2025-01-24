@@ -1,61 +1,119 @@
 package com.gnssAug.helper.lambdaNew;
 
-import com.gnssAug.helper.lambdaNew.models.*;
-import org.apache.commons.math3.linear.*;
 
+import org.ejml.UtilEjml;
+import org.ejml.simple.SimpleMatrix;
+
+/**
+ * LAMBDA 4.0 | Perform a LtDL-decomposition on the ambiguity vc-matrix
+ * This class computes a LtDL decomposition given the ambiguity variance-
+ * covariance matrix, which is assumed to be symmetric positive-definite.
+ * 
+ * -------------------------------------------------------------------------
+ * COPYRIGHT: Geoscience & Remote Sensing department @ TUDelft | 01/06/2024
+ * Contact email:    LAMBDAtoolbox-CITG-GRS@tudelft.nl
+ * -------------------------------------------------------------------------
+ * Created by
+ *   01/06/2024  - Lotfi Massarweh
+ *       Implementation for LAMBDA 4.0 toolbox
+ * 
+ * Modified by
+ *   dd/mm/yyyy  - Name Surname author
+ *       >> Changes made in this new version
+ * -------------------------------------------------------------------------
+ */
 public class DecomposeLtDL {
 
-	 /**
-     * Perform an LtDL decomposition on the ambiguity variance-covariance matrix.
+    /**
+     * Performs a LtDL-decomposition on the given covariance matrix.
      *
-     * @param Q_mat Variance-covariance matrix of the ambiguities (assumed symmetric positive-definite).
-     * @return A result object containing L (lower unitriangular matrix) and d (diagonal elements vector).
-     * @throws IllegalArgumentException if the matrix is not positive-definite.
+     * @param QMat Variance-covariance matrix of the ambiguities
+     * @return An object containing the L matrix and d vector of the decomposition
+     * @throws IllegalArgumentException if the input matrix is not positive-definite
      */
-    public static LtDLDecompositionResult decomposeLtDL(RealMatrix Q_mat) {
-        // Ensure Q_mat is square
-        int n = Q_mat.getRowDimension();
-        if (n != Q_mat.getColumnDimension()) {
-            throw new IllegalArgumentException("Q_mat must be a square matrix.");
+	public static DecompositionResult decomposeLtDL(SimpleMatrix QMat) {
+	    // Problem dimensionality
+	    int nn = QMat.numRows();
+
+	    // In-place iterations (i.e., last-to-first) for the LtDL-decomposition
+	    for (int kk = nn - 1; kk >= 0; kk--) {
+	        double Q_kk_kk = QMat.get(kk, kk);
+	        for (int j = 0; j < kk; j++) {
+	            double value = QMat.get(kk, j) / Q_kk_kk;
+	            QMat.set(kk, j, value);
+	        }
+	        for (int i = 0; i < kk; i++) {
+	            for (int j = 0; j < kk; j++) {
+	                double updatedValue = QMat.get(i, j) - QMat.get(kk, j) * Q_kk_kk * QMat.get(kk, i);
+	                QMat.set(i, j, updatedValue);
+	            }
+	        }
+	    }
+
+	    // Extract main outputs
+	    SimpleMatrix LMat = new SimpleMatrix(nn, nn);
+	    for (int i = 0; i < nn; i++) {
+	        for (int j = 0; j < nn; j++) {
+	            if (i > j) {
+	                LMat.set(i, j, QMat.get(i, j));
+	            } else if (i == j) {
+	                LMat.set(i, j, 1.0);
+	            } else {
+	                LMat.set(i, j, 0.0);
+	            }
+	        }
+	    }
+
+	    double[] dVec = new double[nn];
+	    for (int i = 0; i < nn; i++) {
+	        dVec[i] = QMat.get(i,i);
+	    }
+
+	    // Check positive-definiteness following the decomposition
+	    for (int i = 0; i < nn; i++) {
+	        if (dVec[i] < 1e-12) {
+	            throw new IllegalArgumentException("ATTENTION: the input vc-matrix is not positive-definite or numerical errors affect the LtDL-decomposition!");
+	        }
+	    }
+
+	    return new DecompositionResult(LMat, dVec);
+	}
+
+    /**
+     * Class to hold the result of the LtDL-decomposition.
+     */
+    public static class DecompositionResult {
+        private final SimpleMatrix LMat;
+        private final double[] dVec;
+
+        /**
+         * Constructs a DecompositionResult with the given L matrix and d vector.
+         *
+         * @param LMat The lower unitriangular matrix L
+         * @param dVec The diagonal elements vector D
+         */
+        public DecompositionResult(SimpleMatrix LMat, double[] dVec) {
+            this.LMat = LMat;
+            this.dVec = dVec;
         }
 
-        // Copy the input matrix to avoid modifying the original
-        RealMatrix Q = Q_mat.copy();
-
-        // Perform in-place iterations for the LtDL decomposition
-        for (int k = n - 1; k >= 0; k--) {
-            // Normalize the row Q[k, 0:k-1] by Q[k, k]
-            double diagK = Q.getEntry(k, k);
-            if (diagK <= 1e-12) {
-                throw new IllegalArgumentException("Input matrix is not positive-definite or numerical errors occurred.");
-            }
-
-            for (int j = 0; j < k; j++) {
-                Q.setEntry(k, j, Q.getEntry(k, j) / diagK);
-            }
-
-            // Update the upper-left block of the matrix
-            for (int i = 0; i < k; i++) {
-                for (int j = 0; j < k; j++) {
-                    double value = Q.getEntry(i, j) - Q.getEntry(k, i) * diagK * Q.getEntry(k, j);
-                    Q.setEntry(i, j, value);
-                }
-            }
+        /**
+         * Gets the lower unitriangular matrix L.
+         *
+         * @return The L matrix
+         */
+        public SimpleMatrix getLMat() {
+            return LMat;
         }
 
-        // Extract the L matrix (lower unitriangular) and d vector (diagonal elements)
-        RealMatrix L = MatrixUtils.createRealIdentityMatrix(n); // Start with identity matrix
-        double[] d = new double[n];
-
-        for (int i = 0; i < n; i++) {
-            d[i] = Q.getEntry(i, i);
-            for (int j = 0; j < i; j++) {
-                L.setEntry(i, j, Q.getEntry(i, j));
-            }
+        /**
+         * Gets the diagonal elements vector D.
+         *
+         * @return The d vector
+         */
+        public double[] getDVec() {
+            return dVec;
         }
-
-        // Return results encapsulated in a result object
-        return new LtDLDecompositionResult(L, new ArrayRealVector(d));
     }
-	
 }
+

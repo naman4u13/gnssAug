@@ -1,166 +1,311 @@
 package com.gnssAug.helper.lambdaNew;
-import org.apache.commons.math3.linear.*;
 
-import com.gnssAug.helper.lambdaNew.models.TransformZResult;
+import org.ejml.dense.row.CommonOps_DDRM;
+import org.ejml.simple.SimpleMatrix;
 
+/**
+ * LAMBDA 4.0 | Decorrelate ambiguities by an admissible Z-transformation
+ * 
+ * This class provides a method to decorrelate ambiguities by reduction and ordering of 
+ * conditional variances. The Z-transformation matrix (unimodular) is then
+ * obtained conventionally as the inverse transpose of Z.
+ * 
+ * -------------------------------------------------------------------------
+ * Inputs:
+ *   L_mat       Old LtDL-decomposition matrix L (lower unitriangular)
+ *   d_vec       Old LtDL-decomposition matrix D (diagonal elements)
+ *   iZt_mat     Old inverse transpose Z-transformation matrix (unimodular)
+ * 
+ * Outputs:
+ *   L_mat       New LtDL-decomposition matrix L (lower unitriangular)
+ *   d_vec       New LtDL-decomposition matrix D (diagonal elements)
+ *   iZt_mat     New inverse transpose Z-transformation matrix (unimodular)
+ * 
+ * Dependencies:
+ *   computeIGT_row
+ * 
+ * -------------------------------------------------------------------------
+ * Copyright: Geoscience & Remote Sensing department @ TUDelft | 01/06/2024
+ * Contact email:    LAMBDAtoolbox-CITG-GRS@tudelft.nl
+ * -------------------------------------------------------------------------
+ * Created by
+ *   01/06/2024  - Lotfi Massarweh
+ *       Implementation for LAMBDA 4.0 toolbox, based on LAMBDA 3.0
+ * 
+ * Modified by
+ *   dd/mm/yyyy  - Name Surname author - email address
+ *       >> Changes made in this new version
+ * -------------------------------------------------------------------------
+ */
 public class TransformZ {
-	/**
-	 * Decorrelate ambiguities using an admissible Z-transformation.
-	 *
-	 * @param L_mat  Old LtDL-decomposition matrix L (lower unitriangular).
-	 * @param d_vec  Old LtDL-decomposition diagonal elements.
-	 * @param iZt_mat Old inverse transpose Z-transformation matrix (unimodular).
-	 *                If null, an identity matrix is used.
-	 * @return A result object containing the updated L, d, and iZt matrices.
-	 */
-	public static TransformZResult transformZ(RealMatrix L_mat, RealVector d_vec, RealMatrix iZt_mat) {
-		int n = d_vec.getDimension();
 
-		// Check if iZt_mat is null, initialize it as an identity matrix
-		if (iZt_mat == null) {
-			iZt_mat = MatrixUtils.createRealIdentityMatrix(n);
+    /**
+     * Decorrelates ambiguities by reduction and ordering of conditional variances.
+     * 
+     * @param LMat      Old LtDL-decomposition matrix L (lower unitriangular)
+     * @param dVec      Old LtDL-decomposition matrix D (diagonal elements)
+     * @param iZtMat    Old inverse transpose Z-transformation matrix (unimodular). If null, identity matrix is assumed.
+     * @return          A TransformResult object containing the new L_mat, d_vec, and iZt_mat
+     */
+    public static TransformResult transformZ(SimpleMatrix LMat, double[] dVec, SimpleMatrix iZtMat) {
+        // Problem dimensionality
+        int nn = dVec.length;
+
+        // Check number of inputs
+        if (LMat == null || dVec == null) {
+            throw new IllegalArgumentException("ATTENTION: number of inputs is insufficient!");
+        }
+
+        if (iZtMat == null) {
+            // Case without any a priori Z-transformation matrix
+            iZtMat = SimpleMatrix.identity(nn);
+        }
+
+        // NOTE: we use iZt = inv(Z'), assuming a transformation z_hat = Z' * a_hat
+
+        // ALGORITHM: matrix reduction with conditional variances ordering
+
+        // Iterative loop for swapping & decorrelate adjacent components
+        int kk = nn - 2;
+        while (kk >= 0) {
+            int kp1 = kk + 1;
+            // ----------------------------------------------------------------------
+            // Check current pairs {k,k+1} and a correlation-like term L_mat(kp1,kk)
+            double CORR = LMat.get(kp1, kk);
+            long muLong = Math.round(CORR);
+            double mu = (double) muLong;
+            if (muLong != 0) {
+                CORR = CORR - mu;
+            }
+            // ----------------------------------------------------------------------
+            // Condition for swapping adjacent ambiguities
+            double delta = dVec[kk] + Math.pow(CORR, 2) * dVec[kp1];
+            if (delta < dVec[kp1]) {
+                // ------------------------------------------------------------------
+                // Check if decorrelation for L_mat(kk+1,kk) was needed 
+                if (muLong != 0) {
+                    // L_mat(kp1:nn, kk) = L_mat(kp1:nn, kk) - mu * L_mat(kp1:nn, kp1);
+                    for (int ii = kp1; ii < nn; ii++) {
+                        double updatedValue = LMat.get(ii, kk) - mu * LMat.get(ii, kp1);
+                        LMat.set(ii, kk, updatedValue);
+                    }
+
+                    // iZt_mat(:,kp1) = iZt_mat(:,kp1) + mu * iZt_mat(:,kk);
+                    for (int ii = 0; ii < nn; ii++) {
+                        double updatedValue = iZtMat.get(ii, kp1) + mu * iZtMat.get(ii, kk);
+                        iZtMat.set(ii, kp1, updatedValue);
+                    }
+
+                    // Reduce entire column L_mat(kk+1:nn, kk) -> better stability
+                    for (int ii = kp1 + 1; ii < nn; ii++) {
+                        long muInnerLong = Math.round(LMat.get(ii, kk));
+                        double muInner = (double) muInnerLong;
+                        if (muInnerLong != 0) {
+                            // L_mat(ii:nn, kk) = L_mat(ii:nn, kk) - mu * L_mat(ii:nn, ii);
+                            for (int jj = ii; jj < nn; jj++) {
+                                double updatedValue = LMat.get(jj, kk) - muInner * LMat.get(jj, ii);
+                                LMat.set(jj, kk, updatedValue);
+                            }
+                            // iZt_mat(:,ii) = iZt_mat(:,ii) + mu * iZt_mat(:,kk);
+                            for (int jj = 0; jj < nn; jj++) {
+                                double updatedValue = iZtMat.get(jj, ii) + muInner * iZtMat.get(jj, kk);
+                                iZtMat.set(jj, ii, updatedValue);
+                            }
+                        }
+                    }
+                }
+                // ------------------------------------------------------------------
+                // Compute auxiliary variables for performing the adjacent swapping
+                double lambda = LMat.get(kp1, kk) * dVec[kp1] / delta;    // Auxiliary #1
+                double eta = dVec[kk] / delta;                           // Auxiliary #2
+
+                // STEP I: adjacent swapping operation
+                // Creating swapMatrix = [ -L_mat(kp1,kk)    1 ;
+                //                           eta          lambda ];
+                double[] swapRow1 = { -LMat.get(kp1, kk), 1.0 };
+                double[] swapRow2 = { eta, lambda };
+
+                // Perform swapMatrix * LMat([kk kp1],1:kk-1)
+                for (int col = 0; col < kk; col++) {
+                    double val1 = swapRow1[0] * LMat.get(kk, col) + swapRow1[1] * LMat.get(kp1, col);
+                    double val2 = swapRow2[0] * LMat.get(kk, col) + swapRow2[1] * LMat.get(kp1, col);
+                    LMat.set(kk, col, val1);
+                    LMat.set(kp1, col, val2);
+                }
+
+                // STEP II: update decomposition in the specific swapped block
+                LMat.set(kp1, kk, lambda);
+                dVec[kk] = eta * dVec[kp1];
+                dVec[kp1] = delta;
+
+                // STEP III: update decomposition in the other conditioned block
+                for (int i = kk + 2; i < nn; i++) {
+                    double temp1 = LMat.get(i, kk);
+                    double temp2 = LMat.get(i, kp1);
+                    LMat.set(i, kk, temp2);
+                    LMat.set(i, kp1, temp1);
+                }
+                for (int i = 0; i < nn; i++) {
+                    double temp = iZtMat.get(i, kk);
+                    double tempNext = iZtMat.get(i, kp1);
+                    iZtMat.set(i, kk, tempNext);
+                    iZtMat.set(i, kp1, temp);
+                }
+                // ------------------------------------------------------------------
+                // If a swap took place at lower levels, we move up
+                if (kk < nn - 2) {
+                    kk += 1;
+                }
+            } else {
+                // No swap took place, so we move one level down
+                kk -= 1;
+            }
+            // ----------------------------------------------------------------------
+        }
+
+        // Assure that all the ambiguity components are ultimately decorrelated
+        // [L_mat,iZt_mat] = computeIGT_row(L_mat,iZt_mat);
+        // Assuming computeIGT_row is another method to be implemented.
+        IGTResult result = computeIGTRow(LMat, iZtMat);
+
+        return new TransformResult(result.getLMat(),dVec,result.iZtMat);
+    }
+    
+    /**
+     * A helper class to hold the result of the computeIGTRow method.
+     */
+    public static class IGTResult {
+        private SimpleMatrix lMat;
+        private SimpleMatrix iZtMat;
+
+        public IGTResult(SimpleMatrix lMat, SimpleMatrix iZtMat) {
+            this.lMat = lMat;
+            this.iZtMat = iZtMat;
+        }
+
+        public SimpleMatrix getLMat() {
+            return lMat;
+        }
+
+        public SimpleMatrix getIZtMat() {
+            return iZtMat;
+        }
+    }
+
+    /**
+     * Computes the Integer Gauss Transformations over a range of matrix rows.
+     * 
+     * @param lMat  Old LtDL-decomposition matrix L (lower unitriangular)
+     * @param iZtMat Old inverse transpose of Z-transformation matrix
+     * @param iiMin Minimum index of rows to be processed (0-based)
+     * @param iiMax Maximum index of rows to be processed (0-based)
+     * @return IGTResult containing the new L matrix and inverse transpose Z matrix
+     * @throws IllegalArgumentException if iiMin and iiMax are out of valid range
+     */
+    public static IGTResult computeIGTRow(SimpleMatrix lMat, SimpleMatrix iZtMat, int iiMin, int iiMax) {
+        // Problem dimensionality
+        int nn = lMat.numCols();
+
+        // Check that input "iiMin" and "iiMax" are correct
+        if (iiMin > iiMax || iiMin < 0 || iiMax >= nn) {
+            throw new IllegalArgumentException("ATTENTION: something is wrong with \"iiMin\" and \"iiMax\"!");
+        }
+
+        // Iterate over each row from "iiMin" till "iiMax" (up -> down)
+        for (int ii = iiMin; ii <= iiMax; ii++) {
+            // Round elements of current row "ii"
+            double[] muVect = new double[ii];
+            for (int j = 0; j < ii; j++) {
+                muVect[j] = Math.round(lMat.get(ii, j));
+            }
+
+            // Find indices where muVect is not zero
+            int[] indexMu = findNonZeroIndices(muVect);
+
+            // At the ii-th row, process columns defined in "indexMu"
+            for (int jj : indexMu) {
+                double mu = muVect[jj];
+                for (int row = ii; row < nn; row++) {
+                    double updatedValue = lMat.get(row, jj) - mu * lMat.get(row, ii);
+                    lMat.set(row, jj, updatedValue);
+                }
+                for (int row = 0; row < iZtMat.numRows(); row++) {
+                    double updatedValue = iZtMat.get(row, ii) + mu * iZtMat.get(row, jj);
+                    iZtMat.set(row, ii, updatedValue);
+                }
+            }
+        }
+
+        return new IGTResult(lMat, iZtMat);
+    }
+
+    /**
+     * Finds the indices of the non-zero elements in the given vector.
+     * 
+     * @param vector The input vector
+     * @return An array of indices where the vector elements are non-zero
+     */
+    private static int[] findNonZeroIndices(double[] vector) {
+        return java.util.stream.IntStream.range(0, vector.length)
+                .filter(i -> vector[i] != 0)
+                .toArray();
+    }
+
+    /**
+     * Overloaded method to computeIGTRow when no previous Z-transformation was performed.
+     * Initializes iZtMat as the identity matrix and sets default iiMin and iiMax.
+     * 
+     * @param lMat Old LtDL-decomposition matrix L (lower unitriangular)
+     * @return IGTResult containing the new L matrix and inverse transpose Z matrix
+     */
+    public static IGTResult computeIGTRow(SimpleMatrix lMat) {
+        int nn = lMat.numCols();
+        SimpleMatrix iZtMat = SimpleMatrix.identity(nn);
+        int iiMin = 0; // Changed to zero-based
+        int iiMax = nn - 1; // Changed to zero-based
+        return computeIGTRow(lMat, iZtMat, iiMin, iiMax);
+    }
+
+    /**
+     * Overloaded method to computeIGTRow when only one of iiMin or iiMax is missing.
+     * Sets the missing parameters to default values.
+     * 
+     * @param lMat  Old LtDL-decomposition matrix L (lower unitriangular)
+     * @param iZtMat Old inverse transpose of Z-transformation matrix
+     * @param iiMin Minimum index of rows to be processed (if provided, 0-based)
+     * @return IGTResult containing the new L matrix and inverse transpose Z matrix
+     */
+    public static IGTResult computeIGTRow(SimpleMatrix lMat, SimpleMatrix iZtMat) {
+        int nn = lMat.numCols();
+        int iiMin = 0; // Changed to zero-based
+        int iiMax = nn - 1; // Changed to zero-based
+        return computeIGTRow(lMat, iZtMat, iiMin, iiMax);
+    }
+    
+    /**
+     * A class to hold the results of the transformZ method.
+     */
+    public static class TransformResult {
+        private SimpleMatrix Lmat;
+        private double[] dVec;
+        private SimpleMatrix iZtMat;
+
+        public TransformResult(SimpleMatrix Lmat, double[] dVec, SimpleMatrix iZtMat) {
+            this.Lmat = Lmat;
+            this.dVec = dVec;
+            this.iZtMat = iZtMat;
+        }
+
+		public SimpleMatrix getLmat() {
+			return Lmat;
 		}
 
-		// Iterative loop for swapping and decorrelating adjacent components
-		int k = n - 2;
-		while (k >= 0) {
-			int kp1 = k + 1;
-
-			// Check current pairs {k, k+1} and a correlation-like term L_mat(k+1, k)
-			double corr = L_mat.getEntry(kp1, k);
-			double mu = Math.round(corr);
-			if (mu != 0) {
-				corr -= mu;
-			}
-
-			// Condition for swapping adjacent ambiguities
-			double delta = d_vec.getEntry(k) + corr * corr * d_vec.getEntry(kp1);
-			if (delta < d_vec.getEntry(kp1)) {
-				// Perform decorrelation for L_mat(k+1, k) if needed
-				if (mu != 0) {
-					for (int i = kp1; i < n; i++) {
-						L_mat.setEntry(i, k, L_mat.getEntry(i, k) - mu * L_mat.getEntry(i, kp1));
-					}
-					for (int i = 0; i < n; i++) {
-						iZt_mat.setEntry(i, kp1, iZt_mat.getEntry(i, kp1) + mu * iZt_mat.getEntry(i, k));
-					}
-
-					// Reduce the entire column L_mat(kk+1:nn,kk) for better stability
-					for (int i = kp1 + 1; i < n; i++) {
-						mu = Math.round(L_mat.getEntry(i, k));
-						if (mu != 0) {
-							for (int j = i; j < n; j++) {
-								L_mat.setEntry(j, k, L_mat.getEntry(j, k) - mu * L_mat.getEntry(j, i));
-							}
-							for (int j = 0; j < n; j++) {
-								iZt_mat.setEntry(j, i, iZt_mat.getEntry(j, i) + mu * iZt_mat.getEntry(j, k));
-							}
-						}
-					}
-				}
-
-				// Compute auxiliary variables for performing the adjacent swapping
-				double lambda = L_mat.getEntry(kp1, k) * d_vec.getEntry(kp1) / delta;
-				double eta = d_vec.getEntry(k) / delta;
-
-				// STEP I: Adjacent swapping operation
-				double lkk = -L_mat.getEntry(kp1, k);
-				double lkp1 = 1.0;
-
-				for (int j = 0; j < k; j++) {
-					double temp1 = lkk * L_mat.getEntry(k, j) + lkp1 * L_mat.getEntry(kp1, j);
-					double temp2 = eta * L_mat.getEntry(k, j) + lambda * L_mat.getEntry(kp1, j);
-					L_mat.setEntry(k, j, temp1);
-					L_mat.setEntry(kp1, j, temp2);
-				}
-
-				// STEP II: Update decomposition in the specific swapped block
-				L_mat.setEntry(kp1, k, lambda);
-				d_vec.setEntry(k, eta * d_vec.getEntry(kp1));
-				d_vec.setEntry(kp1, delta);
-
-				// STEP III: Update decomposition in the other conditioned block
-				for (int i = kp1 + 1; i < n; i++) {
-					double temp1 = L_mat.getEntry(i, k);
-					double temp2 = L_mat.getEntry(i, kp1);
-					L_mat.setEntry(i, k, temp2);
-					L_mat.setEntry(i, kp1, temp1);
-				}
-
-				for (int i = 0; i < n; i++) {
-					double temp1 = iZt_mat.getEntry(i, k);
-					double temp2 = iZt_mat.getEntry(i, kp1);
-					iZt_mat.setEntry(i, k, temp2);
-					iZt_mat.setEntry(i, kp1, temp1);
-				}
-
-				// If a swap took place at lower levels, move up
-				if (k < n - 2) {
-					k++;
-				}
-			} else {
-				// No swap took place, so move one level down
-				k--;
-			}
+		public double[] getdVec() {
+			return dVec;
 		}
 
-		// Assure that all ambiguity components are decorrelated
-		computeIGTRow(L_mat, iZt_mat,null,null);
-
-		return new TransformZResult(L_mat, d_vec, iZt_mat);
-	}
-
-	/**
-	 * Ensure all ambiguity components are decorrelated by row operations.
-	 *
-	 * @param L_mat   The L matrix.
-	 * @param iZt_mat The inverse transpose Z-transformation matrix.
-	 */
-	public static void computeIGTRow(RealMatrix L_mat, RealMatrix iZt_mat, Integer ii_min, Integer ii_max) {
-	    int n = L_mat.getColumnDimension(); // Dimensionality of the matrix
-
-	    // Initialize iZt_mat as identity if null
-	    if (iZt_mat == null) {
-	        iZt_mat = MatrixUtils.createRealIdentityMatrix(n);
-	        ii_min = 2;
-	        ii_max = n;
-	    }
-	    // Default values for ii_min and ii_max
-	    else if (ii_min == null) {
-	        ii_min = 2;
-	        ii_max = n;
-	    }
-	    else if (ii_max == null) {
-	        ii_max = n;
-	    }
-	    else if(ii_min > ii_max || ii_min < 2 || ii_max > n) {
-	        throw new IllegalArgumentException("Invalid values for ii_min and ii_max.");
-	    }
-
-	    // Iterate over each row from ii_min to ii_max
-	    for (int ii = ii_min - 1; ii < ii_max; ii++) { // Adjust for 0-based indexing in Java
-	        // Round elements of the current row up to ii-1
-	        double[] mu_vect = new double[ii];
-	        for (int j = 0; j < ii; j++) {
-	            mu_vect[j] = Math.round(L_mat.getEntry(ii, j));
-	        }
-
-	        // Process non-zero elements in mu_vect
-	        for (int jj = 0; jj < mu_vect.length; jj++) {
-	            if (mu_vect[jj] != 0) {
-	                double mu = mu_vect[jj];
-
-	                // Update L_mat for the ii-th row and below
-	                for (int k = ii; k < n; k++) {
-	                    L_mat.setEntry(k, jj, L_mat.getEntry(k, jj) - mu * L_mat.getEntry(k, ii));
-	                }
-
-	                // Update iZt_mat
-	                for (int k = 0; k < n; k++) {
-	                    iZt_mat.setEntry(k, ii, iZt_mat.getEntry(k, ii) + mu * iZt_mat.getEntry(k, jj));
-	                }
-	            }
-	        }
-	    }
-	}
+		public SimpleMatrix getiZtMat() {
+			return iZtMat;
+		}
+    }
 }
