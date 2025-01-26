@@ -1,123 +1,94 @@
 package com.gnssAug.helper.lambdaNew;
 
-import java.util.Arrays;
+import org.apache.commons.math3.analysis.interpolation.LinearInterpolator;
+import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 
-public class ComputeFFRTCoefficient {
-    /**
-     * Computes the Fixed Failure-rate Ratio Test (FFRT) coefficient.
-     *
-     * @param maxFR Maximum failure rate threshold, in the range [0.05-1%]
-     * @param FR     Failure Rate (0-1)
-     * @param nn     Problem dimensionality
-     * @return mu_FFRT Coefficient for the Fixed Failure-rate Ratio Test
-     */
-    public static double computeFFRTcoeff(double maxFR, double FR, int nn) {
-        // Tolerances for the Failure Rate (FR) within the interval [0.05% till 1%]
-        double[] tolFR = createTolFR();
-        int nSteps = tolFR.length;
+public class ComputeFFRTCoefficientOld {
 
-        // Set the maximum dimensionality supported by the current table
-        if (nn > 66) {
-            nn = 66;
-        }
+	public static double computeFFRTcoeff(double maxFR, double FR, int nn) {
+		// Ensure the problem dimensionality does not exceed the supported limit
+		if (nn > 66) {
+			nn = 66; // Max dimensionality supported by the table
+		}
 
-        // Set the maximum Failure Rate within the admissible range
-        if (maxFR < tolFR[0]) {
-            maxFR = tolFR[0]; // Use lower admissible bound
-        } else if (maxFR > tolFR[tolFR.length - 1]) {
-            maxFR = tolFR[tolFR.length - 1]; // Use upper admissible bound
-        }
+		// Define the tolerances for the failure rate (FR) within the interval [0.05% to
+		// 1%]
+		double[] tolFR = createTolFR();
 
-        // Read table data for the mu-coefficient
-        double[][] coefficientMu = getCoefficientMu(); // Faster than using .mat files
+		// Check the failure rate bounds for `maxFR`
+		if (maxFR < tolFR[0]) {
+			maxFR = tolFR[0]; // Use lower admissible bound
+		} else if (maxFR > tolFR[tolFR.length - 1]) {
+			maxFR = tolFR[tolFR.length - 1]; // Use upper admissible bound
+		}
 
-        // Retrieve the polynomial terms for Mu at the current dimensionality "nn"
-        int[] indexDataMu = new int[nSteps];
-        for (int i = 0; i < nSteps; i++) {
-            indexDataMu[i] = 4 * i;
-        }
+		// Get the coefficient lookup table
+		double[][] coefficientMu = getCoefficientMu();
 
-        double[] dataMu_p1 = new double[nSteps];
-        double[] dataMu_p2 = new double[nSteps];
-        double[] dataMu_p3 = new double[nSteps];
+		// Retrieve the polynomial terms for the current dimensionality `nn`
+		int numSteps = tolFR.length;
+		double[] dataMu_p1 = new double[numSteps];
+		double[] dataMu_p2 = new double[numSteps];
+		double[] dataMu_p3 = new double[numSteps];
 
-        for (int i = 0; i < nSteps; i++) {
-            // Adjusting for zero-based indexing in Java
-            dataMu_p1[i] = coefficientMu[nn - 1][1 + indexDataMu[i]];
-            dataMu_p2[i] = coefficientMu[nn - 1][2 + indexDataMu[i]];
-            dataMu_p3[i] = coefficientMu[nn - 1][3 + indexDataMu[i]];
-        }
+		// Populate the polynomial coefficients for dimension `nn`
+		for (int i = 0; i < numSteps; i++) {
+			int index = (nn - 1) * 4 + i; // MATLAB indexing logic translated
+			dataMu_p1[i] = coefficientMu[index][1];
+			dataMu_p2[i] = coefficientMu[index][2];
+			dataMu_p3[i] = coefficientMu[index][3];
+		}
 
-        // Compute coefficient Mu based on the previous polynomial terms
-        double[] mu_FFRT_vect = new double[nSteps];
-        for (int i = 0; i < nSteps; i++) {
-            mu_FFRT_vect[i] = dataMu_p1[i] * Math.pow(FR, dataMu_p2[i]) + dataMu_p3[i];
-        }
+		// Compute coefficient `mu_FFRT_vect` based on polynomial terms
+		double[] mu_FFRT_vect = new double[numSteps];
+		for (int i = 0; i < numSteps; i++) {
+			mu_FFRT_vect[i] = dataMu_p1[i] * Math.pow(FR, dataMu_p2[i]) + dataMu_p3[i];
+		}
 
-        double mu_FFRT;
-        if (FR > 0.20) {
-            mu_FFRT = 0.0;
-        } else if (FR >= maxFR) {
-            mu_FFRT = interpolate(tolFR, mu_FFRT_vect, maxFR);
-            mu_FFRT = Math.max(0.0, mu_FFRT);
-            mu_FFRT = Math.min(1.0, mu_FFRT);
-        } else {
-            mu_FFRT = 1.0;
-        }
+		// Find the `mu_FFRT` value for the given threshold
+		if (FR > 0.20) {
+			return 0; // FR is too large; no valid solution
+		} else if (FR >= maxFR) {
+			// Use interpolation to determine the `mu_FFRT`
+			LinearInterpolator interpolator = new LinearInterpolator();
+			PolynomialSplineFunction spline = interpolator.interpolate(tolFR, mu_FFRT_vect);
+			double mu_FFRT = spline.value(maxFR);
 
-        return mu_FFRT;
-    }
+			// Clamp the value of `mu_FFRT` between 0 and 1
+			mu_FFRT = Math.max(0, mu_FFRT);
+			mu_FFRT = Math.min(1, mu_FFRT);
 
-    /**
-     * Creates the tolerance Failure Rate (tolFR) array.
-     *
-     * @return Array of tolerance failure rates.
-     */
-    private static double[] createTolFR() {
-        double[] firstPart = new double[5];
-        for (int i = 0; i < 5; i++) {
-            firstPart[i] = 5e-4 + i * 1e-4;
-        }
+			return mu_FFRT;
+		} else {
+			return 1; // Success; return a default mu_FFRT value of 1
+		}
+	}
 
-        double[] secondPart = new double[9];
-        for (int i = 0; i < 9; i++) {
-            secondPart[i] = 1e-3 + i * 1e-3;
-        }
+	/**
+	 * Create the tolerance failure rate array for interpolation.
+	 */
+	private static double[] createTolFR() {
+		// Combine the MATLAB ranges: [5e-4:1e-4:9e-4, 1e-3:1e-3:9e-3, 0.01]
+		double[] tolFR = new double[85];
+		int index = 0;
 
-        double[] tolFR = new double[15];
-        System.arraycopy(firstPart, 0, tolFR, 0, firstPart.length);
-        System.arraycopy(secondPart, 0, tolFR, firstPart.length, secondPart.length);
-        tolFR[14] = 0.01;
+		// First range: [5e-4:1e-4:9e-4]
+		for (double i = 5e-4; i <= 9e-4; i += 1e-4) {
+			tolFR[index++] = i;
+		}
 
-        return tolFR;
-    }
+		// Second range: [1e-3:1e-3:9e-3]
+		for (double i = 1e-3; i <= 9e-3; i += 1e-3) {
+			tolFR[index++] = i;
+		}
 
-    /**
-     * Performs linear interpolation similar to MATLAB's interp1 function.
-     *
-     * @param x     Array of x values.
-     * @param y     Array of y values.
-     * @param xInterp The x value to interpolate at.
-     * @return Interpolated y value.
-     */
-    private static double interpolate(double[] x, double[] y, double xInterp) {
-        if (xInterp <= x[0]) {
-            return y[0];
-        }
-        if (xInterp >= x[x.length - 1]) {
-            return y[y.length - 1];
-        }
+		// Final value: [0.01]
+		tolFR[index] = 0.01;
 
-        for (int i = 0; i < x.length - 1; i++) {
-            if (xInterp >= x[i] && xInterp <= x[i + 1]) {
-                double slope = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
-                return y[i] + slope * (xInterp - x[i]);
-            }
-        }
-        return y[y.length - 1]; // Fallback
-    }
+		return tolFR;
+	}
 
-    /**
+	/**
 	 * Returns the coefficient lookup table (similar to MATLAB's
 	 * `getCoefficientMu`).
 	 */

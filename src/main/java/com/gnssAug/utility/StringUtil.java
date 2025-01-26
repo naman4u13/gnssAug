@@ -6,7 +6,7 @@ public class StringUtil {
 
 	public static String[] splitter(String str, int... lens) {
 
-		return splitter(str, true, lens);
+		return splitter(str, false, lens);
 
 	}
 

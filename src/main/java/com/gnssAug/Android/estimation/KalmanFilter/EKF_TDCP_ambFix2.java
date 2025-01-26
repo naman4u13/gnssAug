@@ -381,7 +381,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
 				SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
-				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,10);
+				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,9);
 				//Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
 				int nFixed = lmd.getnFixed();
 				double Ps = lmd.getSr();

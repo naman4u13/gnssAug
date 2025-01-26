@@ -1,52 +1,12 @@
 package com.gnssAug.helper.lambdaNew.Estimators;
 
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
-import java.util.Arrays;
-import java.util.Comparator;
 
-/**
- * LAMBDA 4.0 | Integer Least-Squares (ILS) estimator by search-and-shrink
- * This class computes a 'fixed' solution based on Integer Least-Squares
- * (ILS-)estimator using the search-and-shrink approach. The latter adopts 
- * the algorithm proposed by Ghasemmehdi and Agrell (2011, [RD01]).
- *
- * -------------------------------------------------------------------------
- * INPUTS
- *   aHat        Ambiguity float vector (column)
- *   LMat        LtDL-decomposition matrix L (lower unitriangular)
- *   dVec        LtDL-decomposition matrix D (diagonal elements)
- *   nCands      Number of best integer solutions [DEFAULT = 1]
- *
- * OUTPUTS
- *  aFix        Ambiguity fixed vector (column) - Best ILS solution(s)
- *  sqNorm      Squared norm for each ILS solution
- *
- * DEPENDENCIES:
- *   none
- *
- * REFERENCES
- *   [RD01] A. Ghasemmehdi and E. Agrell, "Faster Recursions in Sphere 
- *       Decoding" in IEEE Transactions on Information Theory, vol. 57, 
- *       no. 6, pp. 3530-3536, June 2011. 
- *       DOI: 10.1109/TIT.2011.2143830.
- *
- * -------------------------------------------------------------------------
- * Copyright: Geoscience & Remote Sensing department @ TUDelft | 01/06/2024
- * Contact email:    LAMBDAtoolbox-CITG-GRS@tudelft.nl
- * -------------------------------------------------------------------------
- * Created by
- *   01/06/2024  - Lotfi Massarweh
- *       Implementation for LAMBDA 4.0 toolbox
- *
- * Modified by
- *   dd/mm/yyyy  - Name Surname author - email address
- *       >> Changes made in this new version
- * -------------------------------------------------------------------------
- */
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS_old.ILSResult;
+
+//Integer ambiguity vector search by employing the search-and-shrink technique.
 public class EstimatorILS {
-
-    /**
+	/**
      * Container class for the ILS estimation results.
      */
     public static class ILSResult {
@@ -77,187 +37,130 @@ public class EstimatorILS {
      * @return ILSResult containing the best ILS solution(s) and their corresponding squared norms
      * @throws IllegalArgumentException if the number of input arguments is insufficient
      */
-    public static ILSResult estimatorILS(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, Integer nCands) {
-        // Problem dimensionality
-        int nn = aHat.numRows();
 
-        // Check number of input arguments
-        if (aHat == null || LMat == null || dVec == null) {
-            throw new IllegalArgumentException("ATTENTION: number of inputs is insufficient!");
-        }
+    public static ILSResult estimatorILS(SimpleMatrix ahat, SimpleMatrix L, double[] D, Integer ncands) {
+        int n = ahat.numRows();
+        SimpleMatrix afixed = new SimpleMatrix(n,ncands);
+        double[] sqnorm = new double[ncands];
 
-        // Set default number of candidates if not provided
-        int numCands = (nCands != null) ? nCands : 1;
+        double Chi2 = Double.MAX_VALUE;
+        double[] dist = new double[n];
+        boolean endsearch = false;
+        int count = 0;
 
-        // Determine which level to move to after zCond[0] is chosen at level 1.
-        int k0;
-        if (numCands == 1 && nn > 1) {
-            k0 = 1; // Cannot find a better candidate, so directly try level 2 (index 1)
-        } else {
-            k0 = 0; // Try to further improve candidates at level 1 (index 0)
-        }
+        double[] acond = new double[n];
+        acond[n-1] = ahat.get(n-1,0);
+        double[] zcond = new double[n];
+        zcond[n-1] = Math.round(acond[n-1]);
+        double left = acond[n-1] - zcond[n-1];
+        double[] step = new double[n];
+        step[n-1] = Math.signum(left);
+        if(step[n-1] == 0.0) step[n-1] = 1.0;
 
-        // Initialization output variables 
-        SimpleMatrix aFix = new SimpleMatrix(nn, numCands);
-        double[] sqNorm = new double[numCands];
+        int imax = ncands;
 
-        // Initial number of candidate solutions
-        int intCount = 0;
-        int intMax = numCands;
+        SimpleMatrix S = new SimpleMatrix(n,n);
+        int k = n;
 
-        // Start from an ellipsoid with infinite radius
-        double maxChi2 = Double.POSITIVE_INFINITY;
+        while (!endsearch){
+            double newdist = dist[k-1] + left*left/D[k-1];
+            if(newdist < Chi2){
+                if (k != 1){
+                    k = k - 1;
+                    dist[k-1] = newdist;
+                 // Update the row (k-1) of matrix S from row k of S and L
+                    SimpleMatrix rowK_S = S.extractMatrix(k, k + 1, 0, k); // Row k of S (1xk matrix)
+                    SimpleMatrix rowK_L = L.extractMatrix(k, k + 1, 0, k); // Row k of L (1xk matrix)
+                    double multiplier = zcond[k] - acond[k];               // Scalar multiplier
 
-        // Initialization variables used
-        SimpleMatrix aCond = new SimpleMatrix(nn, 1);
-        double[] zCond = new double[nn];
-        double[] left = new double[nn];
-        int[] step = new int[nn];
+                    // Compute the updated row (k-1)
+                    SimpleMatrix updatedRow = rowK_S.plus(rowK_L.scale(multiplier));
 
-        // Initialization at the n-th level (last index nn-1)
-        aCond.set(nn - 1, 0, aHat.get(nn - 1, 0));
-        zCond[nn - 1] = Math.round(aCond.get(nn - 1, 0));
-        left[nn - 1] = aCond.get(nn - 1, 0) - zCond[nn - 1];
-        step[nn - 1] = Integer.signum((int) left[nn - 1]);
+                    // Set the updated row (k-1) back into S
+                    S.insertIntoThis(k - 1, 0, updatedRow);
+                    acond[k-1] = ahat.get(k-1,0) + S.get(k-1,k-1);
+                    zcond[k-1] = Math.round(acond[k-1]);
+                    left = acond[k-1] - zcond[k-1];
+                    step[k-1] = Math.signum(left);
+                    if(step[k-1] == 0.0) step[k-1] = 1.0;
+                }else{
+                    if(count < ncands - 1){
+                        count = count + 1;
+                     // Convert zcond to a column SimpleMatrix
+                        SimpleMatrix zcondMatrix = new SimpleMatrix(n, 1, true, zcond);
 
-        // NOTE: very rarely, we need a positive step to avoid stall in the case an
-        // exact integer value is provided for "aHat(nn)"
-        if (step[nn - 1] == 0) {
-            step[nn - 1] = 1;
-        }
+                        // Set column (count - 1) of aFixed with zcondMatrix
+                        afixed.insertIntoThis(0, count - 1, zcondMatrix);
+                        sqnorm[count - 1] = newdist;
+                    }else{
+                    	// Convert zcond to a column SimpleMatrix
+                    	SimpleMatrix zcondMatrix = new SimpleMatrix(n, 1, true, zcond);
 
-        // Used to compute conditional ambiguities
-        SimpleMatrix S = new SimpleMatrix(nn, nn);
-
-        // Initializing the variable "dist[k] = sum_{j=k+1}^{n} (a_j - aCond_j)^2 / d_j"
-        double[] dist = new double[nn + 1];
-        Arrays.fill(dist, 0.0);
-
-        // Additional variables needed for keeping track of the conditional update
-        int[] path = new int[nn];
-        Arrays.fill(path, nn - 1);
-
-        // Algorithm GHAH (Ghasemmehdi and Agrell, 2011; [RD01])
-        int kk = nn - 1; // Start main search-loop from the last ambiguity component
-
-        // Iterative search
-        boolean endSearch = false;
-        while (!endSearch) {
-
-            // Current (partial) distance of a candidate solution
-            double newDist = dist[kk] + (left[kk] * left[kk]) / dVec[kk];
-
-            // Keep moving down if current (partial) distance is smaller than radius
-            while (newDist < maxChi2) {
-                if (kk != 0) {
-                    // Move down to level "k-1"
-                    kk = kk - 1;
-                    dist[kk] = newDist;
-
-                    // Conditionally update recalling previous updates by "path"
-                    for (int jj = path[kk]; jj >= kk + 1; jj--) {
-                        S.set(jj - 1, kk, S.get(jj, kk) - left[jj] * LMat.get(jj, kk));
-                    }
-
-                    aCond.set(kk, 0, aHat.get(kk, 0) + S.get(kk, kk));
-                    zCond[kk] = Math.round(aCond.get(kk, 0));
-                    left[kk] = aCond.get(kk, 0) - zCond[kk];
-                    step[kk] = Integer.signum((int) left[kk]);
-
-                    // NOTE: very rarely, we need a positive step to avoid stall in 
-                    // the case an exact integer value is found for "aCond(kk)"
-                    if (step[kk] == 0) {
-                        step[kk] = 1;
-                    }
-                } else {
-                    // Store the candidate found and try next valid integer
-                    if (intCount < numCands - 1) {
-                        intCount = intCount + 1;
-                        for (int i = 0; i < nn; i++) {
-                            aFix.set(i, intCount, zCond[i]);
-                        }
-                        sqNorm[intCount] = newDist;
-                    } else {
-                        for (int i = 0; i < nn; i++) {
-                            aFix.set(i, intMax - 1, zCond[i]);
-                        }
-                        sqNorm[intMax - 1] = newDist;
-                        double currentMaxChi2 = sqNorm[intMax - 1];
-                        for (int i = 0; i < sqNorm.length; i++) {
-                            if (sqNorm[i] > currentMaxChi2) {
-                                currentMaxChi2 = sqNorm[i];
-                                intMax = i + 1;
+                    	// Set column (imax - 1) of aFixed with zcondMatrix
+                    	afixed.insertIntoThis(0, imax - 1, zcondMatrix);
+                        sqnorm[imax-1] = newdist;
+                        Chi2 = sqnorm[0];
+                        imax = 1;
+                        for(int i = 1;i < sqnorm.length;i++){
+                            if(sqnorm[i] > Chi2){
+                                Chi2 = sqnorm[i];
+                                imax = i + 1;
                             }
                         }
-                        maxChi2 = currentMaxChi2;
                     }
-
-                    // Next valid integer (kk+1 level)
-                    kk = k0;
-                    zCond[kk] = zCond[kk] + step[kk];
-                    left[kk] = aCond.get(kk, 0) - zCond[kk];
-                    step[kk] = -step[kk] - Integer.signum(step[kk]);
-
+                    zcond[0] = zcond[0] + step[0];
+                    left = acond[0] - zcond[0];
+                    step[0] = -step[0] - Math.signum(step[0]);
                 }
-                newDist = dist[kk] + (left[kk] * left[kk]) / dVec[kk];
-            }
-            int iLevel = kk;
-
-            // Exit or move up
-            while (newDist >= maxChi2) {
-                if (kk == nn - 1) {
-                    endSearch = true;
-                    break;
-                }
-                kk = kk + 1; // Move up to level "kk+1"
-                zCond[kk] = zCond[kk] + step[kk]; // Next valid integer
-                left[kk] = aCond.get(kk, 0) - zCond[kk];
-                step[kk] = -step[kk] - Integer.signum(step[kk]);
-                newDist = dist[kk] + (left[kk] * left[kk]) / dVec[kk];
-            }
-
-            if (!endSearch) {
-                // Define "path" for the successive conditional update
-                for (int j = iLevel; j < kk; j++) {
-                    path[j] = kk;
-                }
-                for (int jj = iLevel - 1; jj >= 0; jj--) {
-                    if (path[jj] < kk) {
-                        path[jj] = kk;
-                    } else {
-                        break; // Exit from this for-loop
-                    }
+            }else{
+                if(k == n){
+                    endsearch = true;
+                }else{
+                    k += 1;
+                    zcond[k-1] = zcond[k-1] + step[k-1];
+                    left = acond[k-1] - zcond[k-1];
+                    step[k-1] = -step[k-1] - Math.signum(step[k-1]);
                 }
             }
         }
-
-        // Sort the solutions by their corresponding residuals' squared norm
-        // Create an array of indices
-        Integer[] indices = new Integer[sqNorm.length];
-        for (int i = 0; i < indices.length; i++) {
-            indices[i] = i;
+        int[] order = arraySort(sqnorm);
+        // Reorder the columns of afixed based on the "order" array
+        SimpleMatrix reorderedAFixed = new SimpleMatrix(n, ncands);
+        for (int i = 0; i < ncands; i++) {
+            // Extract the column corresponding to the "order[i]" index
+            SimpleMatrix column = afixed.extractVector(false, order[i]);
+            // Set the reordered column into the "reorderedAFixed" matrix
+            reorderedAFixed.insertIntoThis(0, i, column);
         }
 
-        // Sort indices based on sqNorm values
-        Arrays.sort(indices, Comparator.comparingDouble(i -> sqNorm[i]));
-
-        // Create sorted sqNorm and aFix
-        double[] sortedSqNorm = new double[sqNorm.length];
-        SimpleMatrix sortedAFix = new SimpleMatrix(nn, sqNorm.length);
-        for (int i = 0; i < indices.length; i++) {
-            sortedSqNorm[i] = sqNorm[indices[i]];
-            for (int j = 0; j < nn; j++) {
-                sortedAFix.set(j, i, aFix.get(j, indices[i]));
-            }
-        }
-
-        // If only nCands solutions are needed, truncate
-        if (numCands < sortedSqNorm.length) {
-            sortedSqNorm = Arrays.copyOfRange(sortedSqNorm, 0, numCands);
-            sortedAFix = sortedAFix.extractMatrix(0, nn, 0, numCands);
-        }
-
-        return new ILSResult(sortedAFix, sortedSqNorm);
+        // Update afixed with the reordered matrix
+        afixed = reorderedAFixed;
+        return new ILSResult(afixed, sqnorm);
     }
-}
 
+    private static int[] arraySort(double[] arr) {
+        double temp;
+        int index;
+        int k=arr.length;
+        int[]Index= new int[k];
+        for(int i=0;i<k;i++) {
+            Index[i]=i;
+        }
+
+        for(int i=0;i<arr.length;i++) {
+            for(int j=0;j<arr.length-i-1;j++) {
+                if(arr[j]>arr[j+1]) {
+                    temp = arr[j];
+                    arr[j] = arr[j+1];
+                    arr[j+1] = temp;
+
+                    index=Index[j];
+                    Index[j] = Index[j+1];
+                    Index[j+1] = index;
+                }
+            }
+        }
+        return Index;
+    }
+
+}

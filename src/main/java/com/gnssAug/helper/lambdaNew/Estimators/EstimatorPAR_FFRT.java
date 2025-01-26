@@ -2,10 +2,15 @@ package com.gnssAug.helper.lambdaNew.Estimators;
 
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.helper.lambda.Lambda;
+import com.gnssAug.helper.lambda.Ssearch;
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
+import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficientOld;
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
 import com.gnssAug.helper.lambdaNew.SuccessRate;
 import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.utility.Matrix;
+import com.gnssAug.utility.Vector;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 
@@ -126,24 +131,44 @@ public class EstimatorPAR_FFRT {
 		}
 
 		
-		SimpleMatrix LMat_subset_transpose = LMat.extractMatrix(kk_PAR, nn, kk_PAR, nn).transpose();
-		SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR, nn, 0, 1);
-		SimpleMatrix term = aHat_subset.minus(a_fix_PAR);
+		// Extract float ambiguities before and after kkPAR
+        SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1);          // a_hat(1:kk_PAR-1) in MATLAB
+        SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
 
-		SimpleMatrix inv_LMat = LMat.extractMatrix(kk_PAR, nn, kk_PAR, nn).transpose().invert();
-		SimpleMatrix multiplication = LMat_subset_transpose.mult(inv_LMat).mult(term);
-		SimpleMatrix a_cond_PAR = aHat.extractMatrix(0, kk_PAR, 0, 1).minus(multiplication);
+        // Extract relevant parts of LMat
+        SimpleMatrix L21 = LMat.extractMatrix(kk_PAR, LMat.numRows(), 0, kk_PAR).transpose(); // L_mat(kk_PAR:end,1:kk_PAR-1)'
+        SimpleMatrix L22 = LMat.extractMatrix(kk_PAR, LMat.numRows(), kk_PAR, LMat.numCols()).transpose(); // L_mat(kk_PAR:end,kk_PAR:end)'
 
-		// Return PAR solution(s)
-		aPAR = a_cond_PAR.combine(0, a_cond_PAR.numCols(), a_fix_PAR);
+        // Compute residual: (a_hat(kk_PAR:end) - a_fix_PAR)
+        SimpleMatrix residual = aHat2.minus(a_fix_PAR);
 
+        // Solve L22' \ residual
+        SimpleMatrix solved = L22.solve(residual);
+
+        // Compute adjustment: L21' * (L22' \ residual)
+        SimpleMatrix adjustment = L21.mult(solved);
+
+        // Compute the conditioned float solution
+        SimpleMatrix a_cond_PAR = aHat1.minus(adjustment);
+		
+        // Concatenate a_cond_PAR and a_fix_PAR vertically
+        aPAR = new SimpleMatrix(nn, 1);
+
+        // Set the first part of aPAR to aCondPAR
+        aPAR.insertIntoThis(0, 0, a_cond_PAR);
+
+        // Set the second part of aPAR to aFixPAR
+        aPAR.insertIntoThis(a_cond_PAR.numRows(), 0, a_fix_PAR);
+
+        // aPAR now contains the vertically concatenated result
+    
 		return new PARResult_FFRT(aPAR, nFixed, SR_PAR);
 	}
 
 	private static int findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
 			double[] srCumul, double minSR) {
 
-		double maxFR = 0.1 / 100.0;
+		double maxFR = 1 / 100.0;
 		int n = aHat.numRows();
 		for (int i = 0; i < n; i++) {
 			if (srCumul[i] >= minSR) {
@@ -151,9 +176,14 @@ public class EstimatorPAR_FFRT {
 			}
 			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat.extractMatrix(i, n, 0, 1),
 					LMat.extractMatrix(i, n, i, n), Arrays.copyOfRange(dVec, i, n), 2);
-			double mu_value = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n - 1); // Fixed-FR ratio
-
+			double mu_value = Lambda.ratioinv(maxFR,1 - srCumul[i],n);//ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n); // Fixed-FR ratio
 			double[] sqNorms = ilsResult.getSqNorm();
+			
+			System.out.println("Combination count: "+(n-i));
+			System.out.println("failure rate :" + (1-srCumul[i]) );
+			System.out.println("MU :" + mu_value );
+			System.out.println("ratio :" + (sqNorms[0] / sqNorms[1]) );
+			
 			// Step 4: Perform the Ratio Test based on the computed mu-value
 			if (sqNorms[0] / sqNorms[1] < mu_value) {
 				// If the ratio test passes, return the index

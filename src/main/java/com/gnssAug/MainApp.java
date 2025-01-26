@@ -25,7 +25,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (5) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -118,6 +118,34 @@ public class MainApp {
 			
 			Android.posEstimate(true, 0, 0, 14, obsvCodeList, null, basePath, GTcsv, bias_path,
 					clock_path, orbit_path, ionex_path, true, true, true, true, false, discardSet,true);
+			break;
+		case 5:
+			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
+			obsvCodeList = new String[] {"G1C","E1C"};
+			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Personal Data Collection/ASCM419739/SamsungS24Plus/gnss_log_2025_01_21_16_35_57.txt";
+
+			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
+			strList = basePath.split("/");
+			date = strList[strList.length - 1].split("_");
+			year = Integer.parseInt(date[2]);
+			month = Integer.parseInt(date[3]);
+			day = Integer.parseInt(date[4]);
+			cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+			cal.set(year, month - 1, day, 0, 0, 0);
+			doy = String.format("%03d", cal.get(Calendar.DAY_OF_YEAR));
+			mobName = strList[strList.length - 2];
+
+			bias_path = base_url + year + "_" + doy + sep + "GFZ0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
+			clock_path = base_url + year + "_" + doy + sep + "COD0OPSRAP_" + year + doy + "0000_01D_30S_CLK.CLK";
+			orbit_path = base_url + year + "_" + doy + sep + "COD0OPSRAP_" + year + doy + "0000_01D_05M_ORB.SP3";
+			ionex_path = base_url + year + "_" + doy + sep + "IGS0OPSRAP_"+ year + doy + "0000_01D_02H_GIM.INX";
+			// Urban Static
+			
+			llh = new double[] {51.081628,-114.134081,1110.130-16.7243};
+			trueEcef = LatLonUtil.lla2ecef(llh, true);
+			
+			Android_Static.posEstimate(true, 0, 0,2, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,false, false,true,discardSet,mobName);
 			break;
 		}
 		Instant end = Instant.now();

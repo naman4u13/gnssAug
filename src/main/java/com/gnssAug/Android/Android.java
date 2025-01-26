@@ -38,6 +38,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
@@ -95,7 +96,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -778,7 +779,7 @@ public class Android {
 				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
-				boolean onlyDoppler = false;
+				boolean onlyDoppler = true;
 				if (estimatorType == 19) {
 					estName += " Innov Phase-Rate";
 					innPhaseRate = true;
@@ -786,7 +787,7 @@ public class Android {
 					estName = " Doppler EKF";
 					onlyDoppler = true;
 				}
-				EKF_TDCP_ambFix ekf = new EKF_TDCP_ambFix();
+				EKF_TDCP_ambFix2 ekf = new EKF_TDCP_ambFix2();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
 						doTest, outlierAnalyze, innPhaseRate, onlyDoppler, trueEcefList);
 

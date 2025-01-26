@@ -297,7 +297,7 @@ public class Lambda {
     // Failure rate Pf.
     // Use tabulated values of MU depending on the ILS failure rate and
     // the number of float ambiguities
-    static public double ratioinv(double Pf_FIX, double PfILS, int n){
+    public static double ratioinv(double Pf_FIX, double PfILS, int n){
         int kPf = (int) Math.round(Pf_FIX*1000);
         if(kPf != 1 && kPf != 10) return Double.NaN;
         if(n < 1) return Double.NaN;

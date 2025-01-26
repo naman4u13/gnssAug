@@ -89,6 +89,8 @@ import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.utility.Matrix;
+import com.gnssAug.helper.lambda.Decorrel;
 import com.gnssAug.helper.lambdaNew.Estimators.*;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
@@ -184,6 +186,7 @@ public class LAMBDA {
 
 		// PRE-PROCESS: decorrelate ambiguities by an admissible Z-transformation
 		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
+		Decorrel decorrel = new Decorrel(new Jama.Matrix(Matrix.matrix2Array(qaHat)), new Jama.Matrix(Matrix.matrix2Array(aHat)));
 		SimpleMatrix qzHat = decorrelationResult.getQzHat();
 		SimpleMatrix lzMat = decorrelationResult.getLzMat();
 		double[] dzVec = decorrelationResult.getDzVec();
@@ -200,7 +203,7 @@ public class LAMBDA {
 		double minSR = 0.99;
 		String typeEstim = "ILS";
 		int[] dimBlocks = new int[] { (int) Math.floor(nn / 2.0), (int) Math.ceil(nn / 2.0) };
-		double maxFR = 0.1 / 100.0;
+		double maxFR = 1 / 100.0;
 		double betaIAB = 0.5;
 		double alphaBIE = 1e-6;
 
