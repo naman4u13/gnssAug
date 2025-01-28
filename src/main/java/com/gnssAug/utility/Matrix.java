@@ -103,4 +103,13 @@ public class Matrix {
 		SimpleMatrix Aplus = ((At.mult(W).mult(A)).invert()).mult(At).mult(W);
 		return Aplus;
 	}
+	
+	public static boolean areMatricesEqual(SimpleMatrix matrixA, SimpleMatrix matrixB, double tolerance) {
+        // Check dimensions first
+        if (matrixA.numRows() != matrixB.numRows() || matrixA.numCols() != matrixB.numCols()) {
+            return false; // Matrices are not of the same size
+        }
+        // Use isIdentical to check element-wise equality within the tolerance
+        return matrixA.isIdentical(matrixB, tolerance);
+    }
 }

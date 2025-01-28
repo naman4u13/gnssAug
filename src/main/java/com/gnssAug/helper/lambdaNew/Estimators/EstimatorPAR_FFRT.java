@@ -6,9 +6,11 @@ import com.gnssAug.helper.lambda.Lambda;
 import com.gnssAug.helper.lambda.Ssearch;
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficientOld;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
-import com.gnssAug.helper.lambdaNew.SuccessRate;
-import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
+import com.gnssAug.helper.lambdaNew.ComputeVariance;
+import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
@@ -87,7 +89,7 @@ public class EstimatorPAR_FFRT {
 		}
 
 		// Compute success rate for IB (exact formulation)
-		SRResult srResult = SuccessRate.computeSR_IBexact(dVec);
+		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dVec);
 		double SR_IB = srResult.getSR();
 		double[] SR_IB_cumul = srResult.getSR_cumul();
 
@@ -95,12 +97,12 @@ public class EstimatorPAR_FFRT {
 		double SR_PAR;
 		int nFixed;
 		SimpleMatrix aPAR;
-
+		VarianceResult varRes = null;
 		
 		kk_PAR = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, SR_IB_cumul, minSR);
 		if (kk_PAR == -1) {
 			// No AR
-			return new PARResult_FFRT(aHat, 0, SR_IB);
+			return new PARResult_FFRT(aHat, 0, SR_IB,null);
 		}
 		SR_PAR = SR_IB_cumul[kk_PAR];
 		nFixed = nn - kk_PAR;
@@ -127,6 +129,9 @@ public class EstimatorPAR_FFRT {
 			SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
 			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR, nn);
 			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
+			SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) 1e5);
+			System.out.println("CPU time for Var Estimation : "+varRes.getTimeCPU());
 			a_fix_PAR = ilsResult.getAFix();
 		}
 
@@ -135,6 +140,16 @@ public class EstimatorPAR_FFRT {
         SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1);          // a_hat(1:kk_PAR-1) in MATLAB
         SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
 
+        SimpleMatrix QMat = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
+        SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR,0, kk_PAR);
+        SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn,kk_PAR, nn);
+        SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR,kk_PAR, nn);
+        SimpleMatrix QMat_21 = QMat_12.transpose();
+        SimpleMatrix Q_fix_PAR = varRes.getVariance();
+        
+        SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
+       
+        
         // Extract relevant parts of LMat
         SimpleMatrix L21 = LMat.extractMatrix(kk_PAR, LMat.numRows(), 0, kk_PAR).transpose(); // L_mat(kk_PAR:end,1:kk_PAR-1)'
         SimpleMatrix L22 = LMat.extractMatrix(kk_PAR, LMat.numRows(), kk_PAR, LMat.numCols()).transpose(); // L_mat(kk_PAR:end,kk_PAR:end)'
@@ -149,8 +164,12 @@ public class EstimatorPAR_FFRT {
         SimpleMatrix adjustment = L21.mult(solved);
 
         // Compute the conditioned float solution
-        SimpleMatrix a_cond_PAR = aHat1.minus(adjustment);
+        SimpleMatrix a_cond_PAR2 = aHat1.minus(adjustment);
 		
+        
+        SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
+        SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
+        SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
         // Concatenate a_cond_PAR and a_fix_PAR vertically
         aPAR = new SimpleMatrix(nn, 1);
 
@@ -160,9 +179,13 @@ public class EstimatorPAR_FFRT {
         // Set the second part of aPAR to aFixPAR
         aPAR.insertIntoThis(a_cond_PAR.numRows(), 0, a_fix_PAR);
 
+        SimpleMatrix QPAR = new SimpleMatrix(nn, nn);
+        QPAR.insertIntoThis(0, 0, Q_cond_PAR);
+        QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
+        
         // aPAR now contains the vertically concatenated result
     
-		return new PARResult_FFRT(aPAR, nFixed, SR_PAR);
+		return new PARResult_FFRT(aPAR, nFixed, SR_PAR,QPAR);
 	}
 
 	private static int findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
@@ -201,11 +224,13 @@ public class EstimatorPAR_FFRT {
 		private SimpleMatrix aPAR;
 		private int nFixed;
 		private double SR_PAR;
+		private SimpleMatrix QPAR;
 
-		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR) {
+		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR,SimpleMatrix QPAR) {
 			this.aPAR = aPAR;
 			this.nFixed = nFixed;
 			this.SR_PAR = SR_PAR;
+			this.QPAR = QPAR;
 		}
 
 		public SimpleMatrix getaPAR() {
@@ -218,6 +243,10 @@ public class EstimatorPAR_FFRT {
 
 		public double getSR_PAR() {
 			return SR_PAR;
+		}
+		
+		public SimpleMatrix getQPAR() {
+			return QPAR;
 		}
 	}
 

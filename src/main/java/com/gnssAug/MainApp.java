@@ -25,7 +25,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (5) {
+		switch (1) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};

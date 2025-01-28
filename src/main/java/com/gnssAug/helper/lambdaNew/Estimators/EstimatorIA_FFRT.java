@@ -48,13 +48,15 @@ package com.gnssAug.helper.lambdaNew.Estimators;
  * -------------------------------------------------------------------------
  */
 
+import java.util.ArrayList;
+
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficientOld;
-import com.gnssAug.helper.lambdaNew.SuccessRate;
-import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.utility.Matrix;
 
@@ -67,8 +69,8 @@ public class EstimatorIA_FFRT {
         private SimpleMatrix aFix;
         private double sqNorm;
         private int nFixed;
-
-        public IAFFRTResult(SimpleMatrix aFix, double sqNorm, int nFixed) {
+        private ArrayList<SimpleMatrix> allCandidates;
+        public IAFFRTResult(SimpleMatrix aFix, double sqNorm, int nFixed,ArrayList<SimpleMatrix> allCandidates) {
             this.aFix = aFix;
             this.sqNorm = sqNorm;
             this.nFixed = nFixed;
@@ -85,6 +87,9 @@ public class EstimatorIA_FFRT {
         public int getnFixed() {
             return nFixed;
         }
+        public ArrayList<SimpleMatrix> getAllCandidates() {
+			return allCandidates;
+		}
     }
 
     /**
@@ -120,9 +125,9 @@ public class EstimatorIA_FFRT {
         ILSResult ilsResult = EstimatorILS.estimatorILS(aHat, lMat, dVec, 2);
         SimpleMatrix aFixTemp = ilsResult.getAFix();
         double[] sqNormTemp = ilsResult.getSqNorm();
-
+        ArrayList<SimpleMatrix> allCandidates = ilsResult.getAllCandidates();
         // Compute Success Rate (SR) and Failure Rate (FR)
-        SRResult srResult = SuccessRate.computeSR_IBexact(dVec);
+        SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dVec);
         double sr = srResult.getSR();
         double fr = 1.0 - sr;
 
@@ -133,7 +138,7 @@ public class EstimatorIA_FFRT {
             double sqNorm = sqNormTemp[0];
             int nFixed = nn;
 
-            return new IAFFRTResult(aFix, sqNorm, nFixed);
+            return new IAFFRTResult(aFix, sqNorm, nFixed,allCandidates);
         } else {
             // FR is over the threshold, compute the mu-value for IA
             double muValue;
@@ -149,13 +154,13 @@ public class EstimatorIA_FFRT {
                 double sqNorm = 0.0;
                 int nFixed = 0;
 
-                return new IAFFRTResult(aFix, sqNorm, nFixed);
+                return new IAFFRTResult(aFix, sqNorm, nFixed,new ArrayList<SimpleMatrix>(0));
             } else {
                 SimpleMatrix aFix = aFixTemp.extractVector(false, 0);
                 double sqNorm = sqNormTemp[0];
                 int nFixed = nn;
 
-                return new IAFFRTResult(aFix, sqNorm, nFixed);
+                return new IAFFRTResult(aFix, sqNorm, nFixed,allCandidates);
             }
         }
     }

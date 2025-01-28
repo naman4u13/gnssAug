@@ -96,7 +96,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test3";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test5";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -779,7 +779,7 @@ public class Android {
 				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
-				boolean onlyDoppler = true;
+				boolean onlyDoppler = false;
 				if (estimatorType == 19) {
 					estName += " Innov Phase-Rate";
 					innPhaseRate = true;

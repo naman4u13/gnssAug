@@ -3,12 +3,12 @@ package com.gnssAug.helper.lambdaNew;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.special.Erf;
 
-public class SuccessRate {
+public class ComputeSR_IBexact {
 
 	/**
 	 * Container class for the success rate results.
 	 */
-	public static class SRResult {
+	public static class SR_IB {
 		private double SR;
 		private double[] SR_cumul;
 		private double[] SR_vect;
@@ -20,7 +20,7 @@ public class SuccessRate {
 		 * @param SR_cumul Success rate for Partial AR (PAR) with incremental subsets
 		 * @param SR_vect  Success rate for each individual (conditioned) component
 		 */
-		public SRResult(double SR, double[] SR_cumul, double[] SR_vect) {
+		public SR_IB(double SR, double[] SR_cumul, double[] SR_vect) {
 			this.SR = SR;
 			this.SR_cumul = SR_cumul;
 			this.SR_vect = SR_vect;
@@ -61,7 +61,7 @@ public class SuccessRate {
 	 * @param dVec Conditional variances vector
 	 * @return SRResult containing SR, SR_cumul, and SR_vect
 	 */
-	public static SRResult computeSR_IBexact(double[] dVec) {
+	public static SR_IB computeSR_IBexact(double[] dVec) {
 		// Problem dimensionality
 		int nn = dVec.length;
 
@@ -94,7 +94,7 @@ public class SuccessRate {
             Ps *= (2 * cdf - 1);
         }
 
-		return new SRResult(SR, SR_cumul, SR_vect);
+		return new SR_IB(SR, SR_cumul, SR_vect);
 	}
 
 }

@@ -1,8 +1,10 @@
 package com.gnssAug.helper.lambdaNew.Estimators;
 
+import java.util.ArrayList;
+
 import org.ejml.simple.SimpleMatrix;
 
-import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS_old.ILSResult;
+
 
 //Integer ambiguity vector search by employing the search-and-shrink technique.
 public class EstimatorILS {
@@ -12,10 +14,11 @@ public class EstimatorILS {
     public static class ILSResult {
         private final SimpleMatrix aFix;
         private final double[] sqNorm;
-
-        public ILSResult(SimpleMatrix aFix, double[] sqNorm) {
+        private ArrayList<SimpleMatrix> allCandidates;
+        public ILSResult(SimpleMatrix aFix, double[] sqNorm,ArrayList<SimpleMatrix> allCandidates) {
             this.aFix = aFix;
             this.sqNorm = sqNorm;
+            this.allCandidates = allCandidates;
         }
 
         public SimpleMatrix getAFix() {
@@ -25,6 +28,12 @@ public class EstimatorILS {
         public double[] getSqNorm() {
             return sqNorm;
         }
+
+		public ArrayList<SimpleMatrix> getAllCandidates() {
+			return allCandidates;
+		}
+        
+        
     }
 
     /**
@@ -61,9 +70,16 @@ public class EstimatorILS {
 
         SimpleMatrix S = new SimpleMatrix(n,n);
         int k = n;
+        
+     // **Tracking all checked candidates**
+        ArrayList<SimpleMatrix> allCandidates = new ArrayList<>();
 
         while (!endsearch){
             double newdist = dist[k-1] + left*left/D[k-1];
+            
+            // Add the current zcond as a checked candidate
+            SimpleMatrix temp = new SimpleMatrix(n, 1, true, zcond);
+            allCandidates.add(temp.copy());
             if(newdist < Chi2){
                 if (k != 1){
                     k = k - 1;
@@ -135,7 +151,7 @@ public class EstimatorILS {
 
         // Update afixed with the reordered matrix
         afixed = reorderedAFixed;
-        return new ILSResult(afixed, sqnorm);
+        return new ILSResult(afixed, sqnorm,allCandidates);
     }
 
     private static int[] arraySort(double[] arr) {

@@ -29,7 +29,7 @@ public class DecorrelateVC {
      */
     public static DecorrelateVCResult decorrelateVC(SimpleMatrix qaHat, SimpleMatrix aHat) {
         // Compute LtDL-decomposition    | Qa_hat = La_mat' * diag(da_vec) * La_mat
-        DecompositionResult ltDl = DecomposeLtDL.decomposeLtDL(qaHat);
+        DecompositionResult ltDl = DecomposeLtDL.decomposeLtDL(qaHat.copy());
         SimpleMatrix laMat = ltDl.getLMat();
         double[] daVec = ltDl.getDVec();
 

@@ -112,4 +112,50 @@ public class Utilities {
         // Attempt to decompose the matrix; return true if successful
         return cholesky.decompose(denseMatrixCopy);
     }
+    
+    
+    /**
+     * Computes the number of samples required for SR approximation.
+     *
+     * This function computes the number of samples that are required, based on
+     * Central-limit theorem, to have an accurate success rate simulation-based
+     * approximation with Chebyshev inequality, i.e.
+     *
+     *                  P( | N0/N - P0 | > eSmall ) < probUB
+     *
+     * with N0/N being the computed empirical SR, see Sect. 3.4 in [RD01].
+     *
+     * @param p0      Expectation of the success rate (approximative value)
+     * @param eSmall  Threshold (small value) for the success rate error
+     * @param probUB  Probability upper bound for difference below the threshold
+     * @return nSamples Number of samples required
+     */
+    public static int computeNumSamples(double p0, double eSmall, double probUB) {
+        // Compute the approximative number of samples needed | Default is <=25e6
+        return (int) Math.floor(1 + (p0 * (1 - p0)) / (probUB * Math.pow(eSmall, 2)));
+    }
+
+    /**
+     * Computes the number of samples required for SR approximation with default probUB.
+     *
+     * @param p0      Expectation of the success rate (approximative value)
+     * @param eSmall  Threshold (small value) for the success rate error
+     * @return nSamples Number of samples required
+     */
+    public static int computeNumSamples(double p0, double eSmall) {
+        double probUB = 1.0 / 100;
+        return computeNumSamples(p0, eSmall, probUB);
+    }
+
+    /**
+     * Computes the number of samples required for SR approximation with default eSmall and probUB.
+     *
+     * @param p0  Expectation of the success rate (approximative value)
+     * @return nSamples Number of samples required
+     */
+    public static int computeNumSamples(double p0) {
+        double eSmall = 0.01;
+        double probUB = 1.0 / 100;
+        return computeNumSamples(p0, eSmall, probUB);
+    }
 }

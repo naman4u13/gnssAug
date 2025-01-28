@@ -1,9 +1,9 @@
 package com.gnssAug.helper.lambdaNew.Estimators;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
-import com.gnssAug.helper.lambdaNew.SuccessRate;
-import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 
@@ -89,7 +89,7 @@ public class EstimatorPAR {
         }
         
         // Compute success rate for IB (exact formulation)
-        SRResult srResult = SuccessRate.computeSR_IBexact(dVec);
+        SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dVec);
         double SR_IB = srResult.getSR();
         double[] SR_IB_cumul = srResult.getSR_cumul();
         

@@ -88,9 +88,10 @@ import org.ejml.data.DMatrixRMaj;
 
 import org.ejml.simple.SimpleMatrix;
 
-import com.gnssAug.helper.lambdaNew.SuccessRate.SRResult;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.helper.lambda.Decorrel;
+import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
+import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
 import com.gnssAug.helper.lambdaNew.Estimators.*;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
@@ -186,7 +187,6 @@ public class LAMBDA {
 
 		// PRE-PROCESS: decorrelate ambiguities by an admissible Z-transformation
 		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
-		Decorrel decorrel = new Decorrel(new Jama.Matrix(Matrix.matrix2Array(qaHat)), new Jama.Matrix(Matrix.matrix2Array(aHat)));
 		SimpleMatrix qzHat = decorrelationResult.getQzHat();
 		SimpleMatrix lzMat = decorrelationResult.getLzMat();
 		double[] dzVec = decorrelationResult.getDzVec();
@@ -195,7 +195,7 @@ public class LAMBDA {
 		SimpleMatrix zHat = decorrelationResult.getZHat();
 
 		// ADDITIONAL: computation of success rate & number of fixed components
-		SRResult srResult = SuccessRate.computeSR_IBexact(dzVec);
+		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dzVec);
 		int nFixed = nn;
 		double sr = srResult.getSR();
 		// OPTIONAL PARAMETERS: set default values or get additional inputs
@@ -206,7 +206,7 @@ public class LAMBDA {
 		double maxFR = 1 / 100.0;
 		double betaIAB = 0.5;
 		double alphaBIE = 1e-6;
-
+		
 		if (varArgs != null) {
 			if (varArgs.length > 0 && (method == 3 || method == 4 || method == 5|| method == 10)) {
 				nCands = (int) varArgs[0];
@@ -232,6 +232,7 @@ public class LAMBDA {
 		}
 
 		SimpleMatrix zFix = null;
+		SimpleMatrix QzFix = null;
 		double sqNorm = 0.0;
 
 		// METHODS: define the estimator (see LAMBDA 4.0 toolbox Documentation)
@@ -290,6 +291,7 @@ public class LAMBDA {
 			zFix = parResult_ffrt.getaPAR();
 			nFixed = parResult_ffrt.getnFixed();
 			sr = parResult_ffrt.getSR_PAR();
+			QzFix = parResult_ffrt.getQPAR();
 			break;
 		default:
 			throw new IllegalArgumentException("ATTENTION: the method selected is not available! Use 0-10.");
@@ -305,7 +307,15 @@ public class LAMBDA {
 		// Back Z-transformation with translation to the old origin
 		SimpleMatrix aFix = iZtMat.mult(zFix);
 		aFix = aFix.plus(aOrigin);
-
+		
+		if(QzFix!=null)
+		{
+			SimpleMatrix QFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
+			System.out.println("Fixed Ambiguity Variance");
+			System.out.println(QFix.toString());
+			
+		}
+		
 		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
 		if (method == 1 || method == 2 || method == 5 || method == 6 || method == 8 || method == 9|| method == 10) {
 			SimpleMatrix dzInverse = new SimpleMatrix(dzVec.length, dzVec.length);
