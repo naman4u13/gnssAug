@@ -96,7 +96,7 @@ public class Android {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test5";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/2021-03-10-US-SVL-1/test6";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;

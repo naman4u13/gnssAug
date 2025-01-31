@@ -6,7 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-public class VarianceCalculator {
+public class OptimizedVarCalc {
 
     /**
      * Calculates the variance matrix based on the provided candidates and samples.
@@ -17,23 +17,35 @@ public class VarianceCalculator {
      * @param tolerance     Numerical tolerance for comparing matrices.
      * @return Variance matrix (SimpleMatrix).
      */
-    public static SimpleMatrix calculateVariance(HashSet<String> allCandidatesKey, SimpleMatrix aFixAll, int nSamples, double tolerance) {
+    public static Object[] calculateVariance(HashSet<String> allCandidatesKey, SimpleMatrix aFixAll, int nSamples, double tolerance) {
         int nn = aFixAll.numRows();
+        String zeroKey ="";
+        for(int i=0;i<nn;i++)
+        {
+        	zeroKey += "0.0,";
+        }
         SimpleMatrix variance = new SimpleMatrix(nn, nn);
-
+        
         // Input validation to avoid edge cases
         if (allCandidatesKey == null || allCandidatesKey.isEmpty() || aFixAll == null || aFixAll.numCols() == 0 || nSamples <= 0) {
             throw new IllegalArgumentException("Invalid inputs: Candidates or samples cannot be empty, and nSamples must be > 0.");
         }
-
+        double failRate = 0;
         // Step 1: Preprocess all samples into a map for quick lookup with rounding to handle floating-point precision
         Map<String, Integer> sampleCounts = new HashMap<>();
         for (int jj = 0; jj < nSamples; jj++) {
             SimpleMatrix sample = aFixAll.extractVector(false, jj); // Extract column vector
+            
             String sampleKey = serializeMatrix(sample, tolerance); // Serialize the matrix into a key with rounding
+            if(areAllElementsIntegers(sample)&&!sampleKey.equals(zeroKey))
+            {
+            	failRate++;
+            }
             sampleCounts.put(sampleKey, sampleCounts.getOrDefault(sampleKey, 0) + 1);
         }
-
+        
+        int zeroSampleCount = sampleCounts.getOrDefault(zeroKey, 0);
+        double successRate = (zeroSampleCount*1.0)/nSamples;
         // Step 2: Process each candidate and compute contributions
         for (String candidateKey : allCandidatesKey) {
              // Serialize candidate to a key
@@ -43,12 +55,13 @@ public class VarianceCalculator {
                 // Contribution to the variance matrix
                 variance = variance.plus(candidate.mult(candidate.transpose()).scale((count * 1.0) / nSamples));
             }
+            
         }
-
+        
         // Step 3: Enforce symmetry on the variance matrix (optional but useful for numerical stability)
         variance = enforceSymmetry(variance);
-
-        return variance;
+        failRate = failRate/nSamples;
+        return new Object[] {variance,successRate,failRate};
     }
 
     /**
@@ -97,5 +110,22 @@ public class VarianceCalculator {
      */
     private static SimpleMatrix enforceSymmetry(SimpleMatrix matrix) {
         return matrix.plus(matrix.transpose()).scale(0.5);
+    }
+    
+    public static boolean areAllElementsIntegers(SimpleMatrix matrix) {
+        int rows = matrix.numRows();
+        int cols = matrix.numCols();
+
+        // Iterate over all elements and check if they are integers
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                double element = matrix.get(i, j);
+                // Check if the element is an integer (i.e., it's equal to its integer cast)
+                if (element != (int) element) {  // If element is not equal to its integer part
+                    return false;
+                }
+            }
+        }
+        return true;  // All elements are integers
     }
 }

@@ -15,6 +15,7 @@ import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
+import com.gnssAug.Android.constants.GnssDataConfig;
 
 import java.util.Arrays;
 
@@ -130,8 +131,8 @@ public class EstimatorPAR_FFRT {
 			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR, nn);
 			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
 			SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
-			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) 1e5);
-			System.out.println("CPU time for Var Estimation : "+varRes.getTimeCPU());
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
+			
 			a_fix_PAR = ilsResult.getAFix();
 		}
 
@@ -149,23 +150,6 @@ public class EstimatorPAR_FFRT {
         
         SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
        
-        
-        // Extract relevant parts of LMat
-        SimpleMatrix L21 = LMat.extractMatrix(kk_PAR, LMat.numRows(), 0, kk_PAR).transpose(); // L_mat(kk_PAR:end,1:kk_PAR-1)'
-        SimpleMatrix L22 = LMat.extractMatrix(kk_PAR, LMat.numRows(), kk_PAR, LMat.numCols()).transpose(); // L_mat(kk_PAR:end,kk_PAR:end)'
-
-        // Compute residual: (a_hat(kk_PAR:end) - a_fix_PAR)
-        SimpleMatrix residual = aHat2.minus(a_fix_PAR);
-
-        // Solve L22' \ residual
-        SimpleMatrix solved = L22.solve(residual);
-
-        // Compute adjustment: L21' * (L22' \ residual)
-        SimpleMatrix adjustment = L21.mult(solved);
-
-        // Compute the conditioned float solution
-        SimpleMatrix a_cond_PAR2 = aHat1.minus(adjustment);
-		
         
         SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
         SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);

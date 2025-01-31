@@ -386,22 +386,24 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				int nFixed = lmd.getnFixed();
 				double Ps = lmd.getSr();
 				afixed = lmd.getaFix();
+				SimpleMatrix qFixed = lmd.getqFix();
 				System.out.println(" Failure Rate : "+(1-Ps));
 				if (nFixed != 0) {
 					SimpleMatrix Cba = P.extractMatrix(0, 3 + m, 3 + m, 3 + m + ambCount);
 					SimpleMatrix Cbb_hat = P.extractMatrix(0, 3 + m, 0, 3 + m);
 					SimpleMatrix b_hat = x.extractMatrix(0, 3 + m, 0, 1);
-					SimpleMatrix Caa_inv = floatAmbCov.invert();
-					
-					SimpleMatrix a_inv_hat = new SimpleMatrix(afixed);
-					SimpleMatrix b_inv_hat = b_hat.minus(Cba.mult(Caa_inv).mult(a_hat.minus(a_inv_hat)));
-					SimpleMatrix Cbb_inv_hat = Cbb_hat.minus(Cba.mult(Caa_inv).mult(Cba.transpose()));
+					SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
+					SimpleMatrix Caa_caron = new SimpleMatrix(qFixed);
+					SimpleMatrix a_caron = new SimpleMatrix(afixed);
+					SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(a_hat.minus(a_caron)));
+					SimpleMatrix fixedTermContri = Cba.mult(Caa_hat_inv).mult(Caa_caron).mult(Caa_hat_inv).mult(Cba.transpose());
+					SimpleMatrix Cbb_caron = Cbb_hat.minus(Cba.mult(Caa_hat_inv).mult(Cba.transpose())).plus(fixedTermContri);
 					x = new SimpleMatrix(3 + m + ambCount, 1);
-					x.insertIntoThis(0, 0, b_inv_hat);
-					x.insertIntoThis(3 + m, 0, a_inv_hat);
-					P = new SimpleMatrix(Cbb_inv_hat);
+					x.insertIntoThis(0, 0, b_caron);
+					x.insertIntoThis(3 + m, 0, a_caron);
+					P = new SimpleMatrix(Cbb_caron);
 					System.out.println("Fixed Ambiguity Sequence");
-					System.out.println(a_inv_hat.toString());
+					System.out.println(a_caron.toString());
 					System.out.println(" N Fixed : "+nFixed );
 					
 					ambRepairedCountMap.put(currentTime, nFixed);
@@ -413,7 +415,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 						CycleSlipDetect csdObj = csdList.get(i);
 						if(csdObj.isCS())
 						{
-							double val = a_inv_hat.get(count);
+							double val = a_caron.get(count);
 							if(notNaNOrInfinity(val) && (int) val == val)
 							{
 								csdObj.setRepaired(true);

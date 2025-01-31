@@ -89,6 +89,7 @@ import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.utility.Matrix;
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.helper.lambda.Decorrel;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
@@ -105,16 +106,18 @@ public class LAMBDA {
 	 * Encapsulates the results of the LAMBDA computation.
 	 */
 	public static class LambdaResult {
-		public SimpleMatrix aFix; // Ambiguity fixed vector (column)
-		public double sqNorm; // Squared norm of the ambiguity residuals
-		public int nFixed; // Number of integer-fixed ambiguity components
-		public double sr; // Success rate (bootstrapping) for Full Ambiguity Resolution
-		public SimpleMatrix zMat; // Admissible Z-transformation matrix (unimodular)
-		public SimpleMatrix qzHat; // Variance-covariance matrix of the decorrelated ambiguities
+		private SimpleMatrix aFix; // Ambiguity fixed vector (column)
+		private SimpleMatrix qFix; // Variance of fixed ambiguity vector
+		private double sqNorm; // Squared norm of the ambiguity residuals
+		private int nFixed; // Number of integer-fixed ambiguity components
+		private double sr; // Success rate (bootstrapping) for Full Ambiguity Resolution
+		private SimpleMatrix zMat; // Admissible Z-transformation matrix (unimodular)
+		private SimpleMatrix qzHat; // Variance-covariance matrix of the decorrelated ambiguities
 
-		public LambdaResult(SimpleMatrix aFix, double sqNorm, int nFixed, double sr, SimpleMatrix zMat,
+		public LambdaResult(SimpleMatrix aFix, SimpleMatrix qFix, double sqNorm, int nFixed, double sr, SimpleMatrix zMat,
 				SimpleMatrix qzHat) {
 			this.aFix = aFix;
+			this.qFix = qFix;
 			this.sqNorm = sqNorm;
 			this.nFixed = nFixed;
 			this.sr = sr;
@@ -125,7 +128,10 @@ public class LAMBDA {
 		public SimpleMatrix getaFix() {
 			return aFix;
 		}
-
+		public SimpleMatrix getqFix()
+		{
+			return qFix;
+		}
 		public double getSqNorm() {
 			return sqNorm;
 		}
@@ -250,6 +256,7 @@ public class LAMBDA {
 			ILSResult ilsResult = EstimatorILS.estimatorILS(zHat, lzMat, dzVec, nCands);
 			zFix = ilsResult.getAFix().extractVector(false, 0);
 			sqNorm = ilsResult.getSqNorm()[0];
+			QzFix =  ComputeVariance.computeVariance(qzHat, 1, 0, null,(int) GnssDataConfig.nSamplesMC).getVariance();
 			break;
 //         case 4: // Compute ILS (enumeration) based on an initial ellipsoid
 //             double chi2 = computeInitialEllipsoid(zHat, lzMat, dzVec, nCands);
@@ -262,6 +269,7 @@ public class LAMBDA {
 			zFix = parResult.getaPAR();
 			nFixed = parResult.getnFixed();
 			sr = parResult.getSR_PAR();
+			QzFix = parResult.getQPAR();
 			break;
 //         case 6: // Compute VIB
 //             EstimatorVIBResult vibResult = estimatorVIB(zHat, lzMat, dzVec, typeEstim, dimBlocks);
@@ -273,6 +281,7 @@ public class LAMBDA {
 			zFix = iaFfrtResult.getaFix();
 			sqNorm = iaFfrtResult.getsqNorm();
 			nFixed = iaFfrtResult.getnFixed();
+			QzFix =  ComputeVariance.computeVariance(qzHat, 2, 0, maxFR,(int) GnssDataConfig.nSamplesMC).getVariance();
 			break;
 //         case 8: // Compute IAB (Integer Aperture Bootstrapping)
 //             EstimatorIABResult iabResult = estimatorIAB(zHat, lzMat, dzVec, betaIAB);
@@ -301,7 +310,7 @@ public class LAMBDA {
 		if (nFixed == 0) {
 			SimpleMatrix aFix = aHat.plus(aOrigin); // Back-translation to the old origin
 			double finalSqNorm = 0.0; // Squared norm of float vector is zero
-			return new LambdaResult(aFix, finalSqNorm, nFixed, sr, zMat, qzHat);
+			return new LambdaResult(aFix,null, finalSqNorm, nFixed, sr, zMat, qzHat);
 		}
 
 		// Back Z-transformation with translation to the old origin
@@ -331,7 +340,7 @@ public class LAMBDA {
 			sqNorm = residual;
 		}
 
-		return new LambdaResult(aFix, sqNorm, nFixed, sr, zMat, qzHat);
+		return new LambdaResult(aFix, QzFix,sqNorm, nFixed, sr, zMat, qzHat);
 	}
 
 }

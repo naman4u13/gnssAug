@@ -1,11 +1,15 @@
 package com.gnssAug.helper.lambdaNew.Estimators;
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
+import com.gnssAug.helper.lambdaNew.ComputeVariance;
+import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR_FFRT.PARResult_FFRT;
 
 import java.util.Arrays;
 
@@ -70,7 +74,7 @@ public class EstimatorPAR {
                                          Integer nCands, Double minSR, Double alphaBIE) {
         // Problem dimensionality
         int nn = aHat.numRows();
-        
+        VarianceResult varRes = null;
         // Check number of input arguments and set default values if necessary
         if (aHat == null || LMat == null || dVec == null) {
             throw new IllegalArgumentException("ATTENTION: number of inputs is insufficient!");
@@ -104,6 +108,8 @@ public class EstimatorPAR {
             kk_PAR = 1;
             SR_PAR = SR_IB;
             nFixed = nn;
+            SimpleMatrix qMat_subset = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
         } else {
             // Find the first index where cumulative SR meets or exceeds minSR
             kk_PAR = -1;
@@ -123,7 +129,7 @@ public class EstimatorPAR {
                 aPAR  = aHat;
                 SR_PAR = SR_IB;
                 nFixed = 0;
-                return new PARResult(aPAR, nFixed, SR_PAR);
+                return new PARResult(aPAR, nFixed, SR_PAR,null);
             }
         }
         
@@ -149,24 +155,44 @@ public class EstimatorPAR {
             SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
             double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
             ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
+            SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
             a_fix_PAR = ilsResult.getAFix();
         }
         
-        // Float solution of subset {I}, conditioned onto the fixed subset {II}
-        SimpleMatrix LMat_condition = LMat.extractMatrix(kk_PAR - 1, nn, 0, kk_PAR - 1);
-        SimpleMatrix LMat_subset_transpose = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn).transpose();
-        SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
-        SimpleMatrix term = aHat_subset.minus(a_fix_PAR);
+     // Extract float ambiguities before and after kkPAR
+        SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1);          // a_hat(1:kk_PAR-1) in MATLAB
+        SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
+
+        SimpleMatrix QMat = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
+        SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR,0, kk_PAR);
+        SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn,kk_PAR, nn);
+        SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR,kk_PAR, nn);
+        SimpleMatrix QMat_21 = QMat_12.transpose();
+        SimpleMatrix Q_fix_PAR = varRes.getVariance();
         
-        SimpleMatrix inv_LMat = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn).transpose().invert();
-        SimpleMatrix multiplication = LMat_subset_transpose.mult(inv_LMat).mult(term);
-        SimpleMatrix a_cond_PAR = aHat.extractMatrix(0, kk_PAR - 1, 0, 1).minus(multiplication);
+        SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
+       
         
-        // Return PAR solution(s)
-        aPAR = a_cond_PAR.combine(0, a_cond_PAR.numCols(), a_fix_PAR);
+        SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
+        SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
+        SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
+        // Concatenate a_cond_PAR and a_fix_PAR vertically
+        aPAR = new SimpleMatrix(nn, 1);
+
+        // Set the first part of aPAR to aCondPAR
+        aPAR.insertIntoThis(0, 0, a_cond_PAR);
+
+        // Set the second part of aPAR to aFixPAR
+        aPAR.insertIntoThis(a_cond_PAR.numRows(), 0, a_fix_PAR);
+
+        SimpleMatrix QPAR = new SimpleMatrix(nn, nn);
+        QPAR.insertIntoThis(0, 0, Q_cond_PAR);
+        QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
         
-        return new PARResult(aPAR, nFixed, SR_PAR);
-    }
+        // aPAR now contains the vertically concatenated result
+    
+		return new PARResult(aPAR, nFixed, SR_PAR,QPAR);    }
     
 
     
@@ -177,8 +203,9 @@ public class EstimatorPAR {
         private SimpleMatrix aPAR;
         private int nFixed;
         private double SR_PAR;
+        private SimpleMatrix QPAR;
         
-        public PARResult(SimpleMatrix aPAR, int nFixed, double SR_PAR) {
+        public PARResult(SimpleMatrix aPAR, int nFixed, double SR_PAR,SimpleMatrix QPAR) {
             this.aPAR = aPAR;
             this.nFixed = nFixed;
             this.SR_PAR = SR_PAR;
@@ -195,6 +222,9 @@ public class EstimatorPAR {
         public double getSR_PAR() {
             return SR_PAR;
         }
+        public SimpleMatrix getQPAR() {
+			return QPAR;
+		}
     }
     
     

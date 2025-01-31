@@ -4,6 +4,10 @@ import java.util.ArrayList;
 
 import org.ejml.simple.SimpleMatrix;
 
+import com.gnssAug.Android.constants.GnssDataConfig;
+import com.gnssAug.helper.lambdaNew.ComputeVariance;
+import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
+
 
 
 //Integer ambiguity vector search by employing the search-and-shrink technique.
@@ -15,6 +19,7 @@ public class EstimatorILS {
         private final SimpleMatrix aFix;
         private final double[] sqNorm;
         private ArrayList<SimpleMatrix> allCandidates;
+        
         public ILSResult(SimpleMatrix aFix, double[] sqNorm,ArrayList<SimpleMatrix> allCandidates) {
             this.aFix = aFix;
             this.sqNorm = sqNorm;
@@ -32,6 +37,7 @@ public class EstimatorILS {
 		public ArrayList<SimpleMatrix> getAllCandidates() {
 			return allCandidates;
 		}
+		
         
         
     }
@@ -151,6 +157,7 @@ public class EstimatorILS {
 
         // Update afixed with the reordered matrix
         afixed = reorderedAFixed;
+        
         return new ILSResult(afixed, sqnorm,allCandidates);
     }
 

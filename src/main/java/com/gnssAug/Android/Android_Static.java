@@ -91,7 +91,7 @@ public class Android_Static {
 			Clock clock = null;
 			IONEX ionex = null;
 			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
-					+ mobName + "_test3";
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -105,7 +105,7 @@ public class Android_Static {
 			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
 			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
 			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
-
+			System.out.println("Q matrix for vel_rand_walk = " + GnssDataConfig.nSamplesMC);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
 			GNSS_Log.process(gnss_log_path);
