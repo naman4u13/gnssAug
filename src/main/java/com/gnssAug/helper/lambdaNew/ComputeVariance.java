@@ -18,8 +18,10 @@ import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIR;
 import com.gnssAug.utility.Matrix;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -44,10 +46,10 @@ public class ComputeVariance {
 	 *                                  invalid estimator is selected
 	 */
 	public static VarianceResult computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR,
-			Integer nSamples) {
+			Integer nSamples, Double muRatio) {
 		// Problem dimensionality
 		int nn = QMat.numCols();
-
+		HashMap<String, ILSResult> ILSmap = new HashMap<String, ILSResult>();
 		HashSet<String> allCandidatesKey = new HashSet<String>();
 		SimpleMatrix LMat;
 		double[] dVec;
@@ -105,48 +107,36 @@ public class ComputeVariance {
 		case 1: // Use ILS
 			for (int ii = 0; ii < nSamples; ii++) {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
-				ILSResult ilsResult = EstimatorILS.estimatorILS(aHat, LMat, dVec, 1);
+				ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
 				SimpleMatrix aFix = ilsResult.getAFix();
-				for (SimpleMatrix res : ilsResult.getAllCandidates()) {
-					String key = serializeMatrix(res, 1e-9);
-					allCandidatesKey.add(key);
-				}
-				for (int row = 0; row < aFix.numRows(); row++) {
-					aFixAll.set(row, ii, aFix.get(row));
-				}
+//				for (SimpleMatrix res : ilsResult.getAllCandidates()) {
+//					String key = serializeMatrix(res, 1e-9);
+//					allCandidatesKey.add(key);
+//				}
+				aFixAll.insertIntoThis(0, ii, aFix);
+				
 			}
 			break;
 
 		case 2: // Use IA-FFRT (ILS w/ Fixed Failure-rate Ratio Test)
 			for (int ii = 0; ii < nSamples; ii++) {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
-				IAFFRTResult IAFFRTresult = EstimatorIA_FFRT.estimatorIA_FFRT(aHat, LMat, dVec, maxFR, null);
+				IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
 				SimpleMatrix aFix = IAFFRTresult.getaFix();
-				for (SimpleMatrix res : IAFFRTresult.getAllCandidates()) {
-					String key = serializeMatrix(res, 1e-9);
-					allCandidatesKey.add(key);
+				if (IAFFRTresult.getnFixed() != 0) {
+					aFixAll.insertIntoThis(0, ii, aFix);
+					
+				}
+				
 
-				}
-				for (int row = 0; row < aFix.numRows(); row++) {
-					aFixAll.set(row, ii, aFix.get(row));
-				}
 			}
 			break;
-		case 3: // Use ILS
-			try {
-				Object[] parallelThreadILSsoln = parallelThreadILS(cholQMat, nn, nSamples, LMat, dVec, rand);
-				aFixAll = (SimpleMatrix) parallelThreadILSsoln[0];
-				allCandidatesKey = (HashSet<String>) parallelThreadILSsoln[1];
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			break;
+	
 
 		default:
 			throw new IllegalArgumentException("ATTENTION: the estimator selected is not available! Use 1-7.");
 		}
-		Object[] varCalRes = OptimizedVarCalc.calculateVariance(allCandidatesKey, aFixAll, nSamples, 1e-9);
+		Object[] varCalRes = OptimizedVarCalc2.calculateVariance(aFixAll, nSamples);
 		SimpleMatrix variance = (SimpleMatrix) varCalRes[0];
 		double approxSR = (double) varCalRes[1];
 		double approxFR = (double) varCalRes[2];
@@ -209,51 +199,7 @@ public class ComputeVariance {
 		return symmetricMatrix;
 	}
 
-	private static Object[] parallelThreadILS(SimpleMatrix cholQMat, int nn, int nSamples, SimpleMatrix LMat,
-			double[] dVec, Random rand) throws InterruptedException {
-
-		// Generate aHatAll matrix
-		SimpleMatrix aHatAll = cholQMat.transpose().mult(generateRandn(nn, nSamples, rand));
-
-		// Thread-safe map for storing aFix results (using column index as key)
-		ConcurrentMap<Integer, SimpleMatrix> aFixMap = new ConcurrentHashMap<>();
-
-		// Thread-safe set implementation using ConcurrentHashMap for storing all
-		// candidate keys
-		ConcurrentHashMap<String, Boolean> allCandidatesKeySet = new ConcurrentHashMap<>();
-
-		// Parallel processing using IntStream
-		IntStream.range(0, nSamples).parallel().forEach(ii -> {
-			// Extract column vector aHat for the current sample
-			SimpleMatrix aHat = aHatAll.extractVector(false, ii);
-
-			// Perform the ILS estimation
-			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat, LMat, dVec, 1);
-
-			// Get the fixed solution (aFix)
-			SimpleMatrix aFix = ilsResult.getAFix();
-
-			// Store all candidate keys in a thread-safe set
-			for (SimpleMatrix res : ilsResult.getAllCandidates()) {
-				String key = serializeMatrix(res, 1e-9);
-				allCandidatesKeySet.put(key, Boolean.TRUE); // Simulating a set
-			}
-
-			// Store the fixed solution (aFix) in the thread-safe map
-			aFixMap.put(ii, aFix);
-		});
-
-		// Merge results back into aFixAll
-		SimpleMatrix aFixAll = new SimpleMatrix(nn, nSamples);
-		aFixMap.forEach((colIndex, aFix) -> {
-			for (int row = 0; row < aFix.numRows(); row++) {
-				aFixAll.set(row, colIndex, aFix.get(row));
-			}
-		});
-
-		HashSet<String> allCandidatesKey = new HashSet<String>(allCandidatesKeySet.keySet());
-		return new Object[] { aFixAll, allCandidatesKey };
-	}
+	
 
 	/**
 	 * Serializes a SimpleMatrix to a key with rounding to avoid numerical precision
@@ -263,14 +209,5 @@ public class ComputeVariance {
 	 * @param tolerance Numerical tolerance for rounding.
 	 * @return A serialized string key representing the matrix.
 	 */
-	private static String serializeMatrix(SimpleMatrix matrix, double tolerance) {
-		StringBuilder keyBuilder = new StringBuilder();
-		for (int i = 0; i < matrix.numRows(); i++) {
-			// Round each element to the specified tolerance
-			double roundedValue = Math.round(matrix.get(i, 0) / tolerance) * tolerance;
-			keyBuilder.append(roundedValue).append(",");
-		}
-		return keyBuilder.toString();
-	}
-
+	
 }

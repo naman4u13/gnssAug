@@ -75,6 +75,10 @@ public class OptimizedVarCalc {
         StringBuilder keyBuilder = new StringBuilder();
         for (int i = 0; i < matrix.numRows(); i++) {
             // Round each element to the specified tolerance
+        	if(Double.isNaN(matrix.get(i, 0)))
+        	{
+        		return "NaN";
+        	}
             double roundedValue = Math.round(matrix.get(i, 0) / tolerance) * tolerance;
             keyBuilder.append(roundedValue).append(",");
         }

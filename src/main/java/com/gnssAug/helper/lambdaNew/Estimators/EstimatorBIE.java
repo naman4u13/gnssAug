@@ -110,7 +110,7 @@ public class EstimatorBIE {
             int nIntegers = 1 + 2 * (nn * nn - 1); // More efficient in high dimensions
 
             // Call ILS estimator to find closest "nIntegers" candidates
-            ILSResult ilsResult = EstimatorILS.estimatorILS(aHat, LMat, dVec, nIntegers);
+            ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, nIntegers);
 
             // Define BIE weights (for Gaussian distribution)
             SimpleMatrix wBIE = new SimpleMatrix(ilsResult.getSqNorm().length, 1);

@@ -68,7 +68,7 @@ public class EstimatorPAR_FFRT {
 	 * @throws IllegalArgumentException if number of inputs is insufficient
 	 */
 	public static PARResult_FFRT estimatorPAR_FFRT(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, Integer nCands,
-			Double minSR, Double alphaBIE) {
+			Double minSR) {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
@@ -85,10 +85,6 @@ public class EstimatorPAR_FFRT {
 			minSR = 0.995; // Default minimum success rate threshold
 		}
 
-		if (alphaBIE == null) {
-			alphaBIE = 0.0; // By default, use ILS estimator
-		}
-
 		// Compute success rate for IB (exact formulation)
 		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dVec);
 		double SR_IB = srResult.getSR();
@@ -98,107 +94,101 @@ public class EstimatorPAR_FFRT {
 		double SR_PAR;
 		int nFixed;
 		SimpleMatrix aPAR;
-		VarianceResult varRes = null;
-		
-		kk_PAR = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, SR_IB_cumul, minSR);
-		if (kk_PAR == -1) {
+
+		Object[] findFirstRes = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, SR_IB_cumul, minSR);
+
+		if (findFirstRes == null) {
 			// No AR
-			return new PARResult_FFRT(aHat, 0, SR_IB,null);
+			return new PARResult_FFRT(aHat, 0, SR_IB, null);
 		}
+		ILSResult ilsResult = (ILSResult) findFirstRes[0];
+		VarianceResult varRes = (VarianceResult) findFirstRes[1];
+		kk_PAR = (int) findFirstRes[2];
 		SR_PAR = SR_IB_cumul[kk_PAR];
 		nFixed = nn - kk_PAR;
-		
-		
+
 		// Find fixed solution of subset {II} with sufficiently high success rate
 		SimpleMatrix a_fix_PAR;
-		if (alphaBIE > 0.0 && alphaBIE < 1.0) {
-			double Chi2_BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1 - alphaBIE, nFixed / 2.0);
-			
-			// Call BIE-estimator (recursive implementation)
-			SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR, nn, 0, 1);
-			SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
-			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR, nn);
-			EstimatorBIEResult bieResult = EstimatorBIE.estimatorBIE(aHat_subset, LMat_subset, dVec_subset, Chi2_BIE,
-					null);
-			a_fix_PAR = bieResult.getaBIE();
-			// NOTE: this is an experimental PAR (BIE) approach still based on the
-			// SR criterion. We suggest to use "minSR = 0.50" & "alphaBIE = 1e-6",
-			// or to check the alternative implementation in 'estimatorPAR_BIE.m'
-		} else {
-			// Call ILS-estimator (search-and-shrink)
-			SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR, nn, 0, 1);
-			SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
-			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR, nn);
-			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
-			SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
-			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
-			
-			a_fix_PAR = ilsResult.getAFix();
-		}
 
-		
+		a_fix_PAR = ilsResult.getAFix().extractVector(false, 0);
+
 		// Extract float ambiguities before and after kkPAR
-        SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1);          // a_hat(1:kk_PAR-1) in MATLAB
-        SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
+		SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1); // a_hat(1:kk_PAR-1) in MATLAB
+		SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
 
-        SimpleMatrix QMat = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
-        SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR,0, kk_PAR);
-        SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn,kk_PAR, nn);
-        SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR,kk_PAR, nn);
-        SimpleMatrix QMat_21 = QMat_12.transpose();
-        SimpleMatrix Q_fix_PAR = varRes.getVariance();
-        
-        SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
-       
-        
-        SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
-        SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
-        SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
-        // Concatenate a_cond_PAR and a_fix_PAR vertically
-        aPAR = new SimpleMatrix(nn, 1);
+		SimpleMatrix QMat = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
+		SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR, 0, kk_PAR);
+		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
+		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR, kk_PAR, nn);
+		SimpleMatrix QMat_21 = QMat_12.transpose();
+		SimpleMatrix Q_fix_PAR = varRes.getVariance();
 
-        // Set the first part of aPAR to aCondPAR
-        aPAR.insertIntoThis(0, 0, a_cond_PAR);
+		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 
-        // Set the second part of aPAR to aFixPAR
-        aPAR.insertIntoThis(a_cond_PAR.numRows(), 0, a_fix_PAR);
+		SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
+		SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
+		SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
+		// Concatenate a_cond_PAR and a_fix_PAR vertically
+		aPAR = new SimpleMatrix(nn, 1);
 
-        SimpleMatrix QPAR = new SimpleMatrix(nn, nn);
-        QPAR.insertIntoThis(0, 0, Q_cond_PAR);
-        QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
-        
-        // aPAR now contains the vertically concatenated result
-    
-		return new PARResult_FFRT(aPAR, nFixed, SR_PAR,QPAR);
+		// Set the first part of aPAR to aCondPAR
+		aPAR.insertIntoThis(0, 0, a_cond_PAR);
+
+		// Set the second part of aPAR to aFixPAR
+		aPAR.insertIntoThis(a_cond_PAR.numRows(), 0, a_fix_PAR);
+
+		SimpleMatrix QPAR = new SimpleMatrix(nn, nn);
+		QPAR.insertIntoThis(0, 0, Q_cond_PAR);
+		QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
+
+		// aPAR now contains the vertically concatenated result
+
+		return new PARResult_FFRT(aPAR, nFixed, SR_PAR, QPAR);
 	}
 
-	private static int findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
+	private static Object[] findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
 			double[] srCumul, double minSR) {
 
 		double maxFR = 1 / 100.0;
 		int n = aHat.numRows();
+		boolean flag = false;
+		double muRatio = 1;
 		for (int i = 0; i < n; i++) {
-			if (srCumul[i] >= minSR) {
-				return i;
-			}
-			ILSResult ilsResult = EstimatorILS.estimatorILS(aHat.extractMatrix(i, n, 0, 1),
+			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat.extractMatrix(i, n, 0, 1),
 					LMat.extractMatrix(i, n, i, n), Arrays.copyOfRange(dVec, i, n), 2);
-			double mu_value = Lambda.ratioinv(maxFR,1 - srCumul[i],n);//ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n); // Fixed-FR ratio
-			double[] sqNorms = ilsResult.getSqNorm();
-			
-			System.out.println("Combination count: "+(n-i));
-			System.out.println("failure rate :" + (1-srCumul[i]) );
-			System.out.println("MU :" + mu_value );
-			System.out.println("ratio :" + (sqNorms[0] / sqNorms[1]) );
-			
-			// Step 4: Perform the Ratio Test based on the computed mu-value
-			if (sqNorms[0] / sqNorms[1] < mu_value) {
+			if (srCumul[i] >= minSR) {
+				flag = true;
+
+			}
+			if (!flag) {
+				muRatio = Lambda.ratioinv(maxFR, 1 - srCumul[i], n-i);// ComputeFFRTCoefficient.computeFFRTcoeff(maxFR,
+																	// 1 - srCumul[i], n); // Fixed-FR ratio
+				double[] sqNorms = ilsResult.getSqNorm();
+
+				System.out.println("Combination count: " + (n - i));
+				System.out.println("failure rate :" + (1 - srCumul[i]));
+				System.out.println("MU :" + muRatio);
+				System.out.println("ratio :" + (sqNorms[0] / sqNorms[1]));
+
+				// Step 4: Perform the Ratio Test based on the computed mu-value
+				if (sqNorms[0] / sqNorms[1] < muRatio) {
+					flag = true;
+				}
+			}
+			if (flag) {
+				SimpleMatrix LMat_subset = LMat.extractMatrix(i, n, i, n);
+				double[] dVec_subset = Arrays.copyOfRange(dVec, i, n);
+				SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset))
+						.mult(LMat_subset);
+				int est = 1;
+				VarianceResult varRes = ComputeVariance.computeVariance(qMat_subset, est, 0, 1 / 100.0,
+						(int) GnssDataConfig.nSamplesMC, muRatio);
 				// If the ratio test passes, return the index
-				return i;
+				return new Object[] { ilsResult, varRes, i };
 			}
 
 		}
-		return -1; // Should not occur if threshold logic is correct
+		return null; // Should not occur if threshold logic is correct
 	}
 
 	/**
@@ -210,7 +200,7 @@ public class EstimatorPAR_FFRT {
 		private double SR_PAR;
 		private SimpleMatrix QPAR;
 
-		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR,SimpleMatrix QPAR) {
+		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR, SimpleMatrix QPAR) {
 			this.aPAR = aPAR;
 			this.nFixed = nFixed;
 			this.SR_PAR = SR_PAR;
@@ -228,7 +218,7 @@ public class EstimatorPAR_FFRT {
 		public double getSR_PAR() {
 			return SR_PAR;
 		}
-		
+
 		public SimpleMatrix getQPAR() {
 			return QPAR;
 		}

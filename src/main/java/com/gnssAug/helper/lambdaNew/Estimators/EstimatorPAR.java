@@ -109,7 +109,7 @@ public class EstimatorPAR {
             SR_PAR = SR_IB;
             nFixed = nn;
             SimpleMatrix qMat_subset = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
-			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC,null);
         } else {
             // Find the first index where cumulative SR meets or exceeds minSR
             kk_PAR = -1;
@@ -154,9 +154,9 @@ public class EstimatorPAR {
             SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
             SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
             double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
-            ILSResult ilsResult = EstimatorILS.estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
+            ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
             SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
-			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC);
+			varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null,(int) GnssDataConfig.nSamplesMC,null);
             a_fix_PAR = ilsResult.getAFix();
         }
         

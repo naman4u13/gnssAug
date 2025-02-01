@@ -253,10 +253,10 @@ public class LAMBDA {
 			zFix = EstimatorIB.estimatorIB(zHat, lzMat);
 			break;
 		case 3: // Compute ILS (shrink-and-search) [DEFAULT]
-			ILSResult ilsResult = EstimatorILS.estimatorILS(zHat, lzMat, dzVec, nCands);
+			ILSResult ilsResult = new EstimatorILS().estimatorILS(zHat, lzMat, dzVec, nCands);
 			zFix = ilsResult.getAFix().extractVector(false, 0);
 			sqNorm = ilsResult.getSqNorm()[0];
-			QzFix =  ComputeVariance.computeVariance(qzHat, 1, 0, null,(int) GnssDataConfig.nSamplesMC).getVariance();
+			QzFix =  ComputeVariance.computeVariance(qzHat, 1, 0, null,(int) GnssDataConfig.nSamplesMC,null).getVariance();
 			break;
 //         case 4: // Compute ILS (enumeration) based on an initial ellipsoid
 //             double chi2 = computeInitialEllipsoid(zHat, lzMat, dzVec, nCands);
@@ -277,11 +277,12 @@ public class LAMBDA {
 //             nFixed = vibResult.nFixed;
 //             break;
 		case 7: // Compute IA-FFRT (ILS with Fixed Failure-rate Ratio Test)
-			IAFFRTResult iaFfrtResult = EstimatorIA_FFRT.estimatorIA_FFRT(zHat, lzMat, dzVec, maxFR, null);
+			IAFFRTResult iaFfrtResult = new EstimatorIA_FFRT().estimatorIA_FFRT(zHat, lzMat, dzVec, maxFR, null);
 			zFix = iaFfrtResult.getaFix();
 			sqNorm = iaFfrtResult.getsqNorm();
 			nFixed = iaFfrtResult.getnFixed();
-			QzFix =  ComputeVariance.computeVariance(qzHat, 2, 0, maxFR,(int) GnssDataConfig.nSamplesMC).getVariance();
+			
+			QzFix =  ComputeVariance.computeVariance(qzHat, 2, 0, maxFR,(int) GnssDataConfig.nSamplesMC,iaFfrtResult.getMuRatio()).getVariance();
 			break;
 //         case 8: // Compute IAB (Integer Aperture Bootstrapping)
 //             EstimatorIABResult iabResult = estimatorIAB(zHat, lzMat, dzVec, betaIAB);
@@ -296,7 +297,7 @@ public class LAMBDA {
 			zFix = BieResult.getaBIE();
 			break;
 		case 10: // Compute PAR
-			PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR, null);
+			PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR);
 			zFix = parResult_ffrt.getaPAR();
 			nFixed = parResult_ffrt.getnFixed();
 			sr = parResult_ffrt.getSR_PAR();

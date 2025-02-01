@@ -15,15 +15,15 @@ public class EstimatorILS {
 	/**
      * Container class for the ILS estimation results.
      */
-    public static class ILSResult {
+    public class ILSResult {
         private final SimpleMatrix aFix;
         private final double[] sqNorm;
-        private ArrayList<SimpleMatrix> allCandidates;
         
-        public ILSResult(SimpleMatrix aFix, double[] sqNorm,ArrayList<SimpleMatrix> allCandidates) {
+        
+        public ILSResult(SimpleMatrix aFix, double[] sqNorm) {
             this.aFix = aFix;
             this.sqNorm = sqNorm;
-            this.allCandidates = allCandidates;
+            
         }
 
         public SimpleMatrix getAFix() {
@@ -33,12 +33,6 @@ public class EstimatorILS {
         public double[] getSqNorm() {
             return sqNorm;
         }
-
-		public ArrayList<SimpleMatrix> getAllCandidates() {
-			return allCandidates;
-		}
-		
-        
         
     }
 
@@ -53,7 +47,7 @@ public class EstimatorILS {
      * @throws IllegalArgumentException if the number of input arguments is insufficient
      */
 
-    public static ILSResult estimatorILS(SimpleMatrix ahat, SimpleMatrix L, double[] D, Integer ncands) {
+    public ILSResult estimatorILS(SimpleMatrix ahat, SimpleMatrix L, double[] D, Integer ncands) {
         int n = ahat.numRows();
         SimpleMatrix afixed = new SimpleMatrix(n,ncands);
         double[] sqnorm = new double[ncands];
@@ -77,15 +71,14 @@ public class EstimatorILS {
         SimpleMatrix S = new SimpleMatrix(n,n);
         int k = n;
         
-     // **Tracking all checked candidates**
-        ArrayList<SimpleMatrix> allCandidates = new ArrayList<>();
+     
 
         while (!endsearch){
             double newdist = dist[k-1] + left*left/D[k-1];
             
             // Add the current zcond as a checked candidate
             SimpleMatrix temp = new SimpleMatrix(n, 1, true, zcond);
-            allCandidates.add(temp.copy());
+           
             if(newdist < Chi2){
                 if (k != 1){
                     k = k - 1;
@@ -158,7 +151,7 @@ public class EstimatorILS {
         // Update afixed with the reordered matrix
         afixed = reorderedAFixed;
         
-        return new ILSResult(afixed, sqnorm,allCandidates);
+        return new ILSResult(afixed, sqnorm);
     }
 
     private static int[] arraySort(double[] arr) {
