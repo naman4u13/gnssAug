@@ -3,36 +3,17 @@ package com.gnssAug.helper.lambdaNew;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.CholeskyDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.ejml.data.DMatrixRMaj;
-import org.ejml.dense.row.decomposition.chol.CholeskyDecompositionLDL_DDRM;
-import org.ejml.dense.row.factory.DecompositionFactory_DDRM;
-import org.ejml.interfaces.decomposition.CholeskyDecomposition_F64;
 import org.ejml.simple.SimpleMatrix;
-
 import com.gnssAug.helper.lambdaNew.DecomposeLtDL.DecompositionResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
-import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
-import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIR;
 import com.gnssAug.utility.Matrix;
-
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+
 import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.stream.IntStream;
 
 public class ComputeVariance {
 
@@ -109,12 +90,8 @@ public class ComputeVariance {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
 				ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
 				SimpleMatrix aFix = ilsResult.getAFix();
-//				for (SimpleMatrix res : ilsResult.getAllCandidates()) {
-//					String key = serializeMatrix(res, 1e-9);
-//					allCandidatesKey.add(key);
-//				}
 				aFixAll.insertIntoThis(0, ii, aFix);
-				
+
 			}
 			break;
 
@@ -125,13 +102,11 @@ public class ComputeVariance {
 				SimpleMatrix aFix = IAFFRTresult.getaFix();
 				if (IAFFRTresult.getnFixed() != 0) {
 					aFixAll.insertIntoThis(0, ii, aFix);
-					
+
 				}
-				
 
 			}
 			break;
-	
 
 		default:
 			throw new IllegalArgumentException("ATTENTION: the estimator selected is not available! Use 1-7.");
@@ -140,8 +115,9 @@ public class ComputeVariance {
 		SimpleMatrix variance = (SimpleMatrix) varCalRes[0];
 		double approxSR = (double) varCalRes[1];
 		double approxFR = (double) varCalRes[2];
-		System.out.println("1 - Approximate Success Rate : " + (1 - approxSR));
-		System.out.println("Approximate Failure Rate : " + approxFR);
+		System.out.println("Approximate Success Rate : " + (approxSR*100));
+		System.out.println("1 - Approximate Success Rate : " + (1 - approxSR)*100);
+		System.out.println("Approximate Failure Rate : " + approxFR*100);
 		return new VarianceResult(variance, 0);
 	}
 
@@ -199,15 +175,4 @@ public class ComputeVariance {
 		return symmetricMatrix;
 	}
 
-	
-
-	/**
-	 * Serializes a SimpleMatrix to a key with rounding to avoid numerical precision
-	 * issues.
-	 *
-	 * @param matrix    The matrix to serialize (assumes column vector).
-	 * @param tolerance Numerical tolerance for rounding.
-	 * @return A serialized string key representing the matrix.
-	 */
-	
 }

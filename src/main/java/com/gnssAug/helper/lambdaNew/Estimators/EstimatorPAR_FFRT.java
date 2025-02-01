@@ -2,18 +2,11 @@ package com.gnssAug.helper.lambdaNew.Estimators;
 
 import org.ejml.simple.SimpleMatrix;
 
-import com.gnssAug.helper.lambda.Lambda;
-import com.gnssAug.helper.lambda.Ssearch;
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
-import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficientOld;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
-import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.ComputeVariance;
 import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
-import com.gnssAug.utility.Matrix;
-import com.gnssAug.utility.Vector;
-import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.Android.constants.GnssDataConfig;
 
@@ -68,7 +61,7 @@ public class EstimatorPAR_FFRT {
 	 * @throws IllegalArgumentException if number of inputs is insufficient
 	 */
 	public static PARResult_FFRT estimatorPAR_FFRT(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, Integer nCands,
-			Double minSR) {
+			Double minSR, boolean estimateVar) {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
@@ -95,7 +88,7 @@ public class EstimatorPAR_FFRT {
 		int nFixed;
 		SimpleMatrix aPAR;
 
-		Object[] findFirstRes = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, SR_IB_cumul, minSR);
+		Object[] findFirstRes = findFirstAboveThreshold_RatioTest(aHat, LMat, dVec, SR_IB_cumul, minSR, estimateVar);
 
 		if (findFirstRes == null) {
 			// No AR
@@ -121,7 +114,7 @@ public class EstimatorPAR_FFRT {
 		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
 		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR, kk_PAR, nn);
 		SimpleMatrix QMat_21 = QMat_12.transpose();
-		SimpleMatrix Q_fix_PAR = varRes.getVariance();
+		SimpleMatrix Q_fix_PAR = varRes != null ? varRes.getVariance() : new SimpleMatrix(nn - kk_PAR, nn - kk_PAR);
 
 		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 
@@ -147,7 +140,7 @@ public class EstimatorPAR_FFRT {
 	}
 
 	private static Object[] findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
-			double[] srCumul, double minSR) {
+			double[] srCumul, double minSR, boolean estimateVar) {
 
 		double maxFR = 1 / 100.0;
 		int n = aHat.numRows();
@@ -161,8 +154,8 @@ public class EstimatorPAR_FFRT {
 
 			}
 			if (!flag) {
-				muRatio = Lambda.ratioinv(maxFR, 1 - srCumul[i], n-i);// ComputeFFRTCoefficient.computeFFRTcoeff(maxFR,
-																	// 1 - srCumul[i], n); // Fixed-FR ratio
+				// Lambda.ratioinv(maxFR, 1 - srCumul[i], n-i);
+				muRatio = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n - i); // Fixed-FR ratio
 				double[] sqNorms = ilsResult.getSqNorm();
 
 				System.out.println("Combination count: " + (n - i));
@@ -180,9 +173,12 @@ public class EstimatorPAR_FFRT {
 				double[] dVec_subset = Arrays.copyOfRange(dVec, i, n);
 				SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset))
 						.mult(LMat_subset);
-				int est = 1;
-				VarianceResult varRes = ComputeVariance.computeVariance(qMat_subset, est, 0, 1 / 100.0,
-						(int) GnssDataConfig.nSamplesMC, muRatio);
+
+				VarianceResult varRes = null;
+				if (estimateVar) {
+					varRes = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
+							(int) GnssDataConfig.nSamplesMC, null);
+				}
 				// If the ratio test passes, return the index
 				return new Object[] { ilsResult, varRes, i };
 			}

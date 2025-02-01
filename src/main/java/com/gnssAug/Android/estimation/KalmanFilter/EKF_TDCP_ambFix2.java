@@ -12,6 +12,7 @@ import com.gnssAug.Android.estimation.LinearLeastSquare;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.helper.lambdaNew.LAMBDA;
 import com.gnssAug.helper.lambdaNew.LAMBDA.LambdaResult;
 import com.gnssAug.utility.LatLonUtil;
@@ -381,7 +382,8 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
 				SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
-				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,7);
+				boolean estimateVar = false;
+				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,EstimatorType.PAR_FFRT,estimateVar);
 				//Lambda lmd = new Lambda(ahat, Qahat, 6, "MU", (1 / 3.0), "NCANDS", 10);
 				int nFixed = lmd.getnFixed();
 				double Ps = lmd.getSr();
