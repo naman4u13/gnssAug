@@ -29,8 +29,6 @@ public class OptimizedVarCalc2 {
 		}
 		double failRate = 0;
 		double successRate = 0;
-		// Step 1: Preprocess all samples into a map for quick lookup with rounding to
-		// handle floating-point precision
 
 		for (int jj = 0; jj < nSamples; jj++) {
 			SimpleMatrix sample = aFixAll.extractVector(false, jj); // Extract column vector

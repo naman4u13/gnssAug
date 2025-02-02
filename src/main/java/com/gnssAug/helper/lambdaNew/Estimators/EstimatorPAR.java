@@ -100,11 +100,6 @@ public class EstimatorPAR {
 			kk_PAR = 1;
 			SR_PAR = SR_IB;
 			nFixed = nn;
-			SimpleMatrix qMat_subset = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
-			if (estimateVar) {
-				varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null, (int) GnssDataConfig.nSamplesMC,
-						null);
-			}
 		} else {
 			// Find the first index where cumulative SR meets or exceeds minSR
 			kk_PAR = -1;
@@ -124,7 +119,9 @@ public class EstimatorPAR {
 				aPAR = aHat;
 				SR_PAR = SR_IB;
 				nFixed = 0;
-				return new PARResult(aPAR, nFixed, SR_PAR, null);
+				SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
+						.mult(LMat);
+				return new PARResult(aPAR, nFixed, SR_PAR, qMat);
 			}
 		}
 
@@ -141,8 +138,8 @@ public class EstimatorPAR {
 			SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
 			SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
 			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
-			EstimatorBIEResult bieResult = EstimatorBIE.estimatorBIE(aHat_subset, LMat_subset, dVec_subset, Chi2_BIE,
-					null);
+			EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat_subset, LMat_subset, dVec_subset, Chi2_BIE,
+					null,null);
 			a_fix_PAR = bieResult.getaBIE();
 			// NOTE: this is an experimental PAR (BIE) approach still based on the
 			// SR criterion. We suggest to use "minSR = 0.50" & "alphaBIE = 1e-6",
@@ -162,15 +159,15 @@ public class EstimatorPAR {
 		}
 
 		// Extract float ambiguities before and after kkPAR
-		SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR, 0, 1); // a_hat(1:kk_PAR-1) in MATLAB
-		SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
+		SimpleMatrix aHat1 = aHat.extractMatrix(0, kk_PAR-1, 0, 1); // a_hat(1:kk_PAR-1) in MATLAB
+		SimpleMatrix aHat2 = aHat.extractMatrix(kk_PAR-1, aHat.numRows(), 0, 1); // a_hat(kk_PAR:end) in MATLAB
 
 		SimpleMatrix QMat = LMat.transpose().mult(SimpleMatrix.diag(dVec)).mult(LMat);
-		SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR, 0, kk_PAR);
-		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
-		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR, kk_PAR, nn);
+		SimpleMatrix QMat_11 = QMat.extractMatrix(0, kk_PAR-1, 0, kk_PAR-1);
+		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR-1, nn, kk_PAR-1, nn);
+		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR-1, kk_PAR-1, nn);
 		SimpleMatrix QMat_21 = QMat_12.transpose();
-		SimpleMatrix Q_fix_PAR = varRes != null ? varRes.getVariance() : new SimpleMatrix(nn - kk_PAR, nn - kk_PAR);
+		SimpleMatrix Q_fix_PAR = varRes != null ? varRes.getVariance() : new SimpleMatrix(nn - (kk_PAR-1), nn - (kk_PAR-1));
 
 		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 
@@ -188,7 +185,7 @@ public class EstimatorPAR {
 
 		SimpleMatrix QPAR = new SimpleMatrix(nn, nn);
 		QPAR.insertIntoThis(0, 0, Q_cond_PAR);
-		QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
+		QPAR.insertIntoThis(kk_PAR-1, kk_PAR-1, Q_fix_PAR);
 
 		// aPAR now contains the vertically concatenated result
 

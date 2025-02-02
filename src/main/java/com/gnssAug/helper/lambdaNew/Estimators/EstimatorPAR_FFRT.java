@@ -92,7 +92,9 @@ public class EstimatorPAR_FFRT {
 
 		if (findFirstRes == null) {
 			// No AR
-			return new PARResult_FFRT(aHat, 0, SR_IB, null);
+			SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
+					.mult(LMat);
+			return new PARResult_FFRT(aHat, 0, SR_IB, qMat);
 		}
 		ILSResult ilsResult = (ILSResult) findFirstRes[0];
 		VarianceResult varRes = (VarianceResult) findFirstRes[1];

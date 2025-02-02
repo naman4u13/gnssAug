@@ -25,7 +25,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (5) {
+		switch (3) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -121,10 +121,10 @@ public class MainApp {
 			break;
 		case 5:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
-			obsvCodeList = new String[] {"G1C","E1C","C2I"};
-			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Personal Data Collection/Static/ASCM419739/Pixel 7 pro/gnss_log_2025_01_28_22_05_38.txt";
+			obsvCodeList = new String[] {"G1C","E1C"};
+			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
 
-			discardSet = true ? Set.of("E8") : Set.of("C11", "G12", "G2", "G30");// C33
+			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);
@@ -144,8 +144,8 @@ public class MainApp {
 			llh = new double[] {51.081628,-114.134081,1110.130-16.7243};
 			trueEcef = LatLonUtil.lla2ecef(llh, true);
 			
-			Android_Static.posEstimate(true, 0, 0,18, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,16, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,false, false,false,discardSet,mobName);
 			break;
 		}
 		Instant end = Instant.now();

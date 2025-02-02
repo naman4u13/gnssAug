@@ -163,11 +163,12 @@ public class LAMBDA {
 	 * @param method  Estimator (0-9) adopted, see METHODS section
 	 * @param varArgs Optional input parameters, which replace default values
 	 * @return LambdaResult containing aFix, sqNorm, nFixed, sr, zMat, and qzHat
+	 * @throws Exception 
 	 * @throws IllegalArgumentException if input arguments are insufficient or
 	 *                                  invalid
 	 */
 	public static LambdaResult computeLambda(SimpleMatrix aHat, SimpleMatrix qaHat, EstimatorType method,
-			boolean estimateVar, Object... varArgs) {
+			boolean estimateVar, Object... varArgs) throws Exception {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
@@ -209,10 +210,7 @@ public class LAMBDA {
 		// OPTIONAL PARAMETERS: set default values or get additional inputs
 		int nCands = 1;
 		double minSR = 0.99;
-		String typeEstim = "ILS";
-		int[] dimBlocks = new int[] { (int) Math.floor(nn / 2.0), (int) Math.ceil(nn / 2.0) };
 		double maxFR = 1 / 100.0;
-		double betaIAB = 0.5;
 		double alphaBIE = 1e-6;
 
 		if (varArgs != null) {
@@ -257,7 +255,6 @@ public class LAMBDA {
 			zFix = parResult.getaPAR();
 			nFixed = parResult.getnFixed();
 			sr = parResult.getSR_PAR();
-
 			QzFix = parResult.getQPAR();
 
 			break;
@@ -271,16 +268,26 @@ public class LAMBDA {
 						.computeVariance(qzHat, 2, 0, maxFR, (int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio())
 						.getVariance();
 			} else {
-				QzFix = new SimpleMatrix(qzHat);
+				if(nFixed==0)
+				{
+					QzFix = new SimpleMatrix(qzHat);
+				}
+				else
+				{
+					QzFix = new SimpleMatrix(nn, nn);
+				}
+				
 			}
 			break;
 
 		case BIE: // Compute BIE based on chi-squared inverse CDF
 			double chi2BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1.0 - alphaBIE, nn / 2.0);
-
+			EstimatorBIE estBIE = new EstimatorBIE();
 			// Call BIE-estimator (recursive implementation)
-			EstimatorBIEResult BieResult = EstimatorBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null);
+			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,qzHat);
 			zFix = BieResult.getaBIE();
+			QzFix = new SimpleMatrix(nn, nn);
+			BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
 			break;
 		case PAR_FFRT: // Compute PAR-FFRt
 			PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR,

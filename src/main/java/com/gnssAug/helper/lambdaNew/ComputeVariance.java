@@ -5,6 +5,8 @@ import org.apache.commons.math3.linear.CholeskyDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.helper.lambdaNew.DecomposeLtDL.DecompositionResult;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS;
@@ -30,8 +32,6 @@ public class ComputeVariance {
 			Integer nSamples, Double muRatio) {
 		// Problem dimensionality
 		int nn = QMat.numCols();
-		HashMap<String, ILSResult> ILSmap = new HashMap<String, ILSResult>();
-		HashSet<String> allCandidatesKey = new HashSet<String>();
 		SimpleMatrix LMat;
 		double[] dVec;
 
@@ -107,9 +107,19 @@ public class ComputeVariance {
 
 			}
 			break;
+			
+		case 3: // Use IA-FFRT (ILS w/ Fixed Failure-rate Ratio Test)
+			for (int ii = 0; ii < nSamples; ii++) {
+				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
+				EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, null, null, QMat);
+				SimpleMatrix aFix = bieResult.getaBIE();
+				aFixAll.insertIntoThis(0, ii, aFix);
+
+			}
+			break;
 
 		default:
-			throw new IllegalArgumentException("ATTENTION: the estimator selected is not available! Use 1-7.");
+			throw new IllegalArgumentException("ATTENTION: the estimator selected is not available! Use 1-2.");
 		}
 		Object[] varCalRes = OptimizedVarCalc2.calculateVariance(aFixAll, nSamples);
 		SimpleMatrix variance = (SimpleMatrix) varCalRes[0];

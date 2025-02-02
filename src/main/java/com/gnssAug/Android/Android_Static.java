@@ -90,8 +90,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/"
-					+ mobName + "_PAR_FFRT";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -514,7 +514,7 @@ public class Android_Static {
 			if (estimatorType == 10 || estimatorType == 14 || estimatorType == 11) {
 				int[] estArray = new int[] { estimatorType };
 				if (estimatorType == 11) {
-					estArray = new int[] { 10,14 };
+					estArray = new int[] { 14 };
 				}
 				for (int estType : estArray) {
 					String estName;
