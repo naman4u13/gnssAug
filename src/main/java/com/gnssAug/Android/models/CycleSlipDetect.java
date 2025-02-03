@@ -18,15 +18,20 @@ public class CycleSlipDetect {
 	private double trueDR;
 	private double floatAmb;
 	private double intAmb;
-	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
-			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR) {
-		this( sat,  dopplerDR,  carrierPhaseDR,  ionoRate,  isCS,
-				 wavelength,  satVelCorr,  unitLOS,  time);
-		this.trueDR = trueDR;
+	private double floatAmbCov;
+	private double intAmbCov;
+	
+	
+	
+	public CycleSlipDetect(CycleSlipDetect csdObj) {
+		this( csdObj.getSat(),  csdObj.getDopplerDR(), csdObj.getCarrierPhaseDR(),  csdObj.getIonoRate(),  csdObj.isCS(),
+				csdObj.getWavelength(),  csdObj.getSatVelCorr(),  csdObj.getUnitLOS(),  csdObj.getTime(),csdObj.getTrueDR());
+		
 		
 	}
+	
 	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
-			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time) {
+			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR) {
 		super();
 		this.sat = sat;
 		this.dopplerDR = dopplerDR;
@@ -37,6 +42,12 @@ public class CycleSlipDetect {
 		this.satVelCorr = satVelCorr;
 		this.unitLOS = unitLOS;
 		this.time = time;
+		this.trueDR = trueDR;
+		
+	}
+	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
+			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time) {
+		
 	}
 
 	public Satellite getSat() {
@@ -108,6 +119,22 @@ public class CycleSlipDetect {
 	}
 	public void setIntAmb(double intAmb) {
 		this.intAmb = intAmb;
+	}
+
+	public double getFloatAmbCov() {
+		return floatAmbCov;
+	}
+
+	public void setFloatAmbCov(double floatAmbCov) {
+		this.floatAmbCov = floatAmbCov;
+	}
+
+	public double getIntAmbCov() {
+		return intAmbCov;
+	}
+
+	public void setIntAmbCov(double intAmbCov) {
+		this.intAmbCov = intAmbCov;
 	}
 
 }

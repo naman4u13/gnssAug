@@ -28,8 +28,8 @@ public class ComputeVariance {
 	 * @throws IllegalArgumentException if not enough inputs are provided or if an
 	 *                                  invalid estimator is selected
 	 */
-	public static VarianceResult computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR,
-			Integer nSamples, Double muRatio) {
+	public static Object[] computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR, Integer nSamples,
+			Double muRatio) {
 		// Problem dimensionality
 		int nn = QMat.numCols();
 		SimpleMatrix LMat;
@@ -107,7 +107,7 @@ public class ComputeVariance {
 
 			}
 			break;
-			
+
 		case 3: // Use IA-FFRT (ILS w/ Fixed Failure-rate Ratio Test)
 			for (int ii = 0; ii < nSamples; ii++) {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
@@ -121,14 +121,98 @@ public class ComputeVariance {
 		default:
 			throw new IllegalArgumentException("ATTENTION: the estimator selected is not available! Use 1-2.");
 		}
-		Object[] varCalRes = OptimizedVarCalc2.calculateVariance(aFixAll, nSamples);
-		SimpleMatrix variance = (SimpleMatrix) varCalRes[0];
-		double approxSR = (double) varCalRes[1];
-		double approxFR = (double) varCalRes[2];
-		System.out.println("Approximate Success Rate : " + (approxSR*100));
-		System.out.println("1 - Approximate Success Rate : " + (1 - approxSR)*100);
-		System.out.println("Approximate Failure Rate : " + approxFR*100);
-		return new VarianceResult(variance, 0);
+		Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAll, nSamples);
+		return varCalRes;
+	}
+
+	public static HashMap<EstimatorType, Object[]> computeVarianceAll(SimpleMatrix QMat, int decorr, Double maxFR,
+			Integer nSamples, Double muRatio) {
+		// Problem dimensionality
+		int nn = QMat.numCols();
+		SimpleMatrix LMat;
+		double[] dVec;
+
+		// Z-transformation (optional) for decorrelating the ambiguities
+		if (decorr == 1) {
+			DecorrelateVCResult decorResult = DecorrelateVC.decorrelateVC(QMat.copy(), null);
+			QMat = decorResult.getQzHat();
+			LMat = decorResult.getLzMat();
+			dVec = decorResult.getDzVec();
+
+		} else {
+			// Retrieve LtDL-decomposition of the original ambiguity vc-matrix
+			DecompositionResult ltldlResult = DecomposeLtDL.decomposeLtDL(QMat.copy());
+			LMat = ltldlResult.getLMat();
+			dVec = ltldlResult.getDVec();
+		}
+		// Decorrelate the ambiguity vc-matrix and return a LtDL-decomposition
+
+		// Generation of numerical samples
+		if (nSamples == 0 || nSamples == null) {
+			// Get an approximative value of success rate based on IB formulation
+			double P0 = ComputeSR_IBexact.computeSR_IBexact(dVec).getSR();
+
+			// Compute the number of samples to be used
+			nSamples = Utilities.computeNumSamples(P0);
+		}
+		// ESTIMATORS: numerical simulations for computing the success rate
+
+		// Initialize random number generator
+		Random rand = new Random();
+		// Check if the matrix is symmetric
+		RealMatrix _QMat = new Array2DRowRealMatrix(Matrix.matrix2Array(QMat));
+		if (!isSymmetric(_QMat, 1e-20)) {
+
+			_QMat = makeSymmetric(_QMat);
+		}
+		RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
+
+		SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
+
+		// Now cholQMat contains the lower triangular matrix from the Cholesky
+		// decomposition
+		SimpleMatrix aHatAll = cholQMat.transpose().mult(generateRandn(nn, nSamples, rand));
+
+		// Initialize all the ambiguity fixed vectors
+		HashMap<EstimatorType, SimpleMatrix> aFixAllMap = new HashMap<EstimatorType, SimpleMatrix>();
+
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE }) {
+			SimpleMatrix aFixAll = new SimpleMatrix(nn, nSamples);
+			for (int i = 0; i < aFixAll.getNumElements(); i++) {
+				aFixAll.set(i, Double.NaN);
+			}
+			aFixAllMap.put(est, aFixAll);
+		}
+
+		// ESTIMATORS: numerical simulations for computing the success rate
+
+		for (int ii = 0; ii < nSamples; ii++) {
+			SimpleMatrix aHat = aHatAll.extractVector(false, ii);
+			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
+			IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
+			EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, null, null, QMat);
+
+			SimpleMatrix aFix = ilsResult.getAFix();
+			aFixAllMap.get(EstimatorType.ILS).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+			aFix = IAFFRTresult.getaFix();
+			if (IAFFRTresult.getnFixed() != 0) {
+				aFixAllMap.get(EstimatorType.IA_FFRT).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+
+			}
+			aFix = bieResult.getaBIE();
+			aFixAllMap.get(EstimatorType.BIE).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+
+		}
+		// Initialize all the ambiguity fixed vectors
+		HashMap<EstimatorType, Object[]> varCalResMap = new HashMap<EstimatorType, Object[]>();
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE }) {
+			Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAllMap.get(est), nSamples);
+			varCalResMap.put(est, varCalRes);
+		}
+		if ((double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0) {
+			varCalResMap.put(EstimatorType.IA_FFRT, new Object[] {QMat,0.0,1.0});
+		}
+		return varCalResMap;
 	}
 
 	// Helper method to generate a matrix of random Gaussian numbers
@@ -138,26 +222,6 @@ public class ComputeVariance {
 			data[i] = rand.nextGaussian();
 		}
 		return new SimpleMatrix(rows, cols, true, data);
-	}
-
-	// Result class to hold output values
-	public static class VarianceResult {
-		private final SimpleMatrix variance;
-		private final double timeCPU;
-
-		public VarianceResult(SimpleMatrix variance, double timeCPU) {
-			this.variance = variance;
-			this.timeCPU = timeCPU;
-		}
-
-		public SimpleMatrix getVariance() {
-			return variance;
-		}
-
-		public double getTimeCPU() {
-			return timeCPU;
-		}
-
 	}
 
 	private static boolean isSymmetric(RealMatrix matrix, double tolerance) {

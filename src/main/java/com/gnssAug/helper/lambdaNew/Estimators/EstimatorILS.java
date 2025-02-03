@@ -6,7 +6,7 @@ import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.helper.lambdaNew.ComputeVariance;
-import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
+
 
 
 

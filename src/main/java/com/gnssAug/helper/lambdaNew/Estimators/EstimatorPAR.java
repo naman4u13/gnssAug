@@ -5,12 +5,10 @@ import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.ComputeVariance;
-import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
-import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR_FFRT.PARResult_FFRT;
 
 import java.util.Arrays;
 
@@ -66,7 +64,7 @@ public class EstimatorPAR {
 			Double minSR, Double alphaBIE, boolean estimateVar) {
 		// Problem dimensionality
 		int nn = aHat.numRows();
-		VarianceResult varRes = null;
+		Object[] stats = null;
 		// Check number of input arguments and set default values if necessary
 		if (aHat == null || LMat == null || dVec == null) {
 			throw new IllegalArgumentException("ATTENTION: number of inputs is insufficient!");
@@ -121,7 +119,7 @@ public class EstimatorPAR {
 				nFixed = 0;
 				SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
 						.mult(LMat);
-				return new PARResult(aPAR, nFixed, SR_PAR, qMat);
+				return new PARResult(aPAR, nFixed, SR_PAR, new Object[] {qMat,0.0,1.0});
 			}
 		}
 
@@ -152,7 +150,7 @@ public class EstimatorPAR {
 			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
 			SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
 			if (estimateVar) {
-				varRes = ComputeVariance.computeVariance(qMat_subset, 1, 0, null, (int) GnssDataConfig.nSamplesMC,
+				stats = ComputeVariance.computeVariance(qMat_subset, 1, 0, null, (int) GnssDataConfig.nSamplesMC,
 						null);
 			}
 			a_fix_PAR = ilsResult.getAFix();
@@ -167,7 +165,7 @@ public class EstimatorPAR {
 		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR-1, nn, kk_PAR-1, nn);
 		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR-1, kk_PAR-1, nn);
 		SimpleMatrix QMat_21 = QMat_12.transpose();
-		SimpleMatrix Q_fix_PAR = varRes != null ? varRes.getVariance() : new SimpleMatrix(nn - (kk_PAR-1), nn - (kk_PAR-1));
+		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : new SimpleMatrix(nn - (kk_PAR-1), nn - (kk_PAR-1));
 
 		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 
@@ -188,8 +186,15 @@ public class EstimatorPAR {
 		QPAR.insertIntoThis(kk_PAR-1, kk_PAR-1, Q_fix_PAR);
 
 		// aPAR now contains the vertically concatenated result
-
-		return new PARResult(aPAR, nFixed, SR_PAR, QPAR);
+		if(stats==null)
+		{
+			stats = new Object[] {QPAR,0.0,1.0};
+		}
+		else
+		{
+			stats = new Object[] {QPAR,stats[1],stats[2]};
+		}
+		return new PARResult(aPAR, nFixed, SR_PAR, stats);
 	}
 
 	/**
@@ -199,12 +204,13 @@ public class EstimatorPAR {
 		private SimpleMatrix aPAR;
 		private int nFixed;
 		private double SR_PAR;
-		private SimpleMatrix QPAR;
+		private Object[] stats;
 
-		public PARResult(SimpleMatrix aPAR, int nFixed, double SR_PAR, SimpleMatrix QPAR) {
+		public PARResult(SimpleMatrix aPAR, int nFixed, double SR_PAR, Object[] stats) {
 			this.aPAR = aPAR;
 			this.nFixed = nFixed;
 			this.SR_PAR = SR_PAR;
+			this.stats = stats;
 		}
 
 		public SimpleMatrix getaPAR() {
@@ -219,8 +225,8 @@ public class EstimatorPAR {
 			return SR_PAR;
 		}
 
-		public SimpleMatrix getQPAR() {
-			return QPAR;
+		public Object[] getStats() {
+			return stats;
 		}
 	}
 

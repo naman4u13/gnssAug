@@ -6,7 +6,6 @@ import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.ComputeVariance;
-import com.gnssAug.helper.lambdaNew.ComputeVariance.VarianceResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.Android.constants.GnssDataConfig;
 
@@ -94,10 +93,10 @@ public class EstimatorPAR_FFRT {
 			// No AR
 			SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
 					.mult(LMat);
-			return new PARResult_FFRT(aHat, 0, SR_IB, qMat);
+			return new PARResult_FFRT(aHat, 0, SR_IB, new Object[] {qMat,0.0,1.0});
 		}
 		ILSResult ilsResult = (ILSResult) findFirstRes[0];
-		VarianceResult varRes = (VarianceResult) findFirstRes[1];
+		Object[] stats = (Object[]) findFirstRes[1];
 		kk_PAR = (int) findFirstRes[2];
 		SR_PAR = SR_IB_cumul[kk_PAR];
 		nFixed = nn - kk_PAR;
@@ -116,7 +115,7 @@ public class EstimatorPAR_FFRT {
 		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR, nn, kk_PAR, nn);
 		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR, kk_PAR, nn);
 		SimpleMatrix QMat_21 = QMat_12.transpose();
-		SimpleMatrix Q_fix_PAR = varRes != null ? varRes.getVariance() : new SimpleMatrix(nn - kk_PAR, nn - kk_PAR);
+		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : new SimpleMatrix(nn - kk_PAR, nn - kk_PAR);
 
 		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 
@@ -137,8 +136,15 @@ public class EstimatorPAR_FFRT {
 		QPAR.insertIntoThis(kk_PAR, kk_PAR, Q_fix_PAR);
 
 		// aPAR now contains the vertically concatenated result
-
-		return new PARResult_FFRT(aPAR, nFixed, SR_PAR, QPAR);
+		if(stats==null)
+		{
+			stats = new Object[] {QPAR,0.0,1.0};
+		}
+		else
+		{
+			stats = new Object[] {QPAR,stats[1],stats[2]};
+		}
+		return new PARResult_FFRT(aPAR, nFixed, SR_PAR, stats);
 	}
 
 	private static Object[] findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
@@ -176,13 +182,13 @@ public class EstimatorPAR_FFRT {
 				SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset))
 						.mult(LMat_subset);
 
-				VarianceResult varRes = null;
+				Object[] stats = null;
 				if (estimateVar) {
-					varRes = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
+					stats = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
 							(int) GnssDataConfig.nSamplesMC, null);
 				}
 				// If the ratio test passes, return the index
-				return new Object[] { ilsResult, varRes, i };
+				return new Object[] { ilsResult, stats, i };
 			}
 
 		}
@@ -196,13 +202,13 @@ public class EstimatorPAR_FFRT {
 		private SimpleMatrix aPAR;
 		private int nFixed;
 		private double SR_PAR;
-		private SimpleMatrix QPAR;
+		private Object[] stats;
 
-		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR, SimpleMatrix QPAR) {
+		public PARResult_FFRT(SimpleMatrix aPAR, int nFixed, double SR_PAR, Object[] stats) {
 			this.aPAR = aPAR;
 			this.nFixed = nFixed;
 			this.SR_PAR = SR_PAR;
-			this.QPAR = QPAR;
+			this.stats = stats;
 		}
 
 		public SimpleMatrix getaPAR() {
@@ -217,8 +223,8 @@ public class EstimatorPAR_FFRT {
 			return SR_PAR;
 		}
 
-		public SimpleMatrix getQPAR() {
-			return QPAR;
+		public Object[] getStats() {
+			return stats;
 		}
 	}
 

@@ -34,6 +34,7 @@ import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.models.SatResidual;
+import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.opencsv.CSVWriter;
 
 public class GraphPlotter extends ApplicationFrame {
@@ -82,8 +83,8 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 
 	}
-	
-	public GraphPlotter(HashMap<String,ArrayList<CycleSlipDetect>> satCSmap,int flag) {
+
+	public GraphPlotter(HashMap<String, ArrayList<CycleSlipDetect>> satCSmap, int flag) {
 		super("Cycle Slip Detection and Repair");
 		String title = "Cycle Slip Detection and Repair";
 		JFreeChart chart;
@@ -103,11 +104,10 @@ public class GraphPlotter extends ApplicationFrame {
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
-		
+
 		setContentPane(chartPanel);
 
 	}
-
 
 	public GraphPlotter(TreeMap<String, ArrayList<double[]>> trajectoryMap, int n, String name, boolean isHorizontal) {
 		super(name + " Trajectory");
@@ -477,16 +477,15 @@ public class GraphPlotter extends ApplicationFrame {
 					CSVWriter writer = new CSVWriter(outputfile);
 					// create a List which contains String array
 					List<String[]> data = new ArrayList<String[]>();
-					String[] header = new String[] { "Time", "Proposed AKF", "DBP Filter", "VRWD","PRW", "WLS" };
+					String[] header = new String[] { "Time", "Proposed AKF", "DBP Filter", "VRWD", "PRW", "WLS" };
 					writer.writeNext(header);
 					for (int j = 0; j < timeList.size() - 1; j++) {
 						String[] entry = new String[header.length];
 						entry[0] = timeList.get(j) + "";
 						for (int k = 1; k < header.length; k++) {
 							try {
-							entry[k] = subDataMap.get(header[k])[j] + "";
-							}
-							catch (Exception e) {
+								entry[k] = subDataMap.get(header[k])[j] + "";
+							} catch (Exception e) {
 								// TODO: handle exception
 								System.out.println("");
 							}
@@ -683,13 +682,13 @@ public class GraphPlotter extends ApplicationFrame {
 	public static void graphCycleSlip(HashMap<String, ArrayList<CycleSlipDetect>> satCSmap) {
 
 		// For Satellite Residuals
-		for(int i=0;i<3;i++) {
-		GraphPlotter chart = new GraphPlotter(satCSmap, i);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+		for (int i = 0; i < 3; i++) {
+			GraphPlotter chart = new GraphPlotter(satCSmap, i);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
 		}
-		
+
 		boolean makeCSV = false;
 		if (makeCSV) {
 			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/ENC-2024/CSVs/CycleSlip/RxX_Samsung_Galaxy_S20+_5G2.csv";
@@ -701,24 +700,77 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "SVID", "Time", "Angle", "CN0", "Error","isCS","isRepaired","FloatAmb","IntegerAmb" };
+				String[] header = new String[] { "SVID", "Time", "Angle", "CN0", "Error", "isCS", "isRepaired",
+						"FloatAmb", "IntegerAmb" };
 				writer.writeNext(header);
 				for (String key : satCSmap.keySet()) {
 					ArrayList<CycleSlipDetect> csdList = satCSmap.get(key);
-					for (int i=0;i<csdList.size();i++) {
+					for (int i = 0; i < csdList.size(); i++) {
 						String[] entry = new String[9];
 						CycleSlipDetect csdObj = csdList.get(i);
 						Satellite sat = csdObj.getSat();
-						entry[0] = sat.getObsvCode().charAt(0)+""+sat.getSvid();
-						entry[1] = (csdObj.getTime()*1e-3) + "";
+						entry[0] = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
+						entry[1] = (csdObj.getTime() * 1e-3) + "";
 						entry[2] = Math.toDegrees(sat.getElevAzm()[0]) + "";
 						entry[3] = sat.getCn0DbHz() + "";
-						entry[4] =  (csdObj.getCarrierPhaseDR()-csdObj.getClkDrift()-csdObj.getTrueDR())/csdObj.getWavelength()+"";
-						entry[5] = csdObj.isCS()?"1":"0";
-						entry[6] = csdObj.isRepaired()?"1":"0";
-						entry[7] = csdObj.getFloatAmb()+"";
-						entry[8] = csdObj.getIntAmb()+"";
+						entry[4] = (csdObj.getCarrierPhaseDR() - csdObj.getClkDrift() - csdObj.getTrueDR())
+								/ csdObj.getWavelength() + "";
+						entry[5] = csdObj.isCS() ? "1" : "0";
+						entry[6] = csdObj.isRepaired() ? "1" : "0";
+						entry[7] = csdObj.getFloatAmb() + "";
+						entry[8] = csdObj.getIntAmb() + "";
 						dataList.add(entry);
+					}
+				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
+
+	}
+
+	public static void graphCycleSlipAllEst(
+			HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>> satCSmap) {
+
+		boolean makeCSV = true;
+		if (makeCSV) {
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/SamsungS20plus5G.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "EstType","SVID", "Time", "Angle", "CN0", "Error", "isCS", "isRepaired",
+						"FloatAmb", "IntegerAmb","FloatAmbVar","IntAmbVar" };
+				writer.writeNext(header);
+				for (EstimatorType est : satCSmap.keySet()) {
+					for (String key : satCSmap.get(est).keySet()) {
+						ArrayList<CycleSlipDetect> csdList = satCSmap.get(est).get(key);
+						for (int i = 0; i < csdList.size(); i++) {
+							String[] entry = new String[12];
+							CycleSlipDetect csdObj = csdList.get(i);
+							Satellite sat = csdObj.getSat();
+							entry[0] = est.toString();
+							entry[1] = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
+							entry[2] = (csdObj.getTime() * 1e-3) + "";
+							entry[3] = Math.toDegrees(sat.getElevAzm()[0]) + "";
+							entry[4] = sat.getCn0DbHz() + "";
+							entry[5] = (csdObj.getCarrierPhaseDR() - csdObj.getClkDrift() - csdObj.getTrueDR())
+									/ csdObj.getWavelength() + "";
+							entry[6] = csdObj.isCS() ? "1" : "0";
+							entry[7] = csdObj.isRepaired() ? "1" : "0";
+							entry[8] = csdObj.getFloatAmb() + "";
+							entry[9] = csdObj.getIntAmb() + "";
+							entry[10] = csdObj.getFloatAmbCov() + "";
+							entry[11] = csdObj.getIntAmbCov() + "";
+							dataList.add(entry);
+						}
 					}
 				}
 				writer.writeAll(dataList);
@@ -1004,7 +1056,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/NoCorrections/Static_ASCM419739_Pixel_7_pro_L1.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/NoCorrections/Static_ASCM419739_Pixel_4_L1.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -1741,59 +1793,54 @@ public class GraphPlotter extends ApplicationFrame {
 
 		return dataset;
 	}
-	
-	private XYDataset createDatasetCycleSlip(HashMap<String,ArrayList<CycleSlipDetect>> dataMap, int flag) {
+
+	private XYDataset createDatasetCycleSlip(HashMap<String, ArrayList<CycleSlipDetect>> dataMap, int flag) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
 
-		
-			final XYSeries inlier = new XYSeries("inlier");
-			final XYSeries detect = new XYSeries("CS Detect");
-			final XYSeries repair = new XYSeries("CS Repair");
-			for (String key : dataMap.keySet()) {
-				ArrayList<CycleSlipDetect> dataList = dataMap.get(key);
+		final XYSeries inlier = new XYSeries("inlier");
+		final XYSeries detect = new XYSeries("CS Detect");
+		final XYSeries repair = new XYSeries("CS Repair");
+		for (String key : dataMap.keySet()) {
+			ArrayList<CycleSlipDetect> dataList = dataMap.get(key);
 
-				double t0 = 0;
-				for (int i = 0; i < dataList.size(); i++) {
-					CycleSlipDetect csdObj = dataList.get(i);
-					Satellite sat = csdObj.getSat();
-					double x = 0;
-					if (flag == 0) {
-						double t = csdObj.getTime()*1e-3;
-						x = t;
-					} else if (flag == 1) {
-						double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
-						x = elevAngle;
+			double t0 = 0;
+			for (int i = 0; i < dataList.size(); i++) {
+				CycleSlipDetect csdObj = dataList.get(i);
+				Satellite sat = csdObj.getSat();
+				double x = 0;
+				if (flag == 0) {
+					double t = csdObj.getTime() * 1e-3;
+					x = t;
+				} else if (flag == 1) {
+					double elevAngle = Math.toDegrees(sat.getElevAzm()[0]);
+					x = elevAngle;
+				} else {
+					double CN0 = sat.getCn0DbHz();
+					x = CN0;
+				}
+				double data;
+				data = (csdObj.getCarrierPhaseDR() - csdObj.getClkDrift() - csdObj.getTrueDR())
+						/ csdObj.getWavelength();
+				if (csdObj.isCS()) {
+					if (csdObj.isRepaired()) {
+						repair.add(x, data);
 					} else {
-						double CN0 = sat.getCn0DbHz();
-						x = CN0;
-					}
-					double data;
-					data = (csdObj.getCarrierPhaseDR()-csdObj.getClkDrift()-csdObj.getTrueDR())/csdObj.getWavelength();
-					if (csdObj.isCS()) {
-						if(csdObj.isRepaired())
-						{
-							repair.add(x,data);
-						}
-						else
-						{
-							detect.add(x,data);
-						}
-						
-					} else {
-						inlier.add(x, data);
+						detect.add(x, data);
 					}
 
+				} else {
+					inlier.add(x, data);
 				}
 
 			}
-			repair.setKey(repair.getKey()+" ("+repair.getItemCount()+")");
-			detect.setKey(detect.getKey()+" ("+detect.getItemCount()+")");
-			inlier.setKey(inlier.getKey()+" ("+inlier.getItemCount()+")");
-			dataset.addSeries(repair);
-			dataset.addSeries(detect);
-			dataset.addSeries(inlier);
-			
-			
+
+		}
+		repair.setKey(repair.getKey() + " (" + repair.getItemCount() + ")");
+		detect.setKey(detect.getKey() + " (" + detect.getItemCount() + ")");
+		inlier.setKey(inlier.getKey() + " (" + inlier.getItemCount() + ")");
+		dataset.addSeries(repair);
+		dataset.addSeries(detect);
+		dataset.addSeries(inlier);
 
 		return dataset;
 	}

@@ -62,7 +62,7 @@ public class BIEvariance {
 		}
 		SimpleMatrix bieVar2 = zdp_dahat_sum.mult(qHat).mult(zdp_dahat_sum.transpose());
 		
-		SimpleMatrix bieVar3 = ComputeVariance.computeVariance(qHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null).getVariance();
+		SimpleMatrix bieVar3 = (SimpleMatrix) ComputeVariance.computeVariance(qHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null)[0];
 		System.out.println("BIE variance 1 : "+bieVar1);
 		System.out.println("BIE variance 2 : "+bieVar2);
 		System.out.println("BIE variance 3 : "+bieVar3);

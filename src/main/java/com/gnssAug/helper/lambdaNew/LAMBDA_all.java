@@ -98,29 +98,24 @@ import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR.PARResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR_FFRT.PARResult_FFRT;
 
-public class LAMBDA {
+public class LAMBDA_all {
 
 	/**
 	 * Encapsulates the results of the LAMBDA computation.
 	 */
-	public static class LambdaResult {
+	public static class LambdaAllResult {
 		private SimpleMatrix aFix; // Ambiguity fixed vector (column)
 		private SimpleMatrix qFix; // Variance of fixed ambiguity vector
-		private double sqNorm; // Squared norm of the ambiguity residuals
+
 		private int nFixed; // Number of integer-fixed ambiguity components
 		private double sr; // Success rate (bootstrapping) for Full Ambiguity Resolution
-		private SimpleMatrix zMat; // Admissible Z-transformation matrix (unimodular)
-		private SimpleMatrix qzHat; // Variance-covariance matrix of the decorrelated ambiguities
 
-		public LambdaResult(SimpleMatrix aFix, SimpleMatrix qFix, double sqNorm, int nFixed, double sr,
-				SimpleMatrix zMat, SimpleMatrix qzHat) {
+		public LambdaAllResult(SimpleMatrix aFix, SimpleMatrix qFix, int nFixed, double sr) {
 			this.aFix = aFix;
 			this.qFix = qFix;
-			this.sqNorm = sqNorm;
 			this.nFixed = nFixed;
 			this.sr = sr;
-			this.zMat = zMat;
-			this.qzHat = qzHat;
+
 		}
 
 		public SimpleMatrix getaFix() {
@@ -131,10 +126,6 @@ public class LAMBDA {
 			return qFix;
 		}
 
-		public double getSqNorm() {
-			return sqNorm;
-		}
-
 		public int getnFixed() {
 			return nFixed;
 		}
@@ -143,30 +134,10 @@ public class LAMBDA {
 			return sr;
 		}
 
-		public SimpleMatrix getzMat() {
-			return zMat;
-		}
-
-		public SimpleMatrix getQzHat() {
-			return qzHat;
-		}
-
 	}
 
-	/**
-	 * Computes the LAMBDA adjustment.
-	 *
-	 * @param aHat    Ambiguity float vector (column)
-	 * @param qaHat   Variance-covariance matrix of the original ambiguities
-	 * @param method  Estimator (0-9) adopted, see METHODS section
-	 * @param varArgs Optional input parameters, which replace default values
-	 * @return LambdaResult containing aFix, sqNorm, nFixed, sr, zMat, and qzHat
-	 * @throws Exception 
-	 * @throws IllegalArgumentException if input arguments are insufficient or
-	 *                                  invalid
-	 */
-	public static LambdaResult computeLambda(SimpleMatrix aHat, SimpleMatrix qaHat, EstimatorType method,
-			boolean estimateVar, Object... varArgs) throws Exception {
+	public static HashMap<EstimatorType, LambdaAllResult> computeLambda(SimpleMatrix aHat, SimpleMatrix qaHat,
+			boolean estimateVar) throws Exception {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
@@ -203,145 +174,94 @@ public class LAMBDA {
 
 		// ADDITIONAL: computation of success rate & number of fixed components
 		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dzVec);
-		int nFixed = nn;
+		HashMap<EstimatorType,Integer> nFixedMap = new HashMap<EstimatorType,Integer>();
 		double sr = srResult.getSR();
 		// OPTIONAL PARAMETERS: set default values or get additional inputs
 		int nCands = 1;
 		double minSR = 0.99;
 		double maxFR = 1 / 100.0;
 		double alphaBIE = 1e-6;
+
+		ILSResult ilsResult = new EstimatorILS().estimatorILS(zHat, lzMat, dzVec, nCands);
+		PARResult parResult = EstimatorPAR.estimatorPAR(zHat, lzMat, dzVec, nCands, minSR, null, estimateVar);
+		IAFFRTResult iaFfrtResult = new EstimatorIA_FFRT().estimatorIA_FFRT(zHat, lzMat, dzVec, maxFR, null);
+		EstimatorBIE estBIE = new EstimatorBIE();
+		// Call BIE-estimator (recursive implementation)
+		double chi2BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1.0 - alphaBIE, nn / 2.0);
+		EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null, qzHat);
+		PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR,
+				estimateVar);
+
+		HashMap<EstimatorType, SimpleMatrix> aFixMap = new HashMap<EstimatorType, SimpleMatrix>();
+		HashMap<EstimatorType, SimpleMatrix> qFixMap = new HashMap<EstimatorType, SimpleMatrix>();
+		HashMap<EstimatorType, double[]> srfrMap = new HashMap<EstimatorType, double[]>();
+
+		aFixMap.put(EstimatorType.ILS, ilsResult.getAFix());
+		aFixMap.put(EstimatorType.PAR, parResult.getaPAR());
+		aFixMap.put(EstimatorType.IA_FFRT, iaFfrtResult.getaFix());
+		aFixMap.put(EstimatorType.BIE, BieResult.getaBIE());
+		aFixMap.put(EstimatorType.PAR_FFRT, parResult_ffrt.getaPAR());
 		
-		if (varArgs != null) {
-			if (varArgs.length > 0 && (method == EstimatorType.ILS || method == EstimatorType.PAR
-					|| method == EstimatorType.PAR_FFRT)) {
-				nCands = (int) varArgs[0];
-				if (varArgs.length > 1 && (method == EstimatorType.PAR || method == EstimatorType.PAR_FFRT)) {
-					minSR = (double) varArgs[1];
-				}
-			}
+		nFixedMap.put(EstimatorType.ILS, nn);
+		nFixedMap.put(EstimatorType.PAR, parResult.getnFixed());
+		nFixedMap.put(EstimatorType.IA_FFRT, iaFfrtResult.getnFixed());
+		nFixedMap.put(EstimatorType.BIE, nn);
+		nFixedMap.put(EstimatorType.PAR_FFRT, parResult_ffrt.getnFixed());
 
-			if (varArgs.length > 0 && (method == EstimatorType.IA_FFRT)) {
-				maxFR = (double) varArgs[0];
-			}
+		qFixMap.put(EstimatorType.PAR, (SimpleMatrix) parResult.getStats()[0]);
+		qFixMap.put(EstimatorType.PAR_FFRT, (SimpleMatrix) parResult_ffrt.getStats()[0]);
+		if (estimateVar) {
+			HashMap<EstimatorType, Object[]> varCalResMap = ComputeVariance.computeVarianceAll(qzHat, 0, maxFR,
+					(int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio());
+			qFixMap.put(EstimatorType.ILS, (SimpleMatrix) varCalResMap.get(EstimatorType.ILS)[0]);
 
-			if (varArgs.length > 0 && (method == EstimatorType.BIE)) {
-				alphaBIE = (double) varArgs[0];
-			}
-		}
+			qFixMap.put(EstimatorType.IA_FFRT, (SimpleMatrix) varCalResMap.get(EstimatorType.IA_FFRT)[0]);
+			qFixMap.put(EstimatorType.BIE, (SimpleMatrix) varCalResMap.get(EstimatorType.BIE)[0]);
 
-		SimpleMatrix zFix = null;
-		SimpleMatrix QzFix = null;
-		double sqNorm = 0.0;
-		Object[] stats = null;
-		// METHODS: define the estimator (see LAMBDA 4.0 toolbox Documentation)
-		switch (method) {
-
-		case ILS: // Compute ILS (shrink-and-search) [DEFAULT]
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(zHat, lzMat, dzVec, nCands);
-			zFix = ilsResult.getAFix().extractVector(false, 0);
-			sqNorm = ilsResult.getSqNorm()[0];
-			if (estimateVar) {
-				stats =  ComputeVariance.computeVariance(qzHat, 1, 0, null, (int) GnssDataConfig.nSamplesMC, null);
-				QzFix = (SimpleMatrix) stats[0];
-						
+			srfrMap.put(EstimatorType.ILS, new double[] { (double) varCalResMap.get(EstimatorType.ILS)[1],
+					(double) varCalResMap.get(EstimatorType.ILS)[2] });
+			srfrMap.put(EstimatorType.PAR,
+					new double[] { (double) parResult.getStats()[1], (double) parResult.getStats()[2] });
+			srfrMap.put(EstimatorType.IA_FFRT, new double[] { (double) varCalResMap.get(EstimatorType.IA_FFRT)[1],
+					(double) varCalResMap.get(EstimatorType.IA_FFRT)[2] });
+			srfrMap.put(EstimatorType.BIE, new double[] { (double) varCalResMap.get(EstimatorType.BIE)[1],
+					(double) varCalResMap.get(EstimatorType.BIE)[2] });
+			srfrMap.put(EstimatorType.PAR_FFRT,
+					new double[] { (double) parResult_ffrt.getStats()[1], (double) parResult_ffrt.getStats()[2] });
+		} else {
+			qFixMap.put(EstimatorType.ILS, new SimpleMatrix(nn, nn));
+			qFixMap.put(EstimatorType.BIE, new SimpleMatrix(nn, nn));
+			if (iaFfrtResult.getnFixed() == 0) {
+				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(qzHat));
 			} else {
-				QzFix = new SimpleMatrix(nn, nn);
+				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(nn, nn));
 			}
-			break;
+			qFixMap.put(EstimatorType.ILS, new SimpleMatrix(nn, nn));
+		}
 
-		case PAR: // Compute PAR
-			PARResult parResult = EstimatorPAR.estimatorPAR(zHat, lzMat, dzVec, nCands, minSR, null, estimateVar);
-			zFix = parResult.getaPAR();
-			nFixed = parResult.getnFixed();
-			sr = parResult.getSR_PAR();
-			stats  = parResult.getStats();
-			QzFix = (SimpleMatrix) stats[0];
+		HashMap<EstimatorType, LambdaAllResult> result = new HashMap<EstimatorType, LambdaAllResult>();
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT,
+				EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+			// Back Z-transformation with translation to the old origin
+			SimpleMatrix aFix = iZtMat.mult(aFixMap.get(est));
+			aFix = aFix.plus(aOrigin);
+			aFixMap.put(est, aFix);
 
-			break;
-		case IA_FFRT: // Compute IA-FFRT (ILS with Fixed Failure-rate Ratio Test)
-			IAFFRTResult iaFfrtResult = new EstimatorIA_FFRT().estimatorIA_FFRT(zHat, lzMat, dzVec, maxFR, null);
-			zFix = iaFfrtResult.getaFix();
-			sqNorm = iaFfrtResult.getsqNorm();
-			nFixed = iaFfrtResult.getnFixed();
+			SimpleMatrix qFix = iZtMat.mult(qFixMap.get(est)).mult(iZtMat.transpose());
+			qFixMap.put(est, qFix);
+			System.out.println("Fixed Ambiguity Variance : " + est.toString());
+			System.out.println(qFix.toString());
 			if (estimateVar) {
-				stats = ComputeVariance
-						.computeVariance(qzHat, 2, 0, maxFR, (int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio());
-				QzFix = (SimpleMatrix) stats[0];
-			} else {
-				if(nFixed==0)
-				{
-					QzFix = new SimpleMatrix(qzHat);
-				}
-				else
-				{
-					QzFix = new SimpleMatrix(nn, nn);
-				}
-				
+				double approxSR = (double) srfrMap.get(est)[0];
+				double approxFR = (double) srfrMap.get(est)[1];
+				System.out.println("Approximate Success Rate : " + est.toString() + "  " + approxSR * 100);
+				System.out.println("Approximate Failure Rate : " + est.toString() + "  " + approxFR * 100);
 			}
-			break;
-
-		case BIE: // Compute BIE based on chi-squared inverse CDF
-			double chi2BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1.0 - alphaBIE, nn / 2.0);
-			EstimatorBIE estBIE = new EstimatorBIE();
-			// Call BIE-estimator (recursive implementation)
-			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,qzHat);
-			zFix = BieResult.getaBIE();
-			QzFix = new SimpleMatrix(nn, nn);
-			BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
-			break;
-		case PAR_FFRT: // Compute PAR-FFRt
-			PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR,
-					estimateVar);
-			zFix = parResult_ffrt.getaPAR();
-			nFixed = parResult_ffrt.getnFixed();
-			sr = parResult_ffrt.getSR_PAR();
-			stats  = parResult_ffrt.getStats();
-			QzFix = (SimpleMatrix) stats[0];
-			break;
-		
-			
-		default:
-			throw new IllegalArgumentException("ATTENTION: the method selected is not available! Use 0-10.");
+			int nFixed = nFixedMap.get(est);
+			result.put(est, new LambdaAllResult(aFix, qFix, nFixed, sr));
 		}
+		return result;
 
-		// Check if fixed solution is rejected, e.g. METHOD = 7 (IA-FFRT) or 8 (IAB)
-		if (nFixed == 0) {
-			SimpleMatrix aFix = aHat.plus(aOrigin); // Back-translation to the old origin
-			double finalSqNorm = 0.0; // Squared norm of float vector is zero
-			return new LambdaResult(aFix, null, finalSqNorm, nFixed, sr, zMat, qzHat);
-		}
-
-		// Back Z-transformation with translation to the old origin
-		SimpleMatrix aFix = iZtMat.mult(zFix);
-		aFix = aFix.plus(aOrigin);
-
-		SimpleMatrix QFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
-		System.out.println("Fixed Ambiguity Variance");
-		System.out.println(QFix.toString());
-
-		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
-		if (method == EstimatorType.PAR || method == EstimatorType.BIE || method == EstimatorType.PAR_FFRT) {
-			SimpleMatrix dzInverse = new SimpleMatrix(dzVec.length, dzVec.length);
-			for (int i = 0; i < dzVec.length; i++) {
-				dzInverse.set(i, 0, 1.0 / dzVec[i]);
-			}
-			SimpleMatrix dzDiv = dzInverse;
-
-			double residual = 0.0;
-			for (int i = 0; i < dzVec.length; i++) {
-				residual += Math.pow(dzDiv.get(i, 0) * (zHat.get(i, 0) - zFix.get(i, 0)), 2);
-			}
-			sqNorm = residual;
-		}
-		if(estimateVar)
-		{
-			double approxSR = (double) stats[1];
-			double approxFR = (double) stats[2];
-			System.out.println("Approximate Success Rate : " + approxSR*100);
-			System.out.println("Approximate Failure Rate : " + approxFR*100);
-		}
-
-		return new LambdaResult(aFix, QFix, sqNorm, nFixed, sr, zMat, qzHat);
 	}
 
 }

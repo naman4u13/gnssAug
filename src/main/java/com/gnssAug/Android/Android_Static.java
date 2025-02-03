@@ -39,6 +39,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix_allEst;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
@@ -60,6 +61,7 @@ import com.gnssAug.helper.ComputeEleAzm;
 import com.gnssAug.helper.ComputeTropoCorr;
 import com.gnssAug.helper.INS.IMUconfigure;
 import com.gnssAug.helper.INS.StateInitialization;
+import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
@@ -90,7 +92,7 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/"
 					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
@@ -528,8 +530,8 @@ public class Android_Static {
 					} else {
 						estName = "Proposed AKF";
 						ekf = new AKFDoppler_Static();
-						estStateMap = ((AKFDoppler_Static) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
-								doTest, true,outlierAnalyze);
+						estStateMap = ((AKFDoppler_Static) ekf).process(satMap, timeList, useIGS, obsvCodeList,
+								doAnalyze, doTest, true, outlierAnalyze);
 					}
 
 					// Doppler is used but no velocity is computed therefore useDoppler is set as
@@ -610,8 +612,6 @@ public class Android_Static {
 				}
 
 			}
-
-			
 
 			if (estimatorType == 16) {
 				String estType = "LS TDCP";
@@ -723,12 +723,12 @@ public class Android_Static {
 			ArrayList<double[]> trueEcefList = new ArrayList<double[]>(satMap.size());
 			for (int i = 0; i < satMap.size(); i++) {
 				trueEcefList.add(trueEcef);
-				
+
 			}
 			// Get True Velocity
 			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(trueEcefList, timeList);
 			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
-				HashMap<String,ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String,ArrayList<CycleSlipDetect>>();
+				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
 				boolean onlyDoppler = false;
@@ -741,7 +741,7 @@ public class Android_Static {
 				}
 				EKF_TDCP_ambFix2 ekf = new EKF_TDCP_ambFix2();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
-						doTest, outlierAnalyze, innPhaseRate, onlyDoppler,trueEcefList);
+						doTest, outlierAnalyze, innPhaseRate, onlyDoppler, trueEcefList);
 
 				useDoppler = true;
 				int n = timeList.size();
@@ -789,18 +789,17 @@ public class Android_Static {
 											sat.isOutlier(), sat.getCn0DbHz()));
 
 						}
-						for(int j=0;j<csdList.size();j++)
-						{
+						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
 							Satellite sat = csdObj.getSat();
 							String obsvCode = sat.getObsvCode();
 							for (int k = 0; k < obsvCodeList.length; k++) {
 								if (obsvCodeList[k].equals(obsvCode)) {
-									csdObj.setClkDrift(estVel[3+k]);
+									csdObj.setClkDrift(estVel[3 + k]);
 								}
 							}
 							satCSmap.computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
-											k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
+									k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
 						}
 						satCountMap.get(Measurement.TDCP).computeIfAbsent(estName, k -> new ArrayList<Long>())
 								.add(ekf.getSatCountMap().get(time));
@@ -816,8 +815,7 @@ public class Android_Static {
 				}
 				if (doAnalyze && estimatorType != 11) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
-					if(estimatorType==18||estimatorType==19)
-					{
+					if (estimatorType == 18 || estimatorType == 19) {
 						GraphPlotter.graphCycleSlip(satCSmap);
 					}
 				}
@@ -829,6 +827,61 @@ public class Android_Static {
 					System.out.println("Ambiguity Repair Percentage: "
 							+ ((ekf.getAmbRepairedCount() * 100.0) / ekf.getAmbDetectedCount()));
 				}
+			}
+
+			if (estimatorType == 21) {
+				HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>> satCSmap = new HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>>();
+				String estName = "EKF TDCP All estimators";
+				EKF_TDCP_ambFix_allEst ekf = new EKF_TDCP_ambFix_allEst();
+				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doTest,
+						outlierAnalyze, trueEcefList);
+
+				int n = timeList.size();
+				estVelMap.put(estName, new ArrayList<double[]>());
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estVel = estStateMap.get(time);
+					if (estVel != null) {
+						estVelMap.get(estName).add(estVel);
+					} else {
+						continue;
+					}
+
+					
+					HashMap<EstimatorType, ArrayList<CycleSlipDetect>> csdMap = ekf.getCsdListMap().get(time);
+					
+					
+					for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
+							EstimatorType.IA_FFRT, EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+						ArrayList<CycleSlipDetect> csdList = csdMap.get(est);
+						for (int j = 0; j < csdList.size(); j++) {
+							CycleSlipDetect csdObj = csdList.get(j);
+							Satellite sat = csdObj.getSat();
+							String obsvCode = sat.getObsvCode();
+							for (int k = 0; k < obsvCodeList.length; k++) {
+								if (obsvCodeList[k].equals(obsvCode)) {
+									csdObj.setClkDrift(estVel[3 + k]);
+								}
+							}
+							satCSmap.computeIfAbsent(est,k->new HashMap<String, ArrayList<CycleSlipDetect>>()).computeIfAbsent(sat.getObsvCode().charAt(0) + "" + sat.getSvid(),
+									k -> new ArrayList<CycleSlipDetect>()).add(csdObj);
+						}
+					}
+
+				}
+
+				GraphPlotter.graphCycleSlipAllEst(satCSmap);
+//				GraphPlotter.graphAmbiguityCount(ekf.getAmbDetectedCountMap(), ekf.getAmbRepairedCountMap(), timeList);
+				System.out.println("Ambiguity Detected Count: " + ekf.getAmbDetectedCount());
+				for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
+						EstimatorType.IA_FFRT, EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+					System.out.println("Ambiguity Repaired Count: "+est.toString()+"  " + ekf.getAmbRepairedCount().get(est));
+					System.out.println("Ambiguity Repair Percentage: "+est.toString()+"  "
+							+ ((ekf.getAmbRepairedCount().get(est) * 100.0) / ekf.getAmbDetectedCount()));
+					System.out.println();
+				}
+			
+
 			}
 
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
@@ -885,8 +938,6 @@ public class Android_Static {
 				System.out.println(" 3d Error - " + MathUtil.RMS(posErrList[3]));
 				System.out.println(" 2d Error - " + MathUtil.RMS(posErrList[4]));
 				System.out.println(" Haversine Distance - " + MathUtil.RMS(posErrList[5]));
-				
-				
 
 			}
 
@@ -980,7 +1031,7 @@ public class Android_Static {
 			if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 
-			} else {
+			} else if(estimatorType!=21) {
 
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
@@ -999,7 +1050,7 @@ public class Android_Static {
 
 				}
 			}
-			if (doAnalyze) {
+			if (doAnalyze&&estimatorType!=21) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}

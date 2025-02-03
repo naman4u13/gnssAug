@@ -92,7 +92,7 @@ public class MainApp {
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			
 			
-			Android_Static.posEstimate(true, 0, 0,18, obsvCodeList,basePath, trueEcef, bias_path,
+			Android_Static.posEstimate(true, 0, 0,21, obsvCodeList,basePath, trueEcef, bias_path,
 					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 			break;
 		case 4:
@@ -144,8 +144,8 @@ public class MainApp {
 			llh = new double[] {51.081628,-114.134081,1110.130-16.7243};
 			trueEcef = LatLonUtil.lla2ecef(llh, true);
 			
-			Android_Static.posEstimate(true, 0, 0,16, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,false, false,false,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,2, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,false, false,true,discardSet,mobName);
 			break;
 		}
 		Instant end = Instant.now();
