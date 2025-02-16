@@ -27,7 +27,7 @@ import com.gnssAug.utility.Weight;
 public class EKF_TDCP_ambFix_allEst extends EKFParent {
 	private long ambDetectedCount = 0;
 	private HashMap<EstimatorType, Long> ambRepairedCount = null;
-
+	private HashMap<EstimatorType, ArrayList<Object[]>> srfrMap = new HashMap<EstimatorType, ArrayList<Object[]>>();
 	public EKF_TDCP_ambFix_allEst() {
 		kfObj = new KFconfig();
 	}
@@ -389,6 +389,10 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 						}
 
 					}
+					if(estimateVar)
+					{
+						srfrMap.computeIfAbsent(est, k->new ArrayList<Object[]>()).add(new Object[] {ambCount,nFixed,lmd.getApproxSR(),lmd.getApproxFR()});
+					}
 
 				}
 
@@ -504,4 +508,9 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 	private boolean notNaNOrInfinity(double d) {
 		return !(Double.isNaN(d) || Double.isInfinite(d));
 	}
+
+	public HashMap<EstimatorType, ArrayList<Object[]>> getSrfrMap() {
+		return srfrMap;
+	}
+	
 }

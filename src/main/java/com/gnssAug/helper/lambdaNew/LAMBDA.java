@@ -308,16 +308,17 @@ public class LAMBDA {
 		if (nFixed == 0) {
 			SimpleMatrix aFix = aHat.plus(aOrigin); // Back-translation to the old origin
 			double finalSqNorm = 0.0; // Squared norm of float vector is zero
-			return new LambdaResult(aFix, null, finalSqNorm, nFixed, sr, zMat, qzHat);
+			
+			return new LambdaResult(aFix, qaHat, finalSqNorm, nFixed, sr, zMat, qzHat);
 		}
 
 		// Back Z-transformation with translation to the old origin
 		SimpleMatrix aFix = iZtMat.mult(zFix);
 		aFix = aFix.plus(aOrigin);
 
-		SimpleMatrix QFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
+		SimpleMatrix qFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
 		System.out.println("Fixed Ambiguity Variance");
-		System.out.println(QFix.toString());
+		System.out.println(qFix.toString());
 
 		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
 		if (method == EstimatorType.PAR || method == EstimatorType.BIE || method == EstimatorType.PAR_FFRT) {
@@ -341,7 +342,7 @@ public class LAMBDA {
 			System.out.println("Approximate Failure Rate : " + approxFR*100);
 		}
 
-		return new LambdaResult(aFix, QFix, sqNorm, nFixed, sr, zMat, qzHat);
+		return new LambdaResult(aFix, qFix, sqNorm, nFixed, sr, zMat, qzHat);
 	}
 
 }

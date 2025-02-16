@@ -133,10 +133,10 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-//				if(gtIndex>2000)
-//				{
-//					break;
-//				}
+				if(gtIndex>500)
+				{
+					break;
+				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
@@ -831,11 +831,12 @@ public class Android_Static {
 
 			if (estimatorType == 21) {
 				HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>> satCSmap = new HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>>();
+				HashMap<EstimatorType, ArrayList<Object[]>> srfrMap = new HashMap<EstimatorType, ArrayList<Object[]>>();
 				String estName = "EKF TDCP All estimators";
 				EKF_TDCP_ambFix_allEst ekf = new EKF_TDCP_ambFix_allEst();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, useIGS, obsvCodeList, doTest,
 						outlierAnalyze, trueEcefList);
-
+				srfrMap = (ekf.getSrfrMap());
 				int n = timeList.size();
 				estVelMap.put(estName, new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {
@@ -869,8 +870,8 @@ public class Android_Static {
 					}
 
 				}
-
-				GraphPlotter.graphCycleSlipAllEst(satCSmap);
+				GraphPlotter.graphSRFR(srfrMap);
+				//GraphPlotter.graphCycleSlipAllEst(satCSmap);
 //				GraphPlotter.graphAmbiguityCount(ekf.getAmbDetectedCountMap(), ekf.getAmbRepairedCountMap(), timeList);
 				System.out.println("Ambiguity Detected Count: " + ekf.getAmbDetectedCount());
 				for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,

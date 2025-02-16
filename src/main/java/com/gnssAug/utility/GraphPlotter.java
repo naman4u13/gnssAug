@@ -735,9 +735,9 @@ public class GraphPlotter extends ApplicationFrame {
 	public static void graphCycleSlipAllEst(
 			HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>> satCSmap) {
 
-		boolean makeCSV = true;
+		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/SamsungS20plus5G.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/Pixel7pro_var.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -773,6 +773,47 @@ public class GraphPlotter extends ApplicationFrame {
 						}
 					}
 				}
+				writer.writeAll(dataList);
+				writer.close();
+			} catch (IOException err) {
+				// TODO Auto-generated catch block
+				err.printStackTrace();
+			}
+		}
+
+	}
+	
+	public static void graphSRFR(
+			HashMap<EstimatorType, ArrayList<Object[]>> srfrMap) {
+
+		boolean makeCSV = false;
+		if (makeCSV) {
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/Pixel4_SRFR.csv";
+			File file = new File(filePath);
+			try {
+				// create FileWriter object with file as parameter
+				FileWriter outputfile = new FileWriter(file);
+				// create CSVWriter object filewriter object as parameter
+				CSVWriter writer = new CSVWriter(outputfile);
+				// create a List which contains String array
+				List<String[]> dataList = new ArrayList<String[]>();
+				String[] header = new String[] { "EstType","nFloat", "nFixed", "SR", "FR"};
+				writer.writeNext(header);
+				
+					for (EstimatorType est : srfrMap.keySet()) {
+						ArrayList<Object[]> srfrObj =srfrMap.get(est);
+							for(Object[] objList:srfrObj) {
+							String[] entry = new String[5];
+							
+							entry[0] = est.toString();
+							entry[1] = ""+(int)objList[0];
+							entry[2] = ""+(int)objList[1];
+							entry[3] = ""+(double)objList[2];
+							entry[4] = ""+(double)objList[3];
+							dataList.add(entry);
+							}
+					}
+				
 				writer.writeAll(dataList);
 				writer.close();
 			} catch (IOException err) {

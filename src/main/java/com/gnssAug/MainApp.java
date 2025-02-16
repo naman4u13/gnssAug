@@ -2,21 +2,26 @@ package com.gnssAug;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeMap;
 
 import org.apache.commons.math3.distribution.NormalDistribution;
 
 import com.gnssAug.Android.Android;
 import com.gnssAug.Android.Android_Static;
+import com.gnssAug.Android.fileParser.GNSS_Log;
 import com.gnssAug.Android.fileParser.GroundTruth_GSA;
+import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.IGS.IGS;
 import com.gnssAug.utility.LatLonUtil;
 
 public class MainApp {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 
 		Instant start = Instant.now();
 		String base_url = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/input_files/";// "C:\\Users\\naman.agarwal\\Documents\\GNSS\\Google
@@ -25,7 +30,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (5) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -122,8 +127,7 @@ public class MainApp {
 		case 5:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			obsvCodeList = new String[] {"G1C","E1C"};
-			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
-
+			basePath = "/Users/naman.agarwal/Downloads/Android_GNSS_Dataset_Hervanta/S1_static/raw/log_SamsungA52_20230317141230.txt";
 			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
@@ -144,8 +148,8 @@ public class MainApp {
 			llh = new double[] {51.081628,-114.134081,1110.130-16.7243};
 			trueEcef = LatLonUtil.lla2ecef(llh, true);
 			
-			Android_Static.posEstimate(true, 0, 0,2, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,false, false,true,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,21, obsvCodeList,basePath, trueEcef, bias_path,
+					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 			break;
 		}
 		Instant end = Instant.now();

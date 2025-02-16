@@ -109,12 +109,22 @@ public class LAMBDA_all {
 
 		private int nFixed; // Number of integer-fixed ambiguity components
 		private double sr; // Success rate (bootstrapping) for Full Ambiguity Resolution
-
+		private double approxSR;
+		private double approxFR;
 		public LambdaAllResult(SimpleMatrix aFix, SimpleMatrix qFix, int nFixed, double sr) {
 			this.aFix = aFix;
 			this.qFix = qFix;
 			this.nFixed = nFixed;
 			this.sr = sr;
+
+		}
+		public LambdaAllResult(SimpleMatrix aFix, SimpleMatrix qFix, int nFixed, double sr,double approxSR,double approxFR) {
+			this.aFix = aFix;
+			this.qFix = qFix;
+			this.nFixed = nFixed;
+			this.sr = sr;
+			this.approxSR = approxSR;
+			this.approxFR = approxFR;
 
 		}
 
@@ -132,6 +142,14 @@ public class LAMBDA_all {
 
 		public double getSr() {
 			return sr;
+		}
+		public double getApproxSR()
+		{
+			return approxSR;
+		}
+		public double getApproxFR()
+		{
+			return approxFR;
 		}
 
 	}
@@ -251,14 +269,17 @@ public class LAMBDA_all {
 			qFixMap.put(est, qFix);
 			System.out.println("Fixed Ambiguity Variance : " + est.toString());
 			System.out.println(qFix.toString());
+			int nFixed = nFixedMap.get(est);
 			if (estimateVar) {
 				double approxSR = (double) srfrMap.get(est)[0];
 				double approxFR = (double) srfrMap.get(est)[1];
 				System.out.println("Approximate Success Rate : " + est.toString() + "  " + approxSR * 100);
 				System.out.println("Approximate Failure Rate : " + est.toString() + "  " + approxFR * 100);
+				result.put(est, new LambdaAllResult(aFix, qFix, nFixed, sr,approxSR,approxFR));
+				
 			}
-			int nFixed = nFixedMap.get(est);
-			result.put(est, new LambdaAllResult(aFix, qFix, nFixed, sr));
+			else {
+			result.put(est, new LambdaAllResult(aFix, qFix, nFixed, sr));}
 		}
 		return result;
 

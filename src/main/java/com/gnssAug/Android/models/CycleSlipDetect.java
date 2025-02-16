@@ -20,7 +20,8 @@ public class CycleSlipDetect {
 	private double intAmb;
 	private double floatAmbCov;
 	private double intAmbCov;
-	
+	private double successRate;
+	private double failureRate;
 	
 	
 	public CycleSlipDetect(CycleSlipDetect csdObj) {
@@ -135,6 +136,22 @@ public class CycleSlipDetect {
 
 	public void setIntAmbCov(double intAmbCov) {
 		this.intAmbCov = intAmbCov;
+	}
+
+	public double getSuccessRate() {
+		return successRate;
+	}
+
+	public void setSuccessRate(double successRate) {
+		this.successRate = successRate;
+	}
+
+	public double getFailureRate() {
+		return failureRate;
+	}
+
+	public void setFailureRate(double failureRate) {
+		this.failureRate = failureRate;
 	}
 
 }
