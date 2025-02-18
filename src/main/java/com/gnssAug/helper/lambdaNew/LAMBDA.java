@@ -286,8 +286,8 @@ public class LAMBDA {
 			// Call BIE-estimator (recursive implementation)
 			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,qzHat);
 			zFix = BieResult.getaBIE();
-			QzFix = new SimpleMatrix(nn, nn);
-			BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
+			QzFix = (SimpleMatrix) ComputeVariance.computeVariance(qzHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null)[0];
+			//BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
 			break;
 		case PAR_FFRT: // Compute PAR-FFRt
 			PARResult_FFRT parResult_ffrt = EstimatorPAR_FFRT.estimatorPAR_FFRT(zHat, lzMat, dzVec, nCands, minSR,

@@ -57,10 +57,11 @@ public class EstimatorPAR_FFRT {
 	 * @param minSR    Minimum success rate threshold [DEFAULT = 0.995]
 	 * @param alphaBIE Use BIE estimator instead if alpha > 0 [DEFAULT = 0]
 	 * @return PARResult object containing aPAR, nFixed, SR_PAR
+	 * @throws Exception 
 	 * @throws IllegalArgumentException if number of inputs is insufficient
 	 */
 	public static PARResult_FFRT estimatorPAR_FFRT(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, Integer nCands,
-			Double minSR, boolean estimateVar) {
+			Double minSR, boolean estimateVar) throws Exception {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
@@ -148,7 +149,7 @@ public class EstimatorPAR_FFRT {
 	}
 
 	private static Object[] findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
-			double[] srCumul, double minSR, boolean estimateVar) {
+			double[] srCumul, double minSR, boolean estimateVar) throws Exception {
 
 		double maxFR = 1 / 100.0;
 		int n = aHat.numRows();

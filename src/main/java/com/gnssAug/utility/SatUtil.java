@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.IntStream;
 
+import org.apache.commons.collections.set.ListOrderedSet;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.Measurement;
@@ -61,6 +62,16 @@ public class SatUtil {
 		}
 		return obsvCodeSet.toArray(new String[0]);
 
+	}
+	
+	public static ListOrderedSet findSSIset(String[] obsvCodeList)
+	{
+		ListOrderedSet ssiSet = new ListOrderedSet();
+		for(int i=0;i<obsvCodeList.length;i++)
+		{
+			ssiSet.add(obsvCodeList[i].charAt(0));
+		}
+		return ssiSet;
 	}
 	public static LinkedHashSet<String> findObsvCodeSet(ArrayList<Satellite> satList) {
 		LinkedHashSet<String> obsvCodeSet = new LinkedHashSet<String>();

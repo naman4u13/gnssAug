@@ -58,10 +58,11 @@ public class EstimatorPAR {
 	 * @param minSR    Minimum success rate threshold [DEFAULT = 0.995]
 	 * @param alphaBIE Use BIE estimator instead if alpha > 0 [DEFAULT = 0]
 	 * @return PARResult object containing aPAR, nFixed, SR_PAR
+	 * @throws Exception 
 	 * @throws IllegalArgumentException if number of inputs is insufficient
 	 */
 	public static PARResult estimatorPAR(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec, Integer nCands,
-			Double minSR, Double alphaBIE, boolean estimateVar) {
+			Double minSR, Double alphaBIE, boolean estimateVar) throws Exception {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 		Object[] stats = null;

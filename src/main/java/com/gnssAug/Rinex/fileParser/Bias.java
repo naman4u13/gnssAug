@@ -5,11 +5,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
+import org.ejml.simple.SimpleMatrix;
+
 import com.gnssAug.Android.constants.Constellation;
 import com.gnssAug.utility.StringUtil;
 
 public class Bias {
-
+	private final static double SpeedofLight = 299792458;
 	private String path;
 	private HashMap<Character, HashMap<Integer, HashMap<String, HashMap<String, Double>>>> biasMap;
 	private Map<String, Integer> GPSindexMap;
@@ -20,6 +22,7 @@ public class Bias {
 		GPSindexMap = Map.of("C1C", 0, "C1W", 1, "C2C", 2, "C2W", 3, "C2S", 4, "C2L", 5, "C2X", 6, "C5Q", 7, "C5X", 8);
 		C1Wmap = new HashMap<Integer, double[]>();
 		bsx_process();
+		System.out.println();
 	}
 
 	private void bsx_process() throws Exception {
@@ -88,25 +91,27 @@ public class Bias {
 			C1W[1] = 0;
 			C1W[2] = mat[0][3] + mat[3][2];
 			C1W[3] = mat[1][3];
-			C1W[4] = mat[0][3] + mat[3][4];
-			C1W[5] = mat[0][3] + mat[3][5];
-			C1W[6] = mat[0][3] + mat[3][6];
-			C1W[7] = mat[0][1] + mat[1][7];
-			C1W[8] = mat[0][1] + mat[1][8];
+			C1W[4] = mat[1][3] + mat[3][4];
+			C1W[5] = mat[1][3] + mat[3][5];
+			C1W[6] = mat[1][3] + mat[3][6];
+			C1W[7] = mat[1][0] + mat[0][7];
+			C1W[8] = mat[1][0] + mat[0][8];
+			SimpleMatrix a = new SimpleMatrix(mat);
 			C1Wmap.put(prn, C1W);
 		}
 
 	}
 
-	public double getISC(String obsvCode, int PRN) {
+	public double getISC(String obsvCode, int PRN) throws Exception {
 		char SSI = obsvCode.charAt(0);
 		// Observable/Observation code in RINEX format
 		String _obsvCode = 'C' + obsvCode.substring(1);
 		Double ISC = 0.0;
 		if (SSI == 'G') {
+			
 			int index = GPSindexMap.get(_obsvCode);
 			ISC = C1Wmap.get(PRN)[index];
-
+			
 		} else if (SSI == 'E') {
 			HashMap<String, HashMap<String, Double>> galileoMap = biasMap.get(SSI).get(PRN);
 			if (_obsvCode.equals("C5Q")) {
@@ -118,13 +123,29 @@ public class Bias {
 		} else if (SSI == 'C') {
 			double bds2FreqRatio = Math.pow(Constellation.frequency.get('C').get(2), 2)
 					/ Math.pow(Constellation.frequency.get('C').get(7), 2);
-			double bds3FreqRatio = Math.pow(Constellation.frequency.get('C').get(2), 2)
+			double bds13FreqRatio = Math.pow(Constellation.frequency.get('C').get(2), 2)
 					/ Math.pow(Constellation.frequency.get('C').get(6), 2);
 			HashMap<String, HashMap<String, Double>> beidouMap = biasMap.get(SSI).get(PRN);
-			if (beidouMap.get("C2I").containsKey("C7I")) {
-				ISC = -beidouMap.get("C2I").get("C7I") / (1 - bds2FreqRatio);
-			} else {
-				ISC = -beidouMap.get("C2I").getOrDefault("C6I", null) / (1 - bds3FreqRatio);
+			if(_obsvCode.equals("C2I"))
+			{
+				ISC = -beidouMap.get("C2I").getOrDefault("C6I", null) / (1 - bds13FreqRatio);
+			}
+			else if(_obsvCode.equals("C5X"))
+			{
+				double ISC_ionoFree_C6I = -(bds13FreqRatio)*beidouMap.get("C2I").getOrDefault("C6I", null) / (1 - bds13FreqRatio);
+				double ISC_C6I_C1X = -beidouMap.get("C1X").getOrDefault("C6I", null);
+				double ISC_C1X_C5X =  beidouMap.get("C1X").getOrDefault("C5X", null);
+				ISC = ISC_ionoFree_C6I+ISC_C6I_C1X+ISC_C1X_C5X;
+			}
+			else if(_obsvCode.equals("C1P"))
+			{
+				double ISC_ionoFree_C6I = -(bds13FreqRatio)*beidouMap.get("C2I").getOrDefault("C6I", null) / (1 - bds13FreqRatio);
+				double ISC_C6I_C1P = -beidouMap.get("C1P").getOrDefault("C6I", null);
+				
+				ISC = ISC_ionoFree_C6I+ISC_C6I_C1P;
+			}
+			else {
+				throw new Exception("Error in Beidou DCB initialization");
 			}
 		}
 		return ISC;

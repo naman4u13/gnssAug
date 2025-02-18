@@ -14,6 +14,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
+import org.apache.commons.collections.set.ListOrderedSet;
 import org.ejml.simple.SimpleMatrix;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
@@ -92,8 +93,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/"
-					+ mobName + "_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
+					+ mobName + "_L1_ILS";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -123,6 +124,11 @@ public class Android_Static {
 				geoid = buildGeoid();
 
 			}
+			ListOrderedSet ssiSet = new ListOrderedSet();
+			for(int i=0;i<obsvCodeList.length;i++)
+			{
+				ssiSet.add(obsvCodeList[i].charAt(0));
+			}
 			double[] trueLLH = LatLonUtil.ecef2lla(trueEcef);
 			int gtIndex = 0;
 			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
@@ -133,15 +139,13 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if(gtIndex>500)
-				{
-					break;
-				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
 						weekNo, clock, orbit, useIGS, discardSet);
-				int m = obsvCodeList.length;
+				
+				
+				int m =ssiSet.size();
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
 
@@ -792,9 +796,10 @@ public class Android_Static {
 						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
 							Satellite sat = csdObj.getSat();
-							String obsvCode = sat.getObsvCode();
-							for (int k = 0; k < obsvCodeList.length; k++) {
-								if (obsvCodeList[k].equals(obsvCode)) {
+							char ssi = sat.getObsvCode().charAt(0);
+							
+							for (int k = 0; k < ssiSet.size(); k++) {
+								if ((char)ssiSet.get(k)==ssi) {
 									csdObj.setClkDrift(estVel[3 + k]);
 								}
 							}
@@ -858,9 +863,9 @@ public class Android_Static {
 						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
 							Satellite sat = csdObj.getSat();
-							String obsvCode = sat.getObsvCode();
-							for (int k = 0; k < obsvCodeList.length; k++) {
-								if (obsvCodeList[k].equals(obsvCode)) {
+							char ssi = sat.getObsvCode().charAt(0);
+							for (int k = 0; k < ssiSet.size(); k++) {
+								if ((char)ssiSet.get(k)==ssi) {
 									csdObj.setClkDrift(estVel[3 + k]);
 								}
 							}

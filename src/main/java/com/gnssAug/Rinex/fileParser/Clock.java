@@ -125,7 +125,7 @@ public class Clock {
 
 	}
 
-	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB) {
+	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB) throws Exception {
 		double[] X = new double[2];
 		double[] Y = new double[2];
 		char SSI = obsvCode.charAt(0);
@@ -152,6 +152,7 @@ public class Clock {
 				double TGD = bias.getISC("G2W", SVID) / (1 - gpsFreqRatio);
 
 				double ISC = bias.getISC(obsvCode, SVID);
+				
 				clkBias = clkBias - TGD + ISC;
 
 			} else if (SSI == 'E') {
@@ -168,10 +169,9 @@ public class Clock {
 				}
 
 			} else if (SSI == 'C') {
-
-				Double ISC = bias.getISC("C2I", SVID);
+				double ISC = 0;
+				ISC = bias.getISC(obsvCode, SVID);
 				clkBias = clkBias + ISC;
-
 			}
 		}
 		return new double[] { clkBias, clkDrift };

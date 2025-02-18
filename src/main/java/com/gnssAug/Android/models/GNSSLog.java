@@ -104,7 +104,7 @@ public class GNSSLog implements Cloneable {
 
 	}
 
-	public GNSSLog(String[] data) {
+	public GNSSLog(String[] data) throws Exception {
 		super();
 		this.utcTimeMillis = Long.parseLong(data[1]);
 		this.timeNanos = Long.parseLong(data[2]);
@@ -153,10 +153,27 @@ public class GNSSLog implements Cloneable {
 			freq = (int) 1602e6;
 		}
 
+		String ssi = SSIMap.get(constellationType);
 		String freqID = freqMap.get(freq);
 		String channel = freqID.equals("1") ? "C" : freqID.equals("2") ? "I" : "X";
 
-		String ssi = SSIMap.get(constellationType);
+		if(this.codeType!=null&&!this.codeType.isEmpty())
+		{
+			if(this.codeType.equals("P"))
+			{
+				if(ssi.equals("C"))
+				{
+					channel = "P";
+				}
+				else
+				{
+					throw new Exception("Beidou BDS-3 constellation B1C error");
+				}
+			}
+		}
+		
+		
+		
 		if (ssi.equals("J")) {
 			svid = qzssMap.get(svid);
 		}

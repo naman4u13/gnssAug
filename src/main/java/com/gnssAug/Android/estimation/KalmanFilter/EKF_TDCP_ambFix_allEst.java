@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
+
+import org.apache.commons.collections.set.ListOrderedSet;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
@@ -41,6 +43,12 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 			ArrayList<double[]> truePosEcefList) throws Exception {
 		boolean isWeighted = false;
 		int m = obsvCodeList.length;
+		ListOrderedSet ssiSet = new ListOrderedSet();
+		for(int i=0;i<m;i++)
+		{
+			ssiSet.add(obsvCodeList[i].charAt(0));
+		}
+		m =ssiSet.size();
 		int n = 3 + m;
 		SimpleMatrix x = new SimpleMatrix(n, 1);
 		SimpleMatrix P = new SimpleMatrix(n, n);
@@ -67,14 +75,14 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		}
 		ambDetectedCountMap = new TreeMap<Long, Integer>();
 		ambRepairedCountMap = new TreeMap<Long, HashMap<EstimatorType, Integer>>();
-		return iterate(SatMap, timeList, useIGS, obsvCodeList, doTest, outlierAnalyze, isWeighted, truePosEcefList);
+		return iterate(SatMap, timeList, useIGS, ssiSet, doTest, outlierAnalyze, isWeighted, truePosEcefList);
 	}
 
 	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
-			boolean useIGS, String[] obsvCodeList, boolean doTest, boolean outlierAnalyze, boolean isWeighted,
+			boolean useIGS, ListOrderedSet ssiSet, boolean doTest, boolean outlierAnalyze, boolean isWeighted,
 			ArrayList<double[]> truePosEcefList) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
-		int m = obsvCodeList.length;
+		int m = ssiSet.size();
 		int x_size = 3 + m;
 		long prevTime = timeList.get(0);
 		double[] prevTruePos = truePosEcefList.get(0);
@@ -127,7 +135,7 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 			}
 
 			HashMap<EstimatorType, ArrayList<CycleSlipDetect>> csdMap = runFilter(currentTime, deltaT, csdList,
-					obsvCodeList, doTest, outlierAnalyze, useIGS, i, isWeighted, refPos);
+					ssiSet, doTest, outlierAnalyze, useIGS, i, isWeighted, refPos);
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
 
@@ -153,7 +161,7 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 
 	// Innovation Based Testing
 	private HashMap<EstimatorType, ArrayList<CycleSlipDetect>> runFilter(long currentTime, double deltaT,
-			ArrayList<CycleSlipDetect> csdList, String[] obsvCodeList, boolean doTest, boolean outlierAnalyze,
+			ArrayList<CycleSlipDetect> csdList, ListOrderedSet ssiSet, boolean doTest, boolean outlierAnalyze,
 			boolean useIGS, int ct, boolean isWeighted, double[] refPos) throws Exception {
 
 		// Satellite count
@@ -162,7 +170,7 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		for (int i = 0; i < n; i++) {
 			satList.add(csdList.get(i).getSat());
 		}
-		int m = obsvCodeList.length;
+		int m = ssiSet.size();
 		// Last update VC-matrix
 		SimpleMatrix priorP = new SimpleMatrix(kfObj.getCovariance());
 
@@ -179,9 +187,9 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
 			z.set(i, csdObj.getDopplerDR() - csdObj.getSatVelCorr());
-			String obsvCode = satList.get(i).getObsvCode();
+			char ssi = satList.get(i).getObsvCode().charAt(0);
 			for (int j = 0; j < m; j++) {
-				if (obsvCodeList[j].equals(obsvCode)) {
+				if ((char)ssiSet.get(j)==ssi) {
 					H.set(i, 3 + j, 1);
 				}
 			}
@@ -235,9 +243,9 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		for (int i = 0; i < tested_n; i++) {
 			CycleSlipDetect csdObj = testedCsdList.get(i);
 			z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-			String obsvCode = testedSatList.get(i).getObsvCode();
+			char ssi = satList.get(i).getObsvCode().charAt(0);
 			for (int j = 0; j < m; j++) {
-				if (obsvCodeList[j].equals(obsvCode)) {
+				if ((char)ssiSet.get(j)==ssi) {
 					H.set(i, 3 + j, 1);
 				}
 			}
@@ -292,16 +300,16 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
 			z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-			String obsvCode = satList.get(i).getObsvCode();
 			double wavelength = csdObj.getWavelength();
+			char ssi = satList.get(i).getObsvCode().charAt(0);
 			for (int j = 0; j < m; j++) {
-				if (obsvCodeList[j].equals(obsvCode)) {
+				if ((char)ssiSet.get(j)==ssi) {
 					H.set(i, 3 + j, 1);
 				}
 			}
 			if (csdObj.isCS()) {
 				sysout_var[ctr - 3 - m] = R.get(i, i) / Math.pow(wavelength, 2);
-				sysout_svid[ctr - 3 - m] = obsvCode.charAt(0) + "" + satList.get(i).getSvid();
+				sysout_svid[ctr - 3 - m] = ssi + "" + satList.get(i).getSvid();
 				H.set(i, ctr, wavelength);
 				ctr++;
 			}

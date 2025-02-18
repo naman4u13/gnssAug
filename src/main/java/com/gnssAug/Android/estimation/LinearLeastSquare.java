@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.stream.IntStream;
 
+import org.apache.commons.collections.set.ListOrderedSet;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 import org.ejml.simple.SimpleMatrix;
@@ -98,12 +99,13 @@ public class LinearLeastSquare {
 			}
 		}
 		String[] obsvCodeList = useIGS ? (String[]) SatUtil.findObsvCodeArray(satList) : null;
-
-		double[] estState = estimate(satList, weight, null, refPos, type, useIGS, obsvCodeList);
+		ListOrderedSet ssiSet = SatUtil.findSSIset(obsvCodeList);
+		
+		double[] estState = estimate(satList, weight, null, refPos, type, useIGS, ssiSet);
 		if (doAnalyze) {
 
 			if (outlierAnalyze) {
-				analyze(weight, estState, satList, useAndroidW, type, refPos, useIGS, obsvCodeList);
+				analyze(weight, estState, satList, useAndroidW, type, refPos, useIGS, ssiSet);
 
 			}
 			double[][] _weight = weight;
@@ -114,7 +116,7 @@ public class LinearLeastSquare {
 				while (index != -1) {
 
 					index = qualityControl(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS,
-							obsvCodeList);
+							ssiSet);
 					if (index != -1) {
 						Satellite sat = testedSatList.remove(index);
 						satList.get(satList.indexOf(sat)).setOutlier(true);
@@ -129,13 +131,13 @@ public class LinearLeastSquare {
 						}
 						_weight = _tempweight;
 						obsvCodeList = SatUtil.findObsvCodeArray(testedSatList);
-
-						estState = estimate(testedSatList, _weight, null, refPos, type, useIGS, obsvCodeList);
+						ssiSet = SatUtil.findSSIset(obsvCodeList);
+						estState = estimate(testedSatList, _weight, null, refPos, type, useIGS, ssiSet);
 					}
 				}
 			}
 			if (!outlierAnalyze) {
-				analyze(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS, obsvCodeList);
+				analyze(_weight, estState, testedSatList, useAndroidW, type, refPos, useIGS, ssiSet);
 
 			}
 
@@ -150,12 +152,12 @@ public class LinearLeastSquare {
 	}
 
 	private static void analyze(double[][] weight, double[] estState, ArrayList<Satellite> satList, boolean useAndroidW,
-			Measurement type, double[] refPos, boolean useIGS, String[] obsvCodeList) throws Exception {
+			Measurement type, double[] refPos, boolean useIGS, ListOrderedSet ssiSet) throws Exception {
 
 		int n = satList.size();
 		int m = 1;
 		if (useIGS) {
-			m = obsvCodeList.length;
+			m = ssiSet.size();
 		}
 		int l = 3 + m;
 		int[] constellCount = new int[m];
@@ -167,7 +169,7 @@ public class LinearLeastSquare {
 		}
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
-			String obsvCode = sat.getObsvCode();
+			char ssi = sat.getObsvCode().charAt(0);
 			// Its not really a ECI, therefore don't get confused
 			double[] satEcef = sat.getSatEci();
 			double gr_hat = MathUtil.getEuclidean(satEcef, userEcef);
@@ -178,7 +180,7 @@ public class LinearLeastSquare {
 			double y_hat = 0;
 			if (useIGS) {
 				for (int j = 0; j < m; j++) {
-					if (obsvCode.equals(obsvCodeList[j])) {
+					if (ssi == (char)ssiSet.get(j)) {
 						h[i][3 + j] = 1;
 						y_hat += estState[3 + j];
 						constellCount[j] +=1; 
@@ -320,13 +322,13 @@ public class LinearLeastSquare {
 
 	// Baarda's Iterative Data Snooping
 	private static int qualityControl(double[][] weight, double[] estState, ArrayList<Satellite> satList,
-			boolean useAndroidW, Measurement type, double[] refPos, boolean useIGS, String[] obsvCodeList)
+			boolean useAndroidW, Measurement type, double[] refPos, boolean useIGS,ListOrderedSet ssiSet)
 			throws Exception {
 
 		int n = satList.size();
 		int m = 1;
 		if (useIGS) {
-			m = obsvCodeList.length;
+			m = ssiSet.size();
 		}
 		int l = 3 + m;
 		double[] residual = new double[n];
@@ -337,7 +339,7 @@ public class LinearLeastSquare {
 		}
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
-			String obsvCode = sat.getObsvCode();
+			char ssi = sat.getObsvCode().charAt(0);
 			// Its not really a ECI, therefore don't get confused
 			double[] satEcef = sat.getSatEci();
 			double gr_hat = MathUtil.getEuclidean(satEcef, userEcef);
@@ -348,7 +350,7 @@ public class LinearLeastSquare {
 			double y_hat = 0;
 			if (useIGS) {
 				for (int j = 0; j < m; j++) {
-					if (obsvCode.equals(obsvCodeList[j])) {
+					if (ssi == (char)ssiSet.get(j)) {
 						h[i][3 + j] = 1;
 						y_hat += estState[3 + j];
 					}
@@ -438,25 +440,25 @@ public class LinearLeastSquare {
 	}
 
 	private static double[] estimate(ArrayList<Satellite> satList, double[][] weight, HashSet<Integer> indexSet,
-			double[] refPos, Measurement type, boolean useIGS, String[] obsvCodeList) throws Exception {
+			double[] refPos, Measurement type, boolean useIGS, ListOrderedSet ssiSet) throws Exception {
 
 		if (type == Measurement.Pseudorange) {
-			return estimatePos(satList, weight, null, useIGS, obsvCodeList);
+			return estimatePos(satList, weight, null, useIGS, ssiSet);
 		} else if (type == Measurement.Doppler) {
-			return estimateVel(satList, weight, refPos, useIGS, obsvCodeList);
+			return estimateVel(satList, weight, refPos, useIGS, ssiSet);
 		} else {
 			throw new Exception("Fatal Error: Wrong Measurement Type chosen");
 		}
 	}
 
 	private static double[] estimatePos(ArrayList<Satellite> satList, double[][] weight, HashSet<Integer> indexSet,
-			boolean useIGS, String[] obsvCodeList) throws Exception {
+			boolean useIGS, ListOrderedSet ssiSet) throws Exception {
 
 		boolean augBiasState = indexSet != null && !indexSet.isEmpty();
 		int n = satList.size();
 		int m = 1;
 		if (useIGS) {
-			m = obsvCodeList.length;
+			m = ssiSet.size();
 		}
 		// variable to store estimated Rx position and clk offset
 		double[] estEcefClk = new double[3 + m];
@@ -490,7 +492,8 @@ public class LinearLeastSquare {
 				for (int i = 0; i < n; i++) {
 
 					Satellite sat = satList.get(i);
-					String obsvCode = sat.getObsvCode();
+					char ssi = sat.getObsvCode().charAt(0);
+					
 					// Its not really a ECI, therefore don't get confused
 					double[] satEcef = sat.getSatEci();
 					double PR = sat.getPseudorange();
@@ -503,7 +506,7 @@ public class LinearLeastSquare {
 					IntStream.range(0, 3).forEach(j -> h[index][j] = -(satEcef[j] - estEcefClk[j]) / approxGR);
 					if (useIGS) {
 						for (int j = 0; j < m; j++) {
-							if (obsvCode.equals(obsvCodeList[j])) {
+							if (ssi == (char)ssiSet.get(j)) {
 								h[i][3 + j] = 1;
 								approxPR += estEcefClk[3 + j];
 							}
@@ -547,12 +550,12 @@ public class LinearLeastSquare {
 	}
 
 	private static double[] estimateVel(ArrayList<Satellite> satList, double[][] weight, double[] estEcefClk,
-			boolean useIGS, String[] obsvCodeList) throws Exception {
+			boolean useIGS, ListOrderedSet ssiSet) throws Exception {
 		// Satellite count
 		int n = satList.size();
 		int m = 1;
 		if (useIGS) {
-			m = obsvCodeList.length;
+			m = ssiSet.size();
 		}
 		double[] estVel = new double[3 + m];
 		double[] z = new double[n];
@@ -566,7 +569,7 @@ public class LinearLeastSquare {
 			for (int i = 0; i < n; i++) {
 
 				Satellite sat = satList.get(i);
-				String obsvCode = sat.getObsvCode();
+				char ssi = sat.getObsvCode().charAt(0);
 				// Its not really a ECI, therefore don't get confused
 				double[] satEcef = sat.getSatEci();
 
@@ -577,7 +580,7 @@ public class LinearLeastSquare {
 				IntStream.range(0, 3).forEach(j -> h[index][j] = -(satEcef[j] - estEcefClk[j]) / approxGR);
 				if (useIGS) {
 					for (int j = 0; j < m; j++) {
-						if (obsvCode.equals(obsvCodeList[j])) {
+						if (ssi == (char)ssiSet.get(j)) {
 							h[i][3 + j] = 1;
 						}
 					}

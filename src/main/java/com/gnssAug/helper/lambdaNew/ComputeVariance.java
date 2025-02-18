@@ -25,11 +25,12 @@ public class ComputeVariance {
 	 * @param QMat Variance-Covariance matrix of the ambiguities
 	 * @return Result object containing Success Rate (SR), Failure Rate (FR), and
 	 *         Computational Time (timeCPU)
+	 * @throws Exception 
 	 * @throws IllegalArgumentException if not enough inputs are provided or if an
 	 *                                  invalid estimator is selected
 	 */
 	public static Object[] computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR, Integer nSamples,
-			Double muRatio) {
+			Double muRatio) throws Exception {
 		// Problem dimensionality
 		int nn = QMat.numCols();
 		SimpleMatrix LMat;
@@ -64,12 +65,12 @@ public class ComputeVariance {
 		Random rand = new Random();
 		// Check if the matrix is symmetric
 		RealMatrix _QMat = new Array2DRowRealMatrix(Matrix.matrix2Array(QMat));
-		if (!isSymmetric(_QMat, 1e-20)) {
-
-			_QMat = makeSymmetric(_QMat);
-		}
+		_QMat = makeSymmetric(_QMat);
+//		if (!isSymmetric(_QMat, 1e-20)) {
+//
+//			_QMat = makeSymmetric(_QMat);
+//		}
 		RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
-
 		SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
 
 		// Now cholQMat contains the lower triangular matrix from the Cholesky
@@ -126,7 +127,7 @@ public class ComputeVariance {
 	}
 
 	public static HashMap<EstimatorType, Object[]> computeVarianceAll(SimpleMatrix QMat, int decorr, Double maxFR,
-			Integer nSamples, Double muRatio) {
+			Integer nSamples, Double muRatio) throws Exception {
 		// Problem dimensionality
 		int nn = QMat.numCols();
 		SimpleMatrix LMat;
@@ -165,7 +166,14 @@ public class ComputeVariance {
 
 			_QMat = makeSymmetric(_QMat);
 		}
-		RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
+		RealMatrix _cholQMat = null;
+		try {
+		 _cholQMat = new CholeskyDecomposition(_QMat).getL();
+		}
+		catch (Exception e) {
+			// TODO: handle exception
+			throw new Exception("Cholesky Decomposition did'nt work out");
+		}
 
 		SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
 
