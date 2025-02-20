@@ -40,15 +40,19 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 			boolean useIGS, String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
 			boolean innPhaseRate, boolean onlyDoppler,ArrayList<double[]> truePosEcefList) throws Exception {
 		boolean isWeighted = false;
-		int m = obsvCodeList.length;
+		int _m = obsvCodeList.length;
 		
 		ListOrderedSet ssiSet = new ListOrderedSet();
-		for(int i=0;i<m;i++)
+		for(int i=0;i<_m;i++)
 		{
 			ssiSet.add(obsvCodeList[i].charAt(0));
 		}
-		m =ssiSet.size();
-		
+		int m =ssiSet.size();
+		boolean enableWL = true;
+		if(_m-m==0)
+		{
+			enableWL = false;
+		}
 		int n = 3 + m;
 		SimpleMatrix x = new SimpleMatrix(n, 1);
 		SimpleMatrix P = new SimpleMatrix(n, n);
@@ -80,12 +84,12 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 		ambDetectedCountMap = new TreeMap<Long, Integer>();
 		ambRepairedCountMap = new TreeMap<Long, Integer>();
 		return iterate(SatMap, timeList, useIGS, ssiSet, doAnalyze, doTest, outlierAnalyze, isWeighted,
-				innPhaseRate, onlyDoppler,truePosEcefList);
+				innPhaseRate, onlyDoppler,truePosEcefList,enableWL);
 	}
 
 	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			boolean useIGS, ListOrderedSet ssiSet, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			boolean isWeighted, boolean innPhaseRate, boolean onlyDoppler,ArrayList<double[]> truePosEcefList) throws Exception {
+			boolean isWeighted, boolean innPhaseRate, boolean onlyDoppler,ArrayList<double[]> truePosEcefList,boolean enableWL) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		int m = ssiSet.size();
 		int x_size = 3 + m;
@@ -150,7 +154,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 			}
 
 			runFilter(currentTime, deltaT, csdList, ssiSet, doAnalyze, doTest, outlierAnalyze, useIGS, i,
-					isWeighted, refPos, innPhaseRate, onlyDoppler);
+					isWeighted, refPos, innPhaseRate, onlyDoppler, enableWL);
 			SimpleMatrix x = kfObj.getState();
 			SimpleMatrix P = kfObj.getCovariance();
 			
@@ -182,8 +186,9 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 	// Innovation Based Testing
 	private void runFilter(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,  ListOrderedSet ssiSet,
 			boolean doAnalyze, boolean doTest, boolean outlierAnalyze, boolean useIGS, int ct, boolean isWeighted,
-			double[] refPos, boolean innPhaseRate, boolean onlyDoppler) throws Exception {
-
+			double[] refPos, boolean innPhaseRate, boolean onlyDoppler,boolean enableWL) throws Exception {
+		HashSet<String> widelaneSet = new HashSet<String>();
+		int wlCount = 0;
 		// Satellite count
 		int n = csdList.size();
 		ArrayList<Satellite> satList = new ArrayList<Satellite>();
@@ -319,16 +324,35 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 
 				// Testing for CS
 				performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true);
-
+				
 				// Resume full SatList or CSDList
 				for (int i = 0; i < n; i++) {
 					if (csdList.get(i).isCS()) {
 						ambCount++;
+						widelaneSet.add( satList.get(i).getObsvCode().charAt(0)+""+satList.get(i).getSvid());
 					}
 				}
 			}
+			if(enableWL)
+			{
+				for (int i = 0; i < n; i++) {
+					if(!csdList.get(i).isCS())
+					{
+						Satellite sat = satList.get(i);
+						String satID = sat.getObsvCode().charAt(0)+""+sat.getSvid();
+						if(widelaneSet.contains(satID))
+						{
+							wlCount++;
+							csdList.get(i).setWLcomb(true);
+						}
+					}
+				}
+				
+			}
+			ambCount += wlCount;
 			ambDetectedCountMap.put(currentTime, ambCount);
 			ambDetectedCount += ambCount;
+			
 			SimpleMatrix x_new = new SimpleMatrix(3 + m + ambCount, 1);
 			x_new.insertIntoThis(0, 0, x);
 			P = kfObj.getCovariance();
@@ -351,9 +375,10 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				tdcp_Cyy = SimpleMatrix.identity(n).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
 			}
 			R = new SimpleMatrix(tdcp_Cyy);
-			double[] sysout_var = new double[ambCount];
-			String[] sysout_svid = new String[ambCount];
+			double[] sysout_var = new double[ambCount-wlCount];
+			String[] sysout_svid = new String[ambCount-wlCount];
 			int ctr = 3 + m;
+			
 			for (int i = 0; i < n; i++) {
 				CycleSlipDetect csdObj = csdList.get(i);
 				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
@@ -370,8 +395,27 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 					sysout_svid[ctr-3-m] = ssi+""+satList.get(i).getSvid()+"_"+obsvCode.charAt(1);
 					H.set(i, ctr, wavelength);
 					ctr++;
+					
 				}
 			}
+			double[] sysout_var_wl = new double[wlCount];
+			String[] sysout_svid_wl = new String[wlCount];
+			if(enableWL)
+			{
+				for (int i = 0; i < n; i++) {
+					CycleSlipDetect csdObj = csdList.get(i);
+					char ssi = satList.get(i).getObsvCode().charAt(0);
+					double wavelength = csdObj.getWavelength();
+					if (csdObj.isWLcomb()) {
+						sysout_var_wl[ctr-3-m-(ambCount-wlCount)] = R.get(i,i)/Math.pow(wavelength,2);
+						String obsvCode = satList.get(i).getObsvCode();
+						sysout_svid_wl[ctr-3-m-(ambCount-wlCount)] = ssi+""+satList.get(i).getSvid()+"_"+obsvCode.charAt(1);
+						H.set(i, ctr, wavelength);
+						ctr++;
+					}
+				}
+			}
+			
 			ze = H.mult(x_new);
 			innovation = Matrix.matrix2ArrayVec(z.minus(ze));
 			
@@ -379,7 +423,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 			kfObj.update(z, R, ze, H);
 			x = kfObj.getState();
 			P = kfObj.getCovariance();
-
+			
 			if (ambCount > 0) {
 				SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
 				SimpleMatrix floatAmbCov = P.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
@@ -387,10 +431,23 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				System.out.println(floatAmb.toString());
 				System.out.println("Float Ambiguity Covariance");
 				System.out.println(floatAmbCov.toString());
+				System.out.println("Float Ambiguity Correlation Matrix");
+				System.out.println(Matrix.computeCorrelationMatrix(floatAmbCov).toString());
 				System.out.println("SVIDs:");
 				System.out.println(Arrays.toString(sysout_svid));
 				System.out.println("TDCP variance:");
 				System.out.println(Arrays.toString(sysout_var));
+				
+				if(enableWL)
+				{
+					System.out.println("WideLane observations");
+					System.out.println("SVIDs:");
+					System.out.println(Arrays.toString(sysout_svid_wl));
+					System.out.println("TDCP variance:");
+					System.out.println(Arrays.toString(sysout_var_wl));
+
+				}
+				
 				SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
 				SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);

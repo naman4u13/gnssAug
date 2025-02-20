@@ -68,8 +68,8 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 
 		ambRepairedCount = new HashMap<EstimatorType, Long>();
 		csdListMap = new TreeMap<Long, HashMap<EstimatorType, ArrayList<CycleSlipDetect>>>();
-		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT,
-				EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT
+				 ,EstimatorType.PAR_FFRT }) {
 			ambRepairedCount.put(est, (long) 0);
 
 		}
@@ -309,7 +309,8 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 			}
 			if (csdObj.isCS()) {
 				sysout_var[ctr - 3 - m] = R.get(i, i) / Math.pow(wavelength, 2);
-				sysout_svid[ctr - 3 - m] = ssi + "" + satList.get(i).getSvid();
+				String obsvCode = satList.get(i).getObsvCode();
+				sysout_svid[ctr-3-m] = ssi+""+satList.get(i).getSvid()+"_"+obsvCode.charAt(1);
 				H.set(i, ctr, wavelength);
 				ctr++;
 			}
@@ -323,8 +324,7 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		P = kfObj.getCovariance();
 
 		HashMap<EstimatorType, ArrayList<CycleSlipDetect>> csdMap = new HashMap<EstimatorType, ArrayList<CycleSlipDetect>>();
-		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT,
-				EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT, EstimatorType.PAR_FFRT }) {
 			ArrayList<CycleSlipDetect> newCsdList = new ArrayList<CycleSlipDetect>();
 			for (int i = 0; i < n; i++) {
 				newCsdList.add(new CycleSlipDetect(csdList.get(i)));

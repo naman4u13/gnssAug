@@ -90,6 +90,7 @@ import org.ejml.data.DMatrixRMaj;
 
 import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Android.constants.GnssDataConfig;
+import com.gnssAug.helper.lambda.Decorrel;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.*;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorBIE.EstimatorBIEResult;
@@ -97,6 +98,7 @@ import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR.PARResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorPAR_FFRT.PARResult_FFRT;
+import com.gnssAug.utility.Matrix;
 
 public class LAMBDA {
 
@@ -193,13 +195,35 @@ public class LAMBDA {
 		aHat = aHat.minus(aOrigin);
 
 		// PRE-PROCESS: decorrelate ambiguities by an admissible Z-transformation
-		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
-		SimpleMatrix qzHat = decorrelationResult.getQzHat();
-		SimpleMatrix lzMat = decorrelationResult.getLzMat();
-		double[] dzVec = decorrelationResult.getDzVec();
-		SimpleMatrix iZtMat = decorrelationResult.getIZtMat();
-		SimpleMatrix zMat = decorrelationResult.getZMat();
-		SimpleMatrix zHat = decorrelationResult.getZHat();
+//		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
+//		SimpleMatrix qzHat = decorrelationResult.getQzHat();
+//		SimpleMatrix lzMat = decorrelationResult.getLzMat();
+//		double[] dzVec = decorrelationResult.getDzVec();
+//		SimpleMatrix iZtMat = decorrelationResult.getIZtMat();
+//		SimpleMatrix zMat = decorrelationResult.getZMat();
+//		SimpleMatrix zHat = decorrelationResult.getZHat();
+		
+		
+		
+		  //Compute Z matrix based on the decomposition  Q=L^T*D*L
+        Decorrel decorrel = new Decorrel(new Jama.Matrix(Matrix.matrix2Array(qaHat)),new Jama.Matrix(Matrix.matrix2Array(aHat)));
+        SimpleMatrix qzHat = new SimpleMatrix(decorrel.getQzhat().getArray());
+        SimpleMatrix zMat = new SimpleMatrix(decorrel.getZ().getArray());
+        SimpleMatrix lzMat = new SimpleMatrix(decorrel.getL().getArray());
+        double[] dzVec = Matrix.matrix2ArrayVec(new SimpleMatrix(decorrel.getD().getArray()));
+        SimpleMatrix zHat = new SimpleMatrix(decorrel.getzhat().getArray());
+        SimpleMatrix iZtMat = new SimpleMatrix(decorrel.getiZt().getArray());
+		
+//		double orgAmbDcrNo = Matrix.computeDecorrelationNumber(qaHat);
+//		double zTransAmbDcrNo = Matrix.computeDecorrelationNumber(qzHat);
+		double orgAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(qaHat).normF());
+		double zTransAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(qzHat).normF());
+		System.out.println("Original Float Ambiguities Decorrelation no. :"+orgAmbDcrNo);
+		System.out.println("z-tranformed Float Ambiguities Decorrelation no. :"+zTransAmbDcrNo);
+		System.out.println("Increase in decorrelation: " + (orgAmbDcrNo-zTransAmbDcrNo)); 
+		System.out.println("z-transformed float ambiguity variance: \n" + qzHat.toString()); 
+		System.out.println("z-transformed float ambiguity: \n" + zHat.toString()); 
+		System.out.println("z Matrix : \n" + zMat.toString()); 
 
 		// ADDITIONAL: computation of success rate & number of fixed components
 		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dzVec);

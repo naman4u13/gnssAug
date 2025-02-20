@@ -1,7 +1,10 @@
 package com.gnssAug.utility;
 
 import java.util.ArrayList;
+import java.util.List;
 
+import org.ejml.data.Complex_F64;
+import org.ejml.simple.SimpleEVD;
 import org.ejml.simple.SimpleMatrix;
 
 public class Matrix {
@@ -111,5 +114,59 @@ public class Matrix {
         }
         // Use isIdentical to check element-wise equality within the tolerance
         return matrixA.isIdentical(matrixB, tolerance);
+    }
+	
+	/**
+     * Method to compute the correlation coefficient matrix from a covariance matrix
+     * @param covMatrix The covariance matrix (as a SimpleMatrix)
+     * @return The correlation coefficient matrix
+     */
+    public static SimpleMatrix computeCorrelationMatrix(SimpleMatrix covMatrix) {
+        // Get the number of variables (i.e., the number of rows/columns)
+        int n = covMatrix.numRows();
+
+        // Create a new matrix to store the correlation coefficient matrix
+        SimpleMatrix corrMatrix = new SimpleMatrix(n, n);
+
+        // Calculate the standard deviations (square roots of diagonal elements)
+        SimpleMatrix stdDevs = new SimpleMatrix(n, 1);
+        for (int i = 0; i < n; i++) {
+            stdDevs.set(i, 0, Math.sqrt(covMatrix.get(i, i))); // Square root of diagonal element
+        }
+
+        // Compute the correlation matrix
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                double cov = covMatrix.get(i, j); // Covariance value
+                double stdDevProduct = stdDevs.get(i, 0) * stdDevs.get(j, 0); // Product of standard deviations
+                double corr = cov / stdDevProduct; // Correlation coefficient
+                corrMatrix.set(i, j, corr);
+            }
+        }
+
+        return corrMatrix;
+    }
+    
+    public static double computeDecorrelationNumber(SimpleMatrix varianceMatrix) {
+        // Perform eigenvalue decomposition
+        List<Complex_F64> eigenvalues = new SimpleEVD(varianceMatrix.getMatrix()).getEigenvalues();
+
+        
+        // Find the maximum and minimum eigenvalues
+        double lambdaMax = Double.NEGATIVE_INFINITY;
+        double lambdaMin = Double.POSITIVE_INFINITY;
+
+        for ( int i=0;i<eigenvalues.size();i++) {
+        	Double eigenvalue = eigenvalues.get(i).getMagnitude();
+            if (eigenvalue > lambdaMax) {
+                lambdaMax = eigenvalue;
+            }
+            if (eigenvalue < lambdaMin) {
+                lambdaMin = eigenvalue;
+            }
+        }
+
+        // Compute and return the decorrelation number (ratio of max to min eigenvalue)
+        return lambdaMax / lambdaMin;
     }
 }

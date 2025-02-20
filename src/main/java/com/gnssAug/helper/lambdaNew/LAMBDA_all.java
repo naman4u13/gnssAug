@@ -217,13 +217,13 @@ public class LAMBDA_all {
 		aFixMap.put(EstimatorType.ILS, ilsResult.getAFix());
 		aFixMap.put(EstimatorType.PAR, parResult.getaPAR());
 		aFixMap.put(EstimatorType.IA_FFRT, iaFfrtResult.getaFix());
-		aFixMap.put(EstimatorType.BIE, BieResult.getaBIE());
+		//aFixMap.put(EstimatorType.BIE, BieResult.getaBIE());
 		aFixMap.put(EstimatorType.PAR_FFRT, parResult_ffrt.getaPAR());
 		
 		nFixedMap.put(EstimatorType.ILS, nn);
 		nFixedMap.put(EstimatorType.PAR, parResult.getnFixed());
 		nFixedMap.put(EstimatorType.IA_FFRT, iaFfrtResult.getnFixed());
-		nFixedMap.put(EstimatorType.BIE, nn);
+		//nFixedMap.put(EstimatorType.BIE, nn);
 		nFixedMap.put(EstimatorType.PAR_FFRT, parResult_ffrt.getnFixed());
 
 		qFixMap.put(EstimatorType.PAR, (SimpleMatrix) parResult.getStats()[0]);
@@ -234,7 +234,7 @@ public class LAMBDA_all {
 			qFixMap.put(EstimatorType.ILS, (SimpleMatrix) varCalResMap.get(EstimatorType.ILS)[0]);
 
 			qFixMap.put(EstimatorType.IA_FFRT, (SimpleMatrix) varCalResMap.get(EstimatorType.IA_FFRT)[0]);
-			qFixMap.put(EstimatorType.BIE, (SimpleMatrix) varCalResMap.get(EstimatorType.BIE)[0]);
+			//qFixMap.put(EstimatorType.BIE, (SimpleMatrix) varCalResMap.get(EstimatorType.BIE)[0]);
 
 			srfrMap.put(EstimatorType.ILS, new double[] { (double) varCalResMap.get(EstimatorType.ILS)[1],
 					(double) varCalResMap.get(EstimatorType.ILS)[2] });
@@ -242,13 +242,13 @@ public class LAMBDA_all {
 					new double[] { (double) parResult.getStats()[1], (double) parResult.getStats()[2] });
 			srfrMap.put(EstimatorType.IA_FFRT, new double[] { (double) varCalResMap.get(EstimatorType.IA_FFRT)[1],
 					(double) varCalResMap.get(EstimatorType.IA_FFRT)[2] });
-			srfrMap.put(EstimatorType.BIE, new double[] { (double) varCalResMap.get(EstimatorType.BIE)[1],
-					(double) varCalResMap.get(EstimatorType.BIE)[2] });
+			//srfrMap.put(EstimatorType.BIE, new double[] { (double) varCalResMap.get(EstimatorType.BIE)[1],
+			//		(double) varCalResMap.get(EstimatorType.BIE)[2] });
 			srfrMap.put(EstimatorType.PAR_FFRT,
 					new double[] { (double) parResult_ffrt.getStats()[1], (double) parResult_ffrt.getStats()[2] });
 		} else {
 			qFixMap.put(EstimatorType.ILS, new SimpleMatrix(nn, nn));
-			qFixMap.put(EstimatorType.BIE, new SimpleMatrix(nn, nn));
+			//qFixMap.put(EstimatorType.BIE, new SimpleMatrix(nn, nn));
 			if (iaFfrtResult.getnFixed() == 0) {
 				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(qzHat));
 			} else {
@@ -258,8 +258,7 @@ public class LAMBDA_all {
 		}
 
 		HashMap<EstimatorType, LambdaAllResult> result = new HashMap<EstimatorType, LambdaAllResult>();
-		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT,
-				EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR, EstimatorType.IA_FFRT, EstimatorType.PAR_FFRT }) {
 			// Back Z-transformation with translation to the old origin
 			SimpleMatrix aFix = iZtMat.mult(aFixMap.get(est));
 			aFix = aFix.plus(aOrigin);

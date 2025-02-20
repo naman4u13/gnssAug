@@ -30,7 +30,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (5) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -127,11 +127,11 @@ public class MainApp {
 					clock_path, orbit_path, ionex_path, true, true, true, true, false, discardSet,true);
 			break;
 		case 5:
-			obsvCodeList = new String[] { "G1C","E1C","G5X","E5X"};
+			obsvCodeList = new String[] { "G1C","E1C","C2I","G5X","E5X","C5X"};
 			//obsvCodeList = new String[] {"G1C","E1C"};
-			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
+			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 7 pro/gnss_log_2025_01_28_22_05_38.txt";
 
-			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
+			discardSet = true ? Set.of("E8") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);

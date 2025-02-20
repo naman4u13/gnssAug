@@ -22,7 +22,7 @@ public class CycleSlipDetect {
 	private double intAmbCov;
 	private double successRate;
 	private double failureRate;
-	
+	private boolean isWLcomb = false;
 	
 	public CycleSlipDetect(CycleSlipDetect csdObj) {
 		this( csdObj.getSat(),  csdObj.getDopplerDR(), csdObj.getCarrierPhaseDR(),  csdObj.getIonoRate(),  csdObj.isCS(),
@@ -154,4 +154,12 @@ public class CycleSlipDetect {
 		this.failureRate = failureRate;
 	}
 
+	public boolean isWLcomb() {
+		return isWLcomb;
+	}
+
+	public void setWLcomb(boolean isWLcomb) {
+		this.isWLcomb = isWLcomb;
+	}
+	
 }

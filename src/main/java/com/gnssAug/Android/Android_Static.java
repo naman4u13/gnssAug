@@ -78,6 +78,7 @@ public class Android_Static {
 			String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName) {
 		try {
+			
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 			ArrayList<Long> timeList = new ArrayList<Long>();
 			TreeMap<Long, ArrayList<Satellite>> satMap = new TreeMap<Long, ArrayList<Satellite>>();
@@ -93,8 +94,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
-					+ mobName + "_L1_ILS";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/"
+					+ mobName + "_L1_L5_ILS_widelane_correlationStats_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -858,7 +859,7 @@ public class Android_Static {
 					
 					
 					for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
-							EstimatorType.IA_FFRT, EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+							EstimatorType.IA_FFRT, EstimatorType.PAR_FFRT }) {
 						ArrayList<CycleSlipDetect> csdList = csdMap.get(est);
 						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
@@ -876,7 +877,7 @@ public class Android_Static {
 
 				}
 				GraphPlotter.graphSRFR(srfrMap);
-				//GraphPlotter.graphCycleSlipAllEst(satCSmap);
+				GraphPlotter.graphCycleSlipAllEst(satCSmap);
 //				GraphPlotter.graphAmbiguityCount(ekf.getAmbDetectedCountMap(), ekf.getAmbRepairedCountMap(), timeList);
 				System.out.println("Ambiguity Detected Count: " + ekf.getAmbDetectedCount());
 				for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
