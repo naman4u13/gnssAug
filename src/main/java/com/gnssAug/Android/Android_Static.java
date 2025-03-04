@@ -94,8 +94,8 @@ public class Android_Static {
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/"
-					+ mobName + "_L1_L5_ILS_widelane_correlationStats_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -140,6 +140,10 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
+//				if(gtIndex>260)
+//				{
+//					break;
+//				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
@@ -859,7 +863,7 @@ public class Android_Static {
 					
 					
 					for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
-							EstimatorType.IA_FFRT, EstimatorType.PAR_FFRT }) {
+							EstimatorType.IA_FFRT, EstimatorType.BIE , EstimatorType.PAR_FFRT }) {
 						ArrayList<CycleSlipDetect> csdList = csdMap.get(est);
 						for (int j = 0; j < csdList.size(); j++) {
 							CycleSlipDetect csdObj = csdList.get(j);
@@ -881,7 +885,7 @@ public class Android_Static {
 //				GraphPlotter.graphAmbiguityCount(ekf.getAmbDetectedCountMap(), ekf.getAmbRepairedCountMap(), timeList);
 				System.out.println("Ambiguity Detected Count: " + ekf.getAmbDetectedCount());
 				for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.PAR,
-						EstimatorType.IA_FFRT, EstimatorType.BIE, EstimatorType.PAR_FFRT }) {
+						EstimatorType.IA_FFRT, EstimatorType.BIE , EstimatorType.PAR_FFRT }) {
 					System.out.println("Ambiguity Repaired Count: "+est.toString()+"  " + ekf.getAmbRepairedCount().get(est));
 					System.out.println("Ambiguity Repair Percentage: "+est.toString()+"  "
 							+ ((ekf.getAmbRepairedCount().get(est) * 100.0) / ekf.getAmbDetectedCount()));

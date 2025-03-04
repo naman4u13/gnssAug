@@ -48,7 +48,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 			ssiSet.add(obsvCodeList[i].charAt(0));
 		}
 		int m =ssiSet.size();
-		boolean enableWL = true;
+		boolean enableWL = false;
 		if(_m-m==0)
 		{
 			enableWL = false;
@@ -452,7 +452,7 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
 				SimpleMatrix afixed = new SimpleMatrix(floatAmb);
 				boolean estimateVar = true;
-				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,EstimatorType.ILS,estimateVar);
+				LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat,EstimatorType.BIE,estimateVar);
 				int nFixed = lmd.getnFixed();
 				double Ps = lmd.getSr();
 				afixed = lmd.getaFix();

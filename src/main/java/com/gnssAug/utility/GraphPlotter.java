@@ -737,7 +737,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION_2025/CSVs/Pixel7pro_var.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION-GNSS-2025/CSVs/RxX_Samsung_Galaxy_S20+_5G_L5_var.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -788,7 +788,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION_2025/CSVs/Pixel7Pro_SRFR.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION-GNSS-2025/CSVs/RxX_Samsung_Galaxy_S20+_5G_L5_SRFR.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter
@@ -1097,7 +1097,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
-			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/PLANS_2025/CSVs/NoCorrections/Static_ASCM419739_Pixel_4_L1.csv";
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION-GNSS-2025/CSVs/NoCorrections/RxX_Samsung_Galaxy_S20+_5G_L5.csv";
 			File file = new File(filePath);
 			try {
 				// create FileWriter object with file as parameter

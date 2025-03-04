@@ -195,24 +195,24 @@ public class LAMBDA {
 		aHat = aHat.minus(aOrigin);
 
 		// PRE-PROCESS: decorrelate ambiguities by an admissible Z-transformation
-//		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
-//		SimpleMatrix qzHat = decorrelationResult.getQzHat();
-//		SimpleMatrix lzMat = decorrelationResult.getLzMat();
-//		double[] dzVec = decorrelationResult.getDzVec();
-//		SimpleMatrix iZtMat = decorrelationResult.getIZtMat();
-//		SimpleMatrix zMat = decorrelationResult.getZMat();
-//		SimpleMatrix zHat = decorrelationResult.getZHat();
+		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
+		SimpleMatrix qzHat = decorrelationResult.getQzHat();
+		SimpleMatrix lzMat = decorrelationResult.getLzMat();
+		double[] dzVec = decorrelationResult.getDzVec();
+		SimpleMatrix iZtMat = decorrelationResult.getIZtMat();
+		SimpleMatrix zMat = decorrelationResult.getZMat();
+		SimpleMatrix zHat = decorrelationResult.getZHat();
 		
 		
 		
 		  //Compute Z matrix based on the decomposition  Q=L^T*D*L
-        Decorrel decorrel = new Decorrel(new Jama.Matrix(Matrix.matrix2Array(qaHat)),new Jama.Matrix(Matrix.matrix2Array(aHat)));
-        SimpleMatrix qzHat = new SimpleMatrix(decorrel.getQzhat().getArray());
-        SimpleMatrix zMat = new SimpleMatrix(decorrel.getZ().getArray());
-        SimpleMatrix lzMat = new SimpleMatrix(decorrel.getL().getArray());
-        double[] dzVec = Matrix.matrix2ArrayVec(new SimpleMatrix(decorrel.getD().getArray()));
-        SimpleMatrix zHat = new SimpleMatrix(decorrel.getzhat().getArray());
-        SimpleMatrix iZtMat = new SimpleMatrix(decorrel.getiZt().getArray());
+//        Decorrel decorrel = new Decorrel(new Jama.Matrix(Matrix.matrix2Array(qaHat)),new Jama.Matrix(Matrix.matrix2Array(aHat)));
+//        SimpleMatrix qzHat = new SimpleMatrix(decorrel.getQzhat().getArray());
+//        SimpleMatrix zMat = new SimpleMatrix(decorrel.getZ().getArray());
+//        SimpleMatrix lzMat = new SimpleMatrix(decorrel.getL().getArray());
+//        double[] dzVec = Matrix.matrix2ArrayVec(new SimpleMatrix(decorrel.getD().getArray()));
+//        SimpleMatrix zHat = new SimpleMatrix(decorrel.getzhat().getArray());
+//        SimpleMatrix iZtMat = new SimpleMatrix(decorrel.getiZt().getArray());
 		
 //		double orgAmbDcrNo = Matrix.computeDecorrelationNumber(qaHat);
 //		double zTransAmbDcrNo = Matrix.computeDecorrelationNumber(qzHat);
@@ -310,7 +310,8 @@ public class LAMBDA {
 			// Call BIE-estimator (recursive implementation)
 			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,qzHat);
 			zFix = BieResult.getaBIE();
-			QzFix = (SimpleMatrix) ComputeVariance.computeVariance(qzHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null)[0];
+			stats =ComputeVariance.computeVariance(qzHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null);
+			QzFix = (SimpleMatrix) stats[0];
 			//BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
 			break;
 		case PAR_FFRT: // Compute PAR-FFRt

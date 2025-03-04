@@ -109,7 +109,7 @@ public class ComputeVariance {
 			}
 			break;
 
-		case 3: // Use IA-FFRT (ILS w/ Fixed Failure-rate Ratio Test)
+		case 3: // Use BIE (ILS w/ Fixed Failure-rate Ratio Test)
 			for (int ii = 0; ii < nSamples; ii++) {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
 				EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, null, null, QMat);
@@ -162,19 +162,8 @@ public class ComputeVariance {
 		Random rand = new Random();
 		// Check if the matrix is symmetric
 		RealMatrix _QMat = new Array2DRowRealMatrix(Matrix.matrix2Array(QMat));
-		if (!isSymmetric(_QMat, 1e-20)) {
-
-			_QMat = makeSymmetric(_QMat);
-		}
-		RealMatrix _cholQMat = null;
-		try {
-		 _cholQMat = new CholeskyDecomposition(_QMat).getL();
-		}
-		catch (Exception e) {
-			// TODO: handle exception
-			throw new Exception("Cholesky Decomposition did'nt work out");
-		}
-
+		_QMat = makeSymmetric(_QMat);
+		RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
 		SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
 
 		// Now cholQMat contains the lower triangular matrix from the Cholesky
@@ -213,7 +202,7 @@ public class ComputeVariance {
 		}
 		// Initialize all the ambiguity fixed vectors
 		HashMap<EstimatorType, Object[]> varCalResMap = new HashMap<EstimatorType, Object[]>();
-		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE }) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE  }) {
 			Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAllMap.get(est), nSamples);
 			varCalResMap.put(est, varCalRes);
 		}
