@@ -18,8 +18,9 @@ public class OptimizedVarCalc {
 	 * @param nSamples         Number of samples (columns in aFixAll).
 	 * @param tolerance        Numerical tolerance for comparing matrices.
 	 * @return Variance matrix (SimpleMatrix).
+	 * @throws Exception 
 	 */
-	public static Object[] calculateVariance(SimpleMatrix aFixAll, int nSamples) {
+	public static Object[] calculateVariance(SimpleMatrix aFixAll, int nSamples) throws Exception {
 		int nn = aFixAll.numRows();
 		SimpleMatrix variance = new SimpleMatrix(nn, nn);
 

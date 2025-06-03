@@ -2,7 +2,7 @@ package com.gnssAug.Android.constants;
 
 public class GnssDataConfig {
 	
-	final public static double pseudorange_priorVarOfUnitW =  6.104;//Math.pow(1.5124, 2);
+	final public static double pseudorange_priorVarOfUnitW =  Math.pow(2.47, 2);
 	final public static double doppler_priorVarOfUnitW =0.001;//Math.pow(0.0616, 2);
 	final public static double tdcp_priorVarOfUnitW = 0.002;//0.0006;
 	final public static double clkDriftVar = 1e5;
@@ -18,5 +18,5 @@ public class GnssDataConfig {
 	//Static
 	final public static double[] qENU_velRandWalk = new double[] {  1e-10,1e-10,1e-10 };
 	
-	final public static double nSamplesMC = 1e4;
+	final public static double nSamplesMC = 1e5;
 }

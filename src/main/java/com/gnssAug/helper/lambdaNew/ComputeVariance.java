@@ -12,9 +12,13 @@ import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.utility.Matrix;
+import java.util.stream.IntStream;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-
+import java.util.List;
+import java.util.concurrent.*;
 import java.util.Random;
 
 public class ComputeVariance {
@@ -29,7 +33,7 @@ public class ComputeVariance {
 	 * @throws IllegalArgumentException if not enough inputs are provided or if an
 	 *                                  invalid estimator is selected
 	 */
-	public static Object[] computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR, Integer nSamples,
+	public static Object[] computeVariance2(SimpleMatrix QMat, int estimator, int decorr, Double maxFR, Integer nSamples,
 			Double muRatio) throws Exception {
 		// Problem dimensionality
 		int nn = QMat.numCols();
@@ -125,9 +129,98 @@ public class ComputeVariance {
 		Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAll, nSamples);
 		return varCalRes;
 	}
+	
+	
+	
+	public static Object[] computeVariance(SimpleMatrix QMat, int estimator, int decorr, Double maxFR, Integer nSamples,
+	                                       Double muRatio) throws Exception {
+	    int nn = QMat.numCols();
+	    SimpleMatrix LMat;
+	    double[] dVec;
 
-	public static HashMap<EstimatorType, Object[]> computeVarianceAll(SimpleMatrix QMat, int decorr, Double maxFR,
-			Integer nSamples, Double muRatio) throws Exception {
+	    // Decorrelate if needed
+	    if (decorr == 1) {
+	        DecorrelateVCResult decorResult = DecorrelateVC.decorrelateVC(QMat.copy(), null);
+	        QMat = decorResult.getQzHat();
+	        LMat = decorResult.getLzMat();
+	        dVec = decorResult.getDzVec();
+	    } else {
+	        DecompositionResult ltldlResult = DecomposeLtDL.decomposeLtDL(QMat.copy());
+	        LMat = ltldlResult.getLMat();
+	        dVec = ltldlResult.getDVec();
+	    }
+
+	    if (nSamples == null || nSamples == 0) {
+	        double P0 = ComputeSR_IBexact.computeSR_IBexact(dVec).getSR();
+	        nSamples = Utilities.computeNumSamples(P0);
+	    }
+
+	    // Prepare random samples
+	    Random rand = new Random();
+	    RealMatrix _QMat = new Array2DRowRealMatrix(Matrix.matrix2Array(QMat));
+	    _QMat = makeSymmetric(_QMat);
+	    RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
+	    SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
+	    SimpleMatrix aHatAll = cholQMat.transpose().mult(generateRandn(nn, nSamples, rand));
+
+	    // Number of threads
+	    int numThreads = Runtime.getRuntime().availableProcessors();
+	    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+
+	    // Divide work by threads
+	    int chunkSize = (int) Math.ceil((double) nSamples / numThreads);
+	    Future<SimpleMatrix>[] futures = new Future[numThreads];
+	    final SimpleMatrix final_QMat  = new SimpleMatrix(QMat);
+	    for (int t = 0; t < numThreads; t++) {
+	        final int start = t * chunkSize;
+	        final int end = Math.min(start + chunkSize, nSamples);
+
+	        futures[t] = executor.submit(() -> {
+	            SimpleMatrix localFix = new SimpleMatrix(nn, end - start);
+
+	            for (int i = start; i < end; i++) {
+	                SimpleMatrix aHat = aHatAll.extractVector(false, i);
+	                SimpleMatrix aFix = null;
+
+	                switch (estimator) {
+	                    case 1:
+	                        aFix = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1).getAFix();
+	                        break;
+	                    case 2:
+	                        IAFFRTResult iaResult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
+	                        if (iaResult.getnFixed() != 0)
+	                            aFix = iaResult.getaFix();
+	                        break;
+	                    case 3:
+	                        aFix = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, null, null, final_QMat).getaBIE();
+	                        break;
+	                    default:
+	                        throw new IllegalArgumentException("Unknown estimator");
+	                }
+
+	                if (aFix != null) {
+	                    localFix.insertIntoThis(0, i - start, aFix);
+	                }
+	            }
+	            return localFix;
+	        });
+	    }
+
+	    // Collect results
+	    SimpleMatrix aFixAll = new SimpleMatrix(nn, nSamples);
+	    int offset = 0;
+	    for (Future<SimpleMatrix> future : futures) {
+	        SimpleMatrix chunk = future.get();
+	        aFixAll.insertIntoThis(0, offset, chunk);
+	        offset += chunk.numCols();
+	    }
+
+	    executor.shutdown();
+	    return OptimizedVarCalc.calculateVariance(aFixAll, nSamples);
+	}
+
+	public static HashMap<EstimatorType, Object[]> computeVarianceAll2(SimpleMatrix QMat, int decorr, Double maxFR,
+			Integer nSamples, Double muRatio,double chi2BIE) throws Exception {
 		// Problem dimensionality
 		int nn = QMat.numCols();
 		SimpleMatrix LMat;
@@ -187,7 +280,7 @@ public class ComputeVariance {
 			SimpleMatrix aHat = aHatAll.extractVector(false, ii);
 			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
 			IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
-			EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, null, null, QMat);
+			EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, chi2BIE, null, QMat);
 
 			SimpleMatrix aFix = ilsResult.getAFix();
 			aFixAllMap.get(EstimatorType.ILS).insertIntoThis(0, ii, new SimpleMatrix(aFix));
@@ -206,11 +299,96 @@ public class ComputeVariance {
 			Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAllMap.get(est), nSamples);
 			varCalResMap.put(est, varCalRes);
 		}
-		if ((double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0) {
+		if ((double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double)varCalResMap.get(EstimatorType.IA_FFRT)[2] == 0.0) {
 			varCalResMap.put(EstimatorType.IA_FFRT, new Object[] {QMat,0.0,1.0});
 		}
 		return varCalResMap;
 	}
+	
+	
+
+	public static HashMap<EstimatorType, Object[]> computeVarianceAll(SimpleMatrix QMat, int decorr, Double maxFR,
+			Integer nSamples, Double muRatio, double chi2BIE) throws Exception {
+
+		int nn = QMat.numCols();
+		SimpleMatrix LMat;
+		double[] dVec;
+
+		if (decorr == 1) {
+			DecorrelateVCResult decorResult = DecorrelateVC.decorrelateVC(QMat.copy(), null);
+			QMat = decorResult.getQzHat();
+			LMat = decorResult.getLzMat();
+			dVec = decorResult.getDzVec();
+		} else {
+			DecompositionResult ltldlResult = DecomposeLtDL.decomposeLtDL(QMat.copy());
+			LMat = ltldlResult.getLMat();
+			dVec = ltldlResult.getDVec();
+		}
+
+		if (nSamples == 0 || nSamples == null) {
+			double P0 = ComputeSR_IBexact.computeSR_IBexact(dVec).getSR();
+			nSamples = Utilities.computeNumSamples(P0);
+		}
+
+		Random rand = new Random();
+		RealMatrix _QMat = new Array2DRowRealMatrix(Matrix.matrix2Array(QMat));
+		_QMat = makeSymmetric(_QMat);
+		RealMatrix _cholQMat = new CholeskyDecomposition(_QMat).getL();
+		SimpleMatrix cholQMat = new SimpleMatrix(_cholQMat.getData());
+		SimpleMatrix aHatAll = cholQMat.transpose().mult(generateRandn(nn, nSamples, rand));
+
+		HashMap<EstimatorType, SimpleMatrix> aFixAllMap = new HashMap<>();
+		for (EstimatorType est : EstimatorType.values()) {
+			SimpleMatrix aFixAll = new SimpleMatrix(nn, nSamples);
+			for (int i = 0; i < aFixAll.getNumElements(); i++) {
+				aFixAll.set(i, Double.NaN);
+			}
+			aFixAllMap.put(est, aFixAll);
+		}
+		int nThreads = Runtime.getRuntime().availableProcessors();
+		ForkJoinPool pool = new ForkJoinPool(nThreads);
+		List<Future<Void>> futures = new ArrayList<>();
+		int chunkSize = nSamples / nThreads;
+		final SimpleMatrix final_QMat = new SimpleMatrix(QMat);
+		for (int t = 0; t < nThreads; t++) {
+			final int start = t * chunkSize;
+			final int end = (t == nThreads - 1) ? nSamples : start + chunkSize;
+
+			futures.add(pool.submit(() -> {
+				for (int ii = start; ii < end; ii++) {
+					SimpleMatrix aHat = aHatAll.extractVector(false, ii);
+
+					SimpleMatrix aFix = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1).getAFix();
+					aFixAllMap.get(EstimatorType.ILS).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+
+					IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
+					if (IAFFRTresult.getnFixed() != 0) {
+						aFix = IAFFRTresult.getaFix();
+						aFixAllMap.get(EstimatorType.IA_FFRT).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+					}
+					
+					aFix = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, chi2BIE, null, final_QMat).getaBIE();
+					aFixAllMap.get(EstimatorType.BIE).insertIntoThis(0, ii, new SimpleMatrix(aFix));
+				}
+				return null;
+			}));
+		}
+
+		for (Future<Void> f : futures) f.get();
+
+		HashMap<EstimatorType, Object[]> varCalResMap = new HashMap<>();
+		for (EstimatorType est : EstimatorType.values()) {
+			Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAllMap.get(est), nSamples);
+			varCalResMap.put(est, varCalRes);
+		}
+
+		if ((double) varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double) varCalResMap.get(EstimatorType.IA_FFRT)[2] == 0.0) {
+			varCalResMap.put(EstimatorType.IA_FFRT, new Object[]{QMat, 0.0, 1.0});
+		}
+
+		return varCalResMap;
+	}
+
 
 	// Helper method to generate a matrix of random Gaussian numbers
 	private static SimpleMatrix generateRandn(int rows, int cols, Random rand) {

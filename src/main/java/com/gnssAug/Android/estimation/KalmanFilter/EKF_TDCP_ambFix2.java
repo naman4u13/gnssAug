@@ -456,14 +456,14 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 				int nFixed = lmd.getnFixed();
 				double Ps = lmd.getSr();
 				afixed = lmd.getaFix();
-				SimpleMatrix qFixed = lmd.getqFix();
+				SimpleMatrix QaFixed = lmd.getQaFix();
 				System.out.println(" Failure Rate : "+(1-Ps));
 				if (nFixed != 0) {
 					SimpleMatrix Cba = P.extractMatrix(0, 3 + m, 3 + m, 3 + m + ambCount);
 					SimpleMatrix Cbb_hat = P.extractMatrix(0, 3 + m, 0, 3 + m);
 					SimpleMatrix b_hat = x.extractMatrix(0, 3 + m, 0, 1);
 					SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
-					SimpleMatrix Caa_caron = new SimpleMatrix(qFixed);
+					SimpleMatrix Caa_caron = new SimpleMatrix(QaFixed);
 					SimpleMatrix a_caron = new SimpleMatrix(afixed);
 					SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(a_hat.minus(a_caron)));
 					SimpleMatrix fixedTermContri = Cba.mult(Caa_hat_inv).mult(Caa_caron).mult(Caa_hat_inv).mult(Cba.transpose());
@@ -485,13 +485,12 @@ public class EKF_TDCP_ambFix2 extends EKFParent {
 						CycleSlipDetect csdObj = csdList.get(i);
 						if(csdObj.isCS())
 						{
-							double val = a_caron.get(count);
-							if(notNaNOrInfinity(val) && (int) val == val)
-							{
-								csdObj.setRepaired(true);
-								csdObj.setIntAmb(val);
-							}
+							
+							csdObj.setRepaired(true);
+							csdObj.setIntAmb(a_caron.get(count));
+							csdObj.setIntAmbCov(Caa_caron.get(count, count));
 							csdObj.setFloatAmb(a_hat.get(count));
+							csdObj.setFloatAmbCov(Q_ahat.get(count,count));
 							count++;
 						}
 					}

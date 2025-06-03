@@ -6,6 +6,7 @@ import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.ComputeVariance;
+import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
 import com.gnssAug.Android.constants.GnssDataConfig;
 
@@ -187,6 +188,9 @@ public class EstimatorPAR_FFRT {
 				if (estimateVar) {
 					stats = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
 							(int) GnssDataConfig.nSamplesMC, null);
+				}
+				if ((double)stats[1] == 0.0 && (double)stats[2] == 0.0) {
+					throw new Exception("PAR-FFRT Variance issue");
 				}
 				// If the ratio test passes, return the index
 				return new Object[] { ilsResult, stats, i };

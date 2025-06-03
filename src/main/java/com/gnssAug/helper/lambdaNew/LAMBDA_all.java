@@ -230,7 +230,7 @@ public class LAMBDA_all {
 		qFixMap.put(EstimatorType.PAR_FFRT, (SimpleMatrix) parResult_ffrt.getStats()[0]);
 		if (estimateVar) {
 			HashMap<EstimatorType, Object[]> varCalResMap = ComputeVariance.computeVarianceAll(qzHat, 0, maxFR,
-					(int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio());
+					(int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio(),chi2BIE);
 			qFixMap.put(EstimatorType.ILS, (SimpleMatrix) varCalResMap.get(EstimatorType.ILS)[0]);
 
 			qFixMap.put(EstimatorType.IA_FFRT, (SimpleMatrix) varCalResMap.get(EstimatorType.IA_FFRT)[0]);
@@ -254,7 +254,7 @@ public class LAMBDA_all {
 			} else {
 				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(nn, nn));
 			}
-			qFixMap.put(EstimatorType.ILS, new SimpleMatrix(nn, nn));
+			
 		}
 
 		HashMap<EstimatorType, LambdaAllResult> result = new HashMap<EstimatorType, LambdaAllResult>();

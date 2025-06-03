@@ -107,17 +107,17 @@ public class LAMBDA {
 	 */
 	public static class LambdaResult {
 		private SimpleMatrix aFix; // Ambiguity fixed vector (column)
-		private SimpleMatrix qFix; // Variance of fixed ambiguity vector
+		private SimpleMatrix QaFix; // Variance of fixed ambiguity vector
 		private double sqNorm; // Squared norm of the ambiguity residuals
 		private int nFixed; // Number of integer-fixed ambiguity components
 		private double sr; // Success rate (bootstrapping) for Full Ambiguity Resolution
 		private SimpleMatrix zMat; // Admissible Z-transformation matrix (unimodular)
 		private SimpleMatrix qzHat; // Variance-covariance matrix of the decorrelated ambiguities
 
-		public LambdaResult(SimpleMatrix aFix, SimpleMatrix qFix, double sqNorm, int nFixed, double sr,
+		public LambdaResult(SimpleMatrix aFix, SimpleMatrix QaFix, double sqNorm, int nFixed, double sr,
 				SimpleMatrix zMat, SimpleMatrix qzHat) {
 			this.aFix = aFix;
-			this.qFix = qFix;
+			this.QaFix = QaFix;
 			this.sqNorm = sqNorm;
 			this.nFixed = nFixed;
 			this.sr = sr;
@@ -129,8 +129,8 @@ public class LAMBDA {
 			return aFix;
 		}
 
-		public SimpleMatrix getqFix() {
-			return qFix;
+		public SimpleMatrix getQaFix() {
+			return QaFix;
 		}
 
 		public double getSqNorm() {
@@ -159,7 +159,7 @@ public class LAMBDA {
 	 * Computes the LAMBDA adjustment.
 	 *
 	 * @param aHat    Ambiguity float vector (column)
-	 * @param qaHat   Variance-covariance matrix of the original ambiguities
+	 * @param QaHat   Variance-covariance matrix of the original ambiguities
 	 * @param method  Estimator (0-9) adopted, see METHODS section
 	 * @param varArgs Optional input parameters, which replace default values
 	 * @return LambdaResult containing aFix, sqNorm, nFixed, sr, zMat, and qzHat
@@ -167,13 +167,13 @@ public class LAMBDA {
 	 * @throws IllegalArgumentException if input arguments are insufficient or
 	 *                                  invalid
 	 */
-	public static LambdaResult computeLambda(SimpleMatrix aHat, SimpleMatrix qaHat, EstimatorType method,
+	public static LambdaResult computeLambda(SimpleMatrix aHat, SimpleMatrix QaHat, EstimatorType method,
 			boolean estimateVar, Object... varArgs) throws Exception {
 		// Problem dimensionality
 		int nn = aHat.numRows();
 
 		// Check number of input arguments
-		if (aHat == null || qaHat == null) {
+		if (aHat == null || QaHat == null) {
 			throw new IllegalArgumentException(
 					"ATTENTION: float ambiguity vector and its variance-covariance matrix are both needed in input!");
 		}
@@ -184,7 +184,7 @@ public class LAMBDA {
 		// If method is not provided, it should be set to 3 (ILS estimator)
 
 		// Check main inputs: "qaHat" & "aHat".
-		Utilities.checkMainInputs(qaHat, aHat);
+		Utilities.checkMainInputs(QaHat, aHat);
 
 		// Origin-translation of ambiguities | Only for "numerical" reasons
 		// Round toward zero, so the new origin is within (-1,1)
@@ -195,8 +195,8 @@ public class LAMBDA {
 		aHat = aHat.minus(aOrigin);
 
 		// PRE-PROCESS: decorrelate ambiguities by an admissible Z-transformation
-		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(qaHat, aHat);
-		SimpleMatrix qzHat = decorrelationResult.getQzHat();
+		DecorrelateVCResult decorrelationResult = DecorrelateVC.decorrelateVC(QaHat, aHat);
+		SimpleMatrix QzHat = decorrelationResult.getQzHat();
 		SimpleMatrix lzMat = decorrelationResult.getLzMat();
 		double[] dzVec = decorrelationResult.getDzVec();
 		SimpleMatrix iZtMat = decorrelationResult.getIZtMat();
@@ -216,12 +216,12 @@ public class LAMBDA {
 		
 //		double orgAmbDcrNo = Matrix.computeDecorrelationNumber(qaHat);
 //		double zTransAmbDcrNo = Matrix.computeDecorrelationNumber(qzHat);
-		double orgAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(qaHat).normF());
-		double zTransAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(qzHat).normF());
+		double orgAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(QaHat).normF());
+		double zTransAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(QzHat).normF());
 		System.out.println("Original Float Ambiguities Decorrelation no. :"+orgAmbDcrNo);
 		System.out.println("z-tranformed Float Ambiguities Decorrelation no. :"+zTransAmbDcrNo);
 		System.out.println("Increase in decorrelation: " + (orgAmbDcrNo-zTransAmbDcrNo)); 
-		System.out.println("z-transformed float ambiguity variance: \n" + qzHat.toString()); 
+		System.out.println("z-transformed float ambiguity variance: \n" + QzHat.toString()); 
 		System.out.println("z-transformed float ambiguity: \n" + zHat.toString()); 
 		System.out.println("z Matrix : \n" + zMat.toString()); 
 
@@ -265,7 +265,7 @@ public class LAMBDA {
 			zFix = ilsResult.getAFix().extractVector(false, 0);
 			sqNorm = ilsResult.getSqNorm()[0];
 			if (estimateVar) {
-				stats =  ComputeVariance.computeVariance(qzHat, 1, 0, null, (int) GnssDataConfig.nSamplesMC, null);
+				stats =  ComputeVariance.computeVariance(QzHat, 1, 0, null, (int) GnssDataConfig.nSamplesMC, null);
 				QzFix = (SimpleMatrix) stats[0];
 						
 			} else {
@@ -287,14 +287,14 @@ public class LAMBDA {
 			zFix = iaFfrtResult.getaFix();
 			sqNorm = iaFfrtResult.getsqNorm();
 			nFixed = iaFfrtResult.getnFixed();
-			if (estimateVar) {
+			if (estimateVar&&nFixed!=0) {
 				stats = ComputeVariance
-						.computeVariance(qzHat, 2, 0, maxFR, (int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio());
+						.computeVariance(QzHat, 2, 0, maxFR, (int) GnssDataConfig.nSamplesMC, iaFfrtResult.getMuRatio());
 				QzFix = (SimpleMatrix) stats[0];
 			} else {
 				if(nFixed==0)
 				{
-					QzFix = new SimpleMatrix(qzHat);
+					QzFix = new SimpleMatrix(QzHat);
 				}
 				else
 				{
@@ -308,9 +308,9 @@ public class LAMBDA {
 			double chi2BIE = 2.0 * GammaIncompleteInverse.gammaincinv(1.0 - alphaBIE, nn / 2.0);
 			EstimatorBIE estBIE = new EstimatorBIE();
 			// Call BIE-estimator (recursive implementation)
-			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,qzHat);
+			EstimatorBIEResult BieResult = estBIE.estimatorBIE(zHat, lzMat, dzVec, chi2BIE, null,QzHat);
 			zFix = BieResult.getaBIE();
-			stats =ComputeVariance.computeVariance(qzHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null);
+			stats =ComputeVariance.computeVariance(QzHat, 3,0 , null, (int) GnssDataConfig.nSamplesMC, null);
 			QzFix = (SimpleMatrix) stats[0];
 			//BIEvariance.computeBIEvariance(estBIE, zFix,qzHat,zHat);
 			break;
@@ -334,16 +334,16 @@ public class LAMBDA {
 			SimpleMatrix aFix = aHat.plus(aOrigin); // Back-translation to the old origin
 			double finalSqNorm = 0.0; // Squared norm of float vector is zero
 			
-			return new LambdaResult(aFix, qaHat, finalSqNorm, nFixed, sr, zMat, qzHat);
+			return new LambdaResult(aFix, QaHat, finalSqNorm, nFixed, sr, zMat, QzHat);
 		}
 
 		// Back Z-transformation with translation to the old origin
 		SimpleMatrix aFix = iZtMat.mult(zFix);
 		aFix = aFix.plus(aOrigin);
 
-		SimpleMatrix qFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
+		SimpleMatrix QaFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
 		System.out.println("Fixed Ambiguity Variance");
-		System.out.println(qFix.toString());
+		System.out.println(QaFix.toString());
 
 		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
 		if (method == EstimatorType.PAR || method == EstimatorType.BIE || method == EstimatorType.PAR_FFRT) {
@@ -367,7 +367,7 @@ public class LAMBDA {
 			System.out.println("Approximate Failure Rate : " + approxFR*100);
 		}
 
-		return new LambdaResult(aFix, qFix, sqNorm, nFixed, sr, zMat, qzHat);
+		return new LambdaResult(aFix, QaFix, sqNorm, nFixed, sr, zMat, QzHat);
 	}
 
 }
