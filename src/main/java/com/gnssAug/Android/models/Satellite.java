@@ -28,7 +28,8 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private double clkRate;
 	// Adaptive Var
 	private double prVar;
-	
+	// Tropo Wet Mapping Function
+	private double wetMF;
 	
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
 		this(log,t,pseudorange,satEcef,satVel,rangeRate);
@@ -160,6 +161,12 @@ public class Satellite extends GNSSLog implements Cloneable {
 	}
 	public void setPrVar(double prVar) {
 		this.prVar = prVar;
+	}
+	public double getWetMF() {
+		return wetMF;
+	}
+	public void setWetMF(double wetMF) {
+		this.wetMF = wetMF;
 	}
 	
 }

@@ -1098,7 +1098,9 @@ public class Android_Static {
 				ionoErr = ionex.computeIonoCorr(eleAzm[0], eleAzm[1], gcLat, refLatLon[1], sat.gettRx(),
 						sat.getCarrierFrequencyHz(), time);
 
-				tropoErr = tropo.getSlantDelay(eleAzm[0]);
+				double[] tropoParam = tropo.getSlantDelay(eleAzm[0]);
+				tropoErr = tropoParam[0];
+				double wetMF = tropoParam[1];
 
 				Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(15, 16, 17, 18, 19, 20));
 				if (tdcpEstSet.contains(estimatorType)) {
@@ -1111,6 +1113,7 @@ public class Android_Static {
 //				sat.setPhase(sat.getPhase());
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
 				sat.setPhase(sat.getPhase() + ionoErr - tropoErr);
+				sat.setWetMF(wetMF);
 			}
 		}
 	}

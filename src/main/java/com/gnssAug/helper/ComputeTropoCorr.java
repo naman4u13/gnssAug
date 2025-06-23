@@ -137,7 +137,7 @@ public class ComputeTropoCorr {
 
 	}
 
-	public double getSlantDelay(double E) {
+	public double[] getSlantDelay(double E) {
 		// Map
 		double[] map = computeMappingFun(coeffDry, coeffWet, H, E);
 		double SD = (ZD[0] * map[0]) + (ZD[1] * map[1]);
@@ -155,7 +155,7 @@ public class ComputeTropoCorr {
 //			System.err.println("TROPO est is wrong ->  " + (_SD - SD) + " Elevation - " + Math.toDegrees(E));
 //		}
 
-		return SD;
+		return new double[] {SD,map[1]};
 	}
 
 	// Based on Saastamonien Delay model

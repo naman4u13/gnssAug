@@ -489,7 +489,7 @@ public class IGS {
 				}
 				if (corrTropo) {
 					ComputeTropoCorr tropo = new ComputeTropoCorr(refLatLon, time, geoid);
-					tropoErr = tropo.getSlantDelay(eleAzm[0]);
+					tropoErr = tropo.getSlantDelay(eleAzm[0])[0];
 				}
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
 			}

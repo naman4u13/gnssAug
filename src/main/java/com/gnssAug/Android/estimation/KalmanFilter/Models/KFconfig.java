@@ -1,5 +1,7 @@
 package com.gnssAug.Android.estimation.KalmanFilter.Models;
 
+import java.util.ArrayList;
+import java.util.TreeSet;
 import java.util.stream.IntStream;
 
 import org.ejml.dense.row.MatrixFeatures_DDRM;
@@ -88,8 +90,8 @@ public class KFconfig extends KF {
 				// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 				double[] q = new double[3 + m];
 				IntStream.range(0, 3).forEach(i -> q[i] = qENU[i]);
-				double _sf = useDoppler?25:sf;
-				double _sg = useDoppler?GnssDataConfig.clkDriftVar:sg;
+				double _sf = useDoppler ? 25 : sf;
+				double _sg = useDoppler ? GnssDataConfig.clkDriftVar : sg;
 				IntStream.range(3, 3 + m).forEach(i -> q[i] = _sg);
 				for (int i = 0; i < 3 + m; i++) {
 					_Q[i][i] = q[i] * Math.pow(deltaT, 3) / 3;
@@ -168,8 +170,8 @@ public class KFconfig extends KF {
 		double[][] Q = Matrix.matrix2Array(_Q);
 		super.configure(phi, Q);
 	}
-	
-	public void configAKFStatic(double deltaT,  int m) throws Exception {
+
+	public void configAKFStatic(double deltaT, int m) throws Exception {
 		int n = 3 + m;
 		double[][] phi = new double[n][n];
 		double[][] _Q = new double[n][n];
@@ -179,13 +181,13 @@ public class KFconfig extends KF {
 
 		// qECEF_std can have negative element
 		IntStream.range(0, 3).forEach(i -> _Q[i][i] = qENU[i] * deltaT);
-		
+
 		for (int i = 3; i < 3 + m; i++) {
 			_Q[i][i] = (sf * deltaT) + ((sg * Math.pow(deltaT, 3)) / 3);
-			
+
 		}
 		SimpleMatrix Q = new SimpleMatrix(_Q);
-		
+
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 
 			throw new Exception("PositiveDefinite test Failed");
@@ -193,26 +195,85 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
-	public void configTDCP(double deltaT, int m,double[] refPos) throws Exception {
-		
-		int n = 3+m;
+	public void configTDCP(double deltaT, int m, double[] refPos) throws Exception {
+
+		int n = 3 + m;
 		double[][] phi = new double[n][n];
-		
+
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
-		
+
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
-		SimpleMatrix _Q = new SimpleMatrix(3+m,3+m);
-		IntStream.range(0, 3).forEach(i -> _Q.set(i,i,qENU[i]));
+		SimpleMatrix _Q = new SimpleMatrix(3 + m, 3 + m);
+		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]));
 		double _sg = 1e2;
-		IntStream.range(3, 3 + m).forEach(i -> _Q.set(i,i,_sg));
+		IntStream.range(3, 3 + m).forEach(i -> _Q.set(i, i, _sg * deltaT));
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
 		SimpleMatrix R = new SimpleMatrix(n, n);
 		R.insertIntoThis(0, 0, _R);
 		for (int i = 0; i < m; i++) {
 			R.set(3 + i, 3 + i, 1);
 		}
-	
+
+		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
+		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
+			throw new Exception("PositiveDefinite test Failed");
+		}
+		super.configure(phi, Q);
+	}
+
+	public void configPPP(double deltaT, int clkOffNum,int clkDriftNum, double[] refPos, int totalStateNum,ArrayList<double[]> ionoParams) throws Exception {
+
+		int ionoParamNum = ionoParams.size();
+		// In 16 cm^2/s in TECU^2/s, assuming L1 freq
+		final double TECU_var = 0.0611;
+		double[][] phi = new double[totalStateNum][totalStateNum];
+		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
+		IntStream.range(0, 3).forEach(i -> phi[i][i+3+clkOffNum] = deltaT);
+		
+		double[] qENU = GnssDataConfig.qENU_velRandWalk;
+		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
+		
+		// Position and Velocity 
+		for (int i = 0; i < 3; i++) {
+			_Q.set(i,i, qENU[i] * Math.pow(deltaT, 3) / 3);
+			_Q.set(i,i+3+clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i+3+clkOffNum,i, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i+3+clkOffNum,i+3+clkOffNum, qENU[i] * deltaT);
+		}
+		// Clock Offset and Drift 
+		for (int i = 0; i < clkOffNum; i++) {
+			_Q.set(i+3,i+3,100*deltaT);
+			
+		}
+		for (int i = 0; i < clkDriftNum; i++) {
+			_Q.set(i+6+clkOffNum,i+6+clkOffNum,10*deltaT);
+			
+		}
+		
+		// Tropo: More than 1cm/sqrt(hr)
+		_Q.set(6+clkOffNum+clkDriftNum,6+clkOffNum+clkDriftNum,(1e-8)*deltaT);
+		
+		// Ionosphere: 4 cm/sqrt(s)*sin(elevation)
+		for(int i=0;i<ionoParamNum;i++)
+		{
+			_Q.set(6+clkOffNum+clkDriftNum+1+i,6+clkOffNum+clkDriftNum+1+i,(TECU_var*deltaT)/Math.pow(Math.sin(ionoParams.get(i)[0]),2));
+		}
+		// Ambiguities
+		for(int i=6+clkOffNum+clkDriftNum+ionoParamNum;i<totalStateNum;i++)
+		{
+			_Q.set(i,i,1e-10);
+		}
+		
+		
+		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
+		SimpleMatrix R = new SimpleMatrix(totalStateNum, totalStateNum);
+		for (int i = 0; i < totalStateNum; i++) {
+			R.set(i, i, 1);
+		}
+		R.insertIntoThis(0, 0, _R);
+		R.insertIntoThis(3+clkOffNum, 3+clkOffNum, _R);
+
 		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 			throw new Exception("PositiveDefinite test Failed");
