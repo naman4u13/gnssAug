@@ -1,7 +1,6 @@
 package com.gnssAug.Android.estimation.KalmanFilter.Models;
 
 import java.util.ArrayList;
-import java.util.TreeSet;
 import java.util.stream.IntStream;
 
 import org.ejml.dense.row.MatrixFeatures_DDRM;
@@ -222,10 +221,11 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
-	public void configPPP(double deltaT, int clkOffNum,int clkDriftNum, double[] refPos, int totalStateNum,ArrayList<double[]> ionoParams) throws Exception {
+	public void configPPP(double deltaT, int clkOffNum,int clkDriftNum, int totalStateNum,ArrayList<double[]> ionoParams) throws Exception {
 
+		double[] refPos = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 		int ionoParamNum = ionoParams.size();
-		// In 16 cm^2/s in TECU^2/s, assuming L1 freq
+		// Its 16 cm^2/s in TECU^2/s, assuming L1 freq
 		final double TECU_var = 0.0611;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
@@ -236,34 +236,38 @@ public class KFconfig extends KF {
 		
 		// Position and Velocity 
 		for (int i = 0; i < 3; i++) {
-			_Q.set(i,i, qENU[i] * Math.pow(deltaT, 3) / 3);
+			_Q.set(i,i, (qENU[i] * Math.pow(deltaT, 3) / 3)+(1e-10));
 			_Q.set(i,i+3+clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
 			_Q.set(i+3+clkOffNum,i, qENU[i] * Math.pow(deltaT, 2) / 2);
 			_Q.set(i+3+clkOffNum,i+3+clkOffNum, qENU[i] * deltaT);
 		}
+		
 		// Clock Offset and Drift 
 		for (int i = 0; i < clkOffNum; i++) {
-			_Q.set(i+3,i+3,100*deltaT);
+			_Q.set(i+3,i+3,10000*deltaT);
 			
 		}
 		for (int i = 0; i < clkDriftNum; i++) {
-			_Q.set(i+6+clkOffNum,i+6+clkOffNum,10*deltaT);
+			_Q.set(i+6+clkOffNum,i+6+clkOffNum,100*deltaT);
 			
 		}
 		
 		// Tropo: More than 1cm/sqrt(hr)
 		_Q.set(6+clkOffNum+clkDriftNum,6+clkOffNum+clkDriftNum,(1e-8)*deltaT);
 		
-		// Ionosphere: 4 cm/sqrt(s)*sin(elevation)
-		for(int i=0;i<ionoParamNum;i++)
-		{
-			_Q.set(6+clkOffNum+clkDriftNum+1+i,6+clkOffNum+clkDriftNum+1+i,(TECU_var*deltaT)/Math.pow(Math.sin(ionoParams.get(i)[0]),2));
-		}
+		
 		// Ambiguities
-		for(int i=6+clkOffNum+clkDriftNum+ionoParamNum;i<totalStateNum;i++)
+		for(int i=6+clkOffNum+clkDriftNum+1;i<totalStateNum-ionoParamNum;i++)
 		{
 			_Q.set(i,i,1e-10);
 		}
+		
+		// Ionosphere: 4 cm/sqrt(s)*sin(elevation)
+		for(int i=0;i<ionoParamNum;i++)
+		{
+			_Q.set(totalStateNum-ionoParamNum+i,totalStateNum-ionoParamNum+i,(TECU_var*deltaT)/Math.pow(Math.sin(ionoParams.get(i)[0]),2));
+		}
+		
 		
 		
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
@@ -278,6 +282,12 @@ public class KFconfig extends KF {
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 			throw new Exception("PositiveDefinite test Failed");
 		}
+		System.out.println("Rotation Matrix : "+R.toString());
+		System.out.println();
+		System.out.println("Process Covariance : "+Q.toString());
+		System.out.println();
+		System.out.println("Transition Matrix : "+new SimpleMatrix(phi).toString());
+		Q = Q.plus(Q.transpose()).scale(0.5);
 		super.configure(phi, Q);
 	}
 }

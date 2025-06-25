@@ -61,8 +61,9 @@ public class EKF_TDCP_ambFix_allEst extends EKFParent {
 		double[] refPos = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, useIGS);
 		double[] intialVel = LinearLeastSquare.getEstVel(SatMap.firstEntry().getValue(), true, refPos, useIGS);
 		IntStream.range(0, n).forEach(i -> x.set(i, intialVel[i]));
-
+//		IntStream.range(0, 3).forEach(i -> x.set(i, 0));
 		// Total State
+//		IntStream.range(0, 3).forEach(i -> P.set(i, i, 1e-10));
 		IntStream.range(0, n).forEach(i -> P.set(i, i, 100));
 		kfObj.setState_ProcessCov(x, P);
 

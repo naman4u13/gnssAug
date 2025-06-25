@@ -43,6 +43,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix_allEst;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
@@ -95,7 +96,7 @@ public class Android_Static {
 			Clock clock = null;
 			IONEX ionex = null;
 			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
-					+ mobName + "_test2";
+					+ mobName + "_test3";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -140,7 +141,7 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-//				if(gtIndex>260)
+//				if(gtIndex>100)
 //				{
 //					break;
 //				}
@@ -894,6 +895,21 @@ public class Android_Static {
 			
 
 			}
+			
+			if (estimatorType == 22) {
+				EKF_PPP ekf = new EKF_PPP();
+				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest, outlierAnalyze, trueEcefList, true, false);
+				int n = timeList.size();
+				estPosMap.put("PPP",new ArrayList<double[]>());
+				for (int i = 0; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap.get(time);
+					estPosMap.get("PPP").add(estPos);
+					if (estPos == null) {
+						continue;
+					}
+				}
+			}
 
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
 			// TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap =
@@ -1042,7 +1058,7 @@ public class Android_Static {
 			if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 
-			} else if(estimatorType!=21) {
+			} else if(estimatorType!=21||estimatorType!=22) {
 
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
@@ -1061,7 +1077,7 @@ public class Android_Static {
 
 				}
 			}
-			if (doAnalyze&&estimatorType!=21) {
+			if (doAnalyze&&estimatorType!=21&&estimatorType!=22) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}
@@ -1102,7 +1118,7 @@ public class Android_Static {
 				tropoErr = tropoParam[0];
 				double wetMF = tropoParam[1];
 
-				Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(15, 16, 17, 18, 19, 20));
+				Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(15, 16, 17, 18, 19, 20,21,22));
 				if (tdcpEstSet.contains(estimatorType)) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;

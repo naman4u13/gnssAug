@@ -74,7 +74,7 @@ public class MainApp {
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };
-			obsvCodeList = new String[] {"G1C","E1C","C2I"};
+			obsvCodeList = new String[] {"G1C"};
 			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Static/Test_20210713_T-A-SIS-01_open_sky_static_assisted_4h/RxX_Samsung_Galaxy_S20+_5G/RawData/gnss_log_2021_07_13_09_40_48.txt";
 //			GNSS_Log.process(basePath);
 //			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
@@ -99,7 +99,7 @@ public class MainApp {
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			
 			
-			Android_Static.posEstimate(true, 0, 0,21, obsvCodeList,basePath, trueEcef, bias_path,
+			Android_Static.posEstimate(true, 0, 0,22, obsvCodeList,basePath, trueEcef, bias_path,
 					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 			break;
 		case 4:

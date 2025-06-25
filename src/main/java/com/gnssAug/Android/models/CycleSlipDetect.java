@@ -7,6 +7,7 @@ public class CycleSlipDetect {
 	private Satellite sat;
 	private double dopplerDR;
 	private double carrierPhaseDR;
+	private double prDR;
 	private boolean isCS = false;
 	private boolean isRepaired = false;
 	private double ionoRate;
@@ -44,6 +45,23 @@ public class CycleSlipDetect {
 		this.unitLOS = unitLOS;
 		this.time = time;
 		this.trueDR = trueDR;
+		
+	}
+	
+	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
+			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR,double prDR) {
+		super();
+		this.sat = sat;
+		this.dopplerDR = dopplerDR;
+		this.carrierPhaseDR = carrierPhaseDR;
+		this.ionoRate = ionoRate;
+		this.isCS = isCS;
+		this.wavelength = wavelength;
+		this.satVelCorr = satVelCorr;
+		this.unitLOS = unitLOS;
+		this.time = time;
+		this.trueDR = trueDR;
+		this.prDR = prDR;
 		
 	}
 	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
@@ -160,6 +178,14 @@ public class CycleSlipDetect {
 
 	public void setWLcomb(boolean isWLcomb) {
 		this.isWLcomb = isWLcomb;
+	}
+
+	public double getPrDR() {
+		return prDR;
+	}
+
+	public void setPrDR(double prDR) {
+		this.prDR = prDR;
 	}
 	
 }
