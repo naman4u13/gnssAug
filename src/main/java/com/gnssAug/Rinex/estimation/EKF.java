@@ -15,6 +15,7 @@ import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
+import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.Matrix;
@@ -37,7 +38,7 @@ public class EKF {
 	// Satellite Count
 	private TreeMap<Long, Long> satCountMap;
 	private TreeMap<Long, ArrayList<Satellite>> satListMap;
-	final private static double pseudorange_priorVarOfUnitW = 0.113;
+	
 
 	public EKF() {
 		kfObj = new KFconfig();
@@ -181,7 +182,7 @@ public class EKF {
 
 			innovation[i] = z[i][0] - ze[i][0];
 		}
-		double priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+		double priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;
 
 		for (int i = 0; i < n; i++) {
 			_R[i][i] = priorVarOfUnitW;
@@ -283,7 +284,7 @@ public class EKF {
 
 			innovation[i] = z[i][0] - ze[i][0];
 		}
-		double priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+		double priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;;
 		for (int i = 0; i < n; i++) {
 			_R[i][i] = priorVarOfUnitW;
 		}
@@ -549,7 +550,7 @@ public class EKF {
 		for (int i = 0; i < n; i++) {
 
 			Satellite sat = satList.get(i);
-			String obsvCode = sat.getSSI() + "" + sat.getFreqID() + "C";
+			String obsvCode = sat.getObsvCode();
 			double[] pco = rxPCO.get(obsvCode);
 			double[] rxAPC = new double[3];
 			for (int j = 0; j < 3; j++) {

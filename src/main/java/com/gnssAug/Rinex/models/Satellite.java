@@ -27,6 +27,8 @@ public class Satellite extends Observable {
 	private boolean isTrueOutlier;
 	// set by using outlier detection/DIA method
 	private boolean isOutlier;
+	// Wet mapping function
+	private double wetMF;
 
 	public double[] getSatEcef() {
 		return satEcef;
@@ -184,4 +186,12 @@ public class Satellite extends Observable {
 		this.isOutlier = isOutlier;
 	}
 
+	public double getWetMF() {
+		return wetMF;
+	}
+
+	public void setWetMF(double wetMF) {
+		this.wetMF = wetMF;
+	}
+	
 }

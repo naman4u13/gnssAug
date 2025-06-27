@@ -30,7 +30,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (2) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -62,15 +62,23 @@ public class MainApp {
 			break;
 
 		case 2:
-			year = 2021;
-			doy = "" + 119;
-			bias_path = base_url + year + "_" + doy + "/CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
-			clock_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
-			orbit_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
-			ionex_path = base_url + year + "_" + doy + "/igsg" + doy + "0.21I";
-			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
+			year = 2024;
+			doy = "" + 200;
+//			bias_path = base_url + year + "_" + doy + "/CAS0MGXRAP_" + year + doy + "0000_01D_01D_DCB.BSX";
+//			clock_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
+//			orbit_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
+//			ionex_path = base_url + year + "_" + doy + "/igsg" + doy + "0.21I";
+			discardSet =Set.of("C60");
+			bias_path = base_url + year + "_" + doy + sep + "CAS0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
+			clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
+			orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
+			ionex_path = base_url + year + "_" + doy + sep + "IGS0OPSFIN_"+ year + doy + "0000_01D_02H_GIM.INX";
+			
+			String sinex_path = base_url + year + "_" + doy + sep + "IGS0OPSSNX_"+ year + doy + "0000_01D_01D_SOL.SNX";
+			
+//			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
 			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C", "E1C" }, 4, 1, 0, true, true, 2, true, true, false);
+					new String[] { "G1C" }, 4, 1, 0, true, true, 5, false, false, false,discardSet);
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };
@@ -100,7 +108,7 @@ public class MainApp {
 			
 			
 			Android_Static.posEstimate(true, 0, 0,22, obsvCodeList,basePath, trueEcef, bias_path,
-					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
+					clock_path, orbit_path, ionex_path, true, true,true, true,false,discardSet,mobName);
 			break;
 		case 4:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };

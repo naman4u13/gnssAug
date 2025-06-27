@@ -5,6 +5,7 @@ import org.ejml.simple.SimpleMatrix;
 public class CycleSlipDetect {
 
 	private Satellite sat;
+	private com.gnssAug.Rinex.models.Satellite igs_sat;
 	private double dopplerDR;
 	private double carrierPhaseDR;
 	private double prDR;
@@ -52,6 +53,22 @@ public class CycleSlipDetect {
 			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR,double prDR) {
 		super();
 		this.sat = sat;
+		this.dopplerDR = dopplerDR;
+		this.carrierPhaseDR = carrierPhaseDR;
+		this.ionoRate = ionoRate;
+		this.isCS = isCS;
+		this.wavelength = wavelength;
+		this.satVelCorr = satVelCorr;
+		this.unitLOS = unitLOS;
+		this.time = time;
+		this.trueDR = trueDR;
+		this.prDR = prDR;
+		
+	}
+	public CycleSlipDetect(com.gnssAug.Rinex.models.Satellite igs_sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
+			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR,double prDR) {
+		super();
+		this.igs_sat = igs_sat;
 		this.dopplerDR = dopplerDR;
 		this.carrierPhaseDR = carrierPhaseDR;
 		this.ionoRate = ionoRate;
@@ -187,5 +204,11 @@ public class CycleSlipDetect {
 	public void setPrDR(double prDR) {
 		this.prDR = prDR;
 	}
+
+	public com.gnssAug.Rinex.models.Satellite getIgs_sat() {
+		return igs_sat;
+	}
+
+	
 	
 }

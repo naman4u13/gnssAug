@@ -92,7 +92,8 @@ public class Antenna {
 			char SSI = obsvCode[i].charAt(0);
 			int freq = Integer.parseInt(obsvCode[i].charAt(1) + "");
 			wavelength[i] = SPEED_OF_LIGHT / Constellation.frequency.get(SSI).get(freq);
-			ArrayList<IGSAntenna> satAntList = satAntMap.get(SSI).get(SVID).get(freq);
+			HashMap<Integer, ArrayList<IGSAntenna>> svidAntMap = satAntMap.get(SSI).get(SVID);
+			ArrayList<IGSAntenna> satAntList = svidAntMap!=null?svidAntMap.get(freq):null;
 			if (satAntList == null) {
 				for (int j = 0; j < fN; j++) {
 					int _j = j;

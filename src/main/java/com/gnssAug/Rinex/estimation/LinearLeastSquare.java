@@ -12,6 +12,7 @@ import org.apache.commons.math3.util.CombinatoricsUtils;
 import org.ejml.simple.SimpleMatrix;
 
 import com.gnssAug.Android.constants.Measurement;
+import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
@@ -20,8 +21,7 @@ import com.gnssAug.utility.Weight;
 
 public class LinearLeastSquare {
 	private final static double SpeedofLight = 299792458;
-	final private static double pseudorange_priorVarOfUnitW = 0.113;
-	final private static double doppler_priorVarOfUnitW = 6.246e-4;
+	
 	private static HashMap<Measurement, double[]> residualMap = new HashMap<Measurement, double[]>();
 	private static HashMap<Measurement, Double> postVarOfUnitWMap = new HashMap<Measurement, Double>();
 	private static HashMap<Measurement, SimpleMatrix> Cxx_hat_Map = new HashMap<Measurement, SimpleMatrix>();
@@ -218,9 +218,9 @@ public class LinearLeastSquare {
 		SimpleMatrix Cyy = null;
 		double priorVarOfUnitW = 1;
 		if (type == Measurement.Pseudorange) {
-			priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+			priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;
 		} else if (type == Measurement.Doppler) {
-			priorVarOfUnitW = doppler_priorVarOfUnitW;
+			priorVarOfUnitW = GnssDataConfig.doppler_priorVarOfUnitW;
 		}
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;
@@ -381,9 +381,9 @@ public class LinearLeastSquare {
 		SimpleMatrix Cyy = null;
 		double priorVarOfUnitW = 1;
 		if (type == Measurement.Pseudorange) {
-			priorVarOfUnitW = pseudorange_priorVarOfUnitW;
+			priorVarOfUnitW = GnssDataConfig.pseudorange_priorVarOfUnitW;
 		} else if (type == Measurement.Doppler) {
-			priorVarOfUnitW = doppler_priorVarOfUnitW;
+			priorVarOfUnitW = GnssDataConfig.doppler_priorVarOfUnitW;
 		}
 		double[][] cov = new double[n][n];
 		double max = Double.MIN_VALUE;

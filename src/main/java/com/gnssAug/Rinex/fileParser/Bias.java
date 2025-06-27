@@ -126,6 +126,10 @@ public class Bias {
 			double bds13FreqRatio = Math.pow(Constellation.frequency.get('C').get(2), 2)
 					/ Math.pow(Constellation.frequency.get('C').get(6), 2);
 			HashMap<String, HashMap<String, Double>> beidouMap = biasMap.get(SSI).get(PRN);
+			if(beidouMap==null)
+			{
+				System.out.println();
+			}
 			if(_obsvCode.equals("C2I"))
 			{
 				ISC = -beidouMap.get("C2I").getOrDefault("C6I", null) / (1 - bds13FreqRatio);

@@ -53,6 +53,27 @@ public class Weight {
 		Cyy = new SimpleMatrix(cov);
 		return Cyy;
 	}
+	
+	public static SimpleMatrix igs_getNormCyy(ArrayList<com.gnssAug.Rinex.models.Satellite> satList, double priorVarOfUnitW) {
+		int n = satList.size();
+		double[][] weight = Weight.computeCovInvMat(satList);
+		SimpleMatrix Cyy = null;
+
+		double[][] cov = new double[n][n];
+		double max = Double.MIN_VALUE;
+		for (int i = 0; i < n; i++) {
+			max = Math.max(weight[i][i], max);
+		}
+		for (int i = 0; i < n; i++) {
+			weight[i][i] = weight[i][i] / max;
+		}
+
+		for (int i = 0; i < n; i++) {
+			cov[i][i] = priorVarOfUnitW / weight[i][i];
+		}
+		Cyy = new SimpleMatrix(cov);
+		return Cyy;
+	}
 
 	public static double[][] normalize(double[][] W) {
 

@@ -282,11 +282,11 @@ public class KFconfig extends KF {
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 			throw new Exception("PositiveDefinite test Failed");
 		}
-		System.out.println("Rotation Matrix : "+R.toString());
-		System.out.println();
-		System.out.println("Process Covariance : "+Q.toString());
-		System.out.println();
-		System.out.println("Transition Matrix : "+new SimpleMatrix(phi).toString());
+//		System.out.println("Rotation Matrix : "+R.toString());
+//		System.out.println();
+//		System.out.println("Process Covariance : "+Q.toString());
+//		System.out.println();
+//		System.out.println("Transition Matrix : "+new SimpleMatrix(phi).toString());
 		Q = Q.plus(Q.transpose()).scale(0.5);
 		super.configure(phi, Q);
 	}

@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -27,7 +28,7 @@ public class SingleFreq {
 	public static ArrayList<Satellite> process(ObservationMsg obsvMsg,
 			HashMap<Integer, ArrayList<NavigationMsg>> NavMsgs, String[] obsvCodeList, boolean useIGS, boolean useBias,
 			IonoCoeff ionoCoeff, Bias bias, Orbit orbit, Clock clock, Antenna antenna, double tRX, long weekNo,
-			Calendar time) throws Exception {
+			Calendar time,Set<String> discardSet) throws Exception {
 		ArrayList<Satellite> SV = new ArrayList<Satellite>();
 		if (obsvCodeList.length > 1 && !useIGS) {
 			throw new Exception("Multi-Constellation is not supported without IGS");
@@ -50,6 +51,11 @@ public class SingleFreq {
 					Observable sat = observables.get(i);
 					// PRN
 					int SVID = sat.getSVID();
+					String code = SSI+""+SVID;
+					if(discardSet.contains(code))
+					{
+						continue;
+					}
 					double tSV = tRX - (sat.getPseudorange() / SpeedofLight);
 
 					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, SVID, obsvCode, true);
@@ -59,6 +65,10 @@ public class SingleFreq {
 					// GPS System transmission time
 					double t = tSV - satClkOff;
 					double[][] satPV = orbit.getPV(t, SVID, polyOrder, SSI);
+					if (satPV == null) {
+						System.err.println(SSI + "" + SVID + " MGEX data absent");
+						continue;
+					}
 					double[] satECEF = satPV[0];
 					double[] satVel = satPV[1];
 
@@ -74,6 +84,7 @@ public class SingleFreq {
 					/* double windup = satPC_windup[3]; */
 					sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * satClkOff));
 					sat.setPseudoRangeRate(sat.getPseudoRangeRate() + (SpeedofLight * satClkDrift));
+					sat.setPhase(sat.getPhase()+ (SpeedofLight * satClkOff));
 					Satellite _sat = new Satellite(sat, satECEF, satClkOff, t, tRX, satVel, satClkDrift, null, time);
 					_sat.compECI();
 					/* _sat.setPhaseWindUp(windup); */
@@ -101,6 +112,11 @@ public class SingleFreq {
 				Observable sat = observables.get(i);
 				// PRN
 				int SVID = sat.getSVID();
+				String code = sat.getSSI()+""+SVID;
+				if(discardSet.contains(code))
+				{
+					continue;
+				}
 				// IGS .BSX file DCB
 				double ISC = 0;
 				NavigationMsg NavMsg = NavMsgs.get(SVID).get(order[i]);

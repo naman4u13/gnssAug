@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
@@ -28,6 +29,7 @@ import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
+import com.gnssAug.Rinex.estimation.EKF_PPP;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Bias;
@@ -58,7 +60,7 @@ public class IGS {
 	public static void posEstimate(String bias_path, String clock_path, String orbit_path, String ionex_path,
 			String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX, String[] obsvCodeList,
 			int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo, int estimatorType,
-			boolean doAnalyze, boolean doTest, boolean outlierAnalyze) {
+			boolean doAnalyze, boolean doTest, boolean outlierAnalyze,Set<String> discardSet) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
@@ -84,13 +86,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = base_path
-					+ "/LROC00FRA_R_20211190000_01D_30S_MO.crx/LROC00FRA_R_20211190000_01D_30S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/test3";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC_GPS_L1_EKF_PPP_test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -101,7 +102,7 @@ public class IGS {
 			} catch (FileNotFoundException e) { // TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-
+			System.out.println("Discarded Satellites: " + discardSet.toString());
 			geoid = buildGeoid();
 			Map<String, Object> NavMsgComp = NavigationRNX.rinex_nav_process(nav_path, useIGS);
 			@SuppressWarnings("unchecked")
@@ -148,14 +149,14 @@ public class IGS {
 				}
 				ArrayList<Satellite> satList = null;
 				satList = SingleFreq.process(obsvMsg, NavMsgs, obsvCodeList, useIGS, useBias, ionoCoeff, bias, orbit,
-						clock, antenna, tRx, weekNo, time);
+						clock, antenna, tRx, weekNo, time,discardSet);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
 				double[] refEcef = LinearLeastSquare.getEstPos(satList, rxPCO, false);
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(rxARP, i.getSatEci())));
-				filterSat(satList, rxARP, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time);
+				filterSat(satList, rxARP, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time,estimatorType);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
@@ -299,9 +300,24 @@ public class IGS {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
-			if (estimatorType == 1) {
-				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap, outlierAnalyze);
+			if (estimatorType == 3 || estimatorType == 5) {
+				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
+						outlierAnalyze, obsvCodeList,rxARP,true,false);
+				
+				int n = timeList.size();
+				for (int i = 1; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF_PPP", k -> new ArrayList<double[]>()).add(estPos);
+					
+				}
+				
 			}
+//			if (estimatorType == 1) {
+//				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap, outlierAnalyze);
+//			}
 			// Calculate Accuracy Metrics
 			HashMap<String, ArrayList<double[]>> GraphPosMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<String, ArrayList<double[]>> GraphVelMap = new HashMap<String, ArrayList<double[]>>();
@@ -425,15 +441,46 @@ public class IGS {
 				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
+			System.out.println("\n\nPost Variance of Unit Weight Calculations");
+			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
+				System.out.println(meas.toString());
+				for (String est_type : postVarOfUnitWeightMap.get(meas).keySet()) {
+					System.out.println(est_type);
+					ArrayList<Double> data = new ArrayList<Double>(postVarOfUnitWeightMap.get(meas).get(est_type));
+					double sum = 0;
+					int count = 0;
+					for (int i = 0; i < data.size(); i++) {
+						double val = data.get(i);
+						if (val == 0 || val == -1) {
+							continue;
+						}
+						sum += val;
+						count++;
+
+					}
+					Collections.sort(data);
+					double avg = sum / count;
+					int q50 = (int) (count * 0.50);
+					double median = data.get(q50);
+					int _q75 = (int) (count * 0.75);
+					double q75 = data.get(_q75);
+					System.out.println("MEAN : " + avg);
+					System.out.println("MEDIAN : " + median);
+					System.out.println("Q75 : " + q75);
+
+				}
+			}
 			long t0 = timeList.get(0);
 			for (int i = 0; i < timeList.size(); i++) {
 				timeList.set(i, (long) ((timeList.get(i) - t0) * 1e-3));
 			}
 
+			
+
 			// Plot Error Graphs
 			if (Cxx_hat_map.isEmpty()) {
 				GraphPlotter.graphENU(GraphPosMap, timeList, true);
-				GraphPlotter.graphENU(GraphVelMap, timeList, false);
+//				GraphPlotter.graphENU(GraphVelMap, timeList, false);
 			} else {
 				GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 				GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
@@ -457,7 +504,7 @@ public class IGS {
 	}
 
 	public static void filterSat(ArrayList<Satellite> satList, double[] refEcef, double cutOffAng, double snrMask,
-			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time) {
+			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time, int estimatorType) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -474,6 +521,7 @@ public class IGS {
 				double[] eleAzm = sat.getElevAzm();
 				double ionoErr = 0;
 				double tropoErr = 0;
+				double wetMF = 1;
 				if (corrIono) {
 					if (ionex != null) {
 						ionoErr = ionex.computeIonoCorr(eleAzm[0], eleAzm[1], gcLat, refLatLon[1], sat.gettRX(),
@@ -489,9 +537,18 @@ public class IGS {
 				}
 				if (corrTropo) {
 					ComputeTropoCorr tropo = new ComputeTropoCorr(refLatLon, time, geoid);
-					tropoErr = tropo.getSlantDelay(eleAzm[0])[0];
+					double[] tropoParam = tropo.getSlantDelay(eleAzm[0]);
+					tropoErr = tropoParam[0];
+					wetMF = tropoParam[1];
+				}
+				if (estimatorType==5) {
+					sat.setIonoErr(ionoErr);
+					ionoErr = 0;
 				}
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
+				sat.setPhase(sat.getPhase() + ionoErr - tropoErr);
+				sat.setWetMF(wetMF);
+				
 			}
 		}
 	}
