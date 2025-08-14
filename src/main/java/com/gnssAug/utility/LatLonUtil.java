@@ -21,6 +21,9 @@ public class LatLonUtil {
 	public static final double mu = 3.986004418e14;
 
 	public static double[] ecef2lla(double[] ECEF) {
+		return ecef2lla(ECEF,true);
+	}
+	public static double[] ecef2lla(double[] ECEF,boolean returnDeg) {
 
 		double x = ECEF[0];
 		double y = ECEF[1];
@@ -52,9 +55,12 @@ public class LatLonUtil {
 
 		height = (p * Math.cos(lat)) + ((z + (Math.pow(e, 2) * N * Math.sin(lat))) * Math.sin(lat)) - N;
 
-		lon = lon * 180 / Math.PI;
-
-		lat = lat * 180 / Math.PI;
+		if(returnDeg)
+		{
+			lon = lon * 180 / Math.PI;
+	
+			lat = lat * 180 / Math.PI;
+		}
 		lla[0] = lat;
 		lla[1] = lon;
 		lla[2] = height;

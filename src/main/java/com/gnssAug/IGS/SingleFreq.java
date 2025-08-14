@@ -24,17 +24,19 @@ import com.gnssAug.utility.Vector;
 
 public class SingleFreq {
 	final static double SpeedofLight = 299792458;
+	private static HashMap<String, Double> phase_windup_map = new HashMap<String, Double>();
 
 	public static ArrayList<Satellite> process(ObservationMsg obsvMsg,
 			HashMap<Integer, ArrayList<NavigationMsg>> NavMsgs, String[] obsvCodeList, boolean useIGS, boolean useBias,
 			IonoCoeff ionoCoeff, Bias bias, Orbit orbit, Clock clock, Antenna antenna, double tRX, long weekNo,
-			Calendar time,Set<String> discardSet) throws Exception {
+			Calendar time, Set<String> discardSet, double[] refEcef) throws Exception {
 		ArrayList<Satellite> SV = new ArrayList<Satellite>();
 		if (obsvCodeList.length > 1 && !useIGS) {
 			throw new Exception("Multi-Constellation is not supported without IGS");
 		}
 
 		if (useIGS) {
+			
 			for (String obsvCode : obsvCodeList) {
 				ArrayList<Observable> observables = obsvMsg.getObsvSat(obsvCode);
 				if (observables == null) {
@@ -51,9 +53,8 @@ public class SingleFreq {
 					Observable sat = observables.get(i);
 					// PRN
 					int SVID = sat.getSVID();
-					String code = SSI+""+SVID;
-					if(discardSet.contains(code))
-					{
+					String code = SSI + "" + SVID;
+					if (discardSet.contains(code)) {
 						continue;
 					}
 					double tSV = tRX - (sat.getPseudorange() / SpeedofLight);
@@ -76,15 +77,19 @@ public class SingleFreq {
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
 					t = tSV - satClkOff;
-
-					double[] satPC_windup = antenna.getSatPC_windup(SVID, obsvCode, tRX, weekNo, satECEF);
+					String key = obsvCode + SVID;
+					double prev_previousWindUpCycles = phase_windup_map.containsKey(key)?phase_windup_map.get(key):0;
+					double[] satPC_windup = antenna.getSatPC_windup_new(SVID, obsvCode, tRX, weekNo, satECEF, refEcef,
+							prev_previousWindUpCycles);
+					double phase_windup = satPC_windup[3];
+					phase_windup_map.put(key, phase_windup);
 					IntStream.range(0, 3).forEach(j -> satECEF[j] = satPC_windup[j]);
 					// fractional Wind up in cycles, will require further processing to correct for
 					// full cycles and then multiply by wavelength
 					/* double windup = satPC_windup[3]; */
 					sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * satClkOff));
 					sat.setPseudoRangeRate(sat.getPseudoRangeRate() + (SpeedofLight * satClkDrift));
-					sat.setPhase(sat.getPhase()+ (SpeedofLight * satClkOff));
+					sat.setPhase(sat.getPhase() + (SpeedofLight * satClkOff)-phase_windup);
 					Satellite _sat = new Satellite(sat, satECEF, satClkOff, t, tRX, satVel, satClkDrift, null, time);
 					_sat.compECI();
 					/* _sat.setPhaseWindUp(windup); */
@@ -93,7 +98,7 @@ public class SingleFreq {
 
 				}
 			}
-
+			
 		} else {
 			ArrayList<Observable> observables = obsvMsg.getObsvSat(obsvCodeList[0]);
 			if (observables == null) {
@@ -112,9 +117,8 @@ public class SingleFreq {
 				Observable sat = observables.get(i);
 				// PRN
 				int SVID = sat.getSVID();
-				String code = sat.getSSI()+""+SVID;
-				if(discardSet.contains(code))
-				{
+				String code = sat.getSSI() + "" + SVID;
+				if (discardSet.contains(code)) {
 					continue;
 				}
 				// IGS .BSX file DCB
@@ -138,8 +142,10 @@ public class SingleFreq {
 				double[] ECI = (double[]) SatParams[4];
 				// AbsoluteDate date = new AbsoluteDate(time.getTime(),
 				// TimeScalesFactory.getGPS());
-//				double ele = tpf.getElevation(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
-//				double az = tpf.getAzimuth(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0, 3)), frame, date);
+				// double ele = tpf.getElevation(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff,
+				// 0, 3)), frame, date);
+				// double az = tpf.getAzimuth(new Vector3D(Arrays.copyOfRange(ECEF_SatClkOff, 0,
+				// 3)), frame, date);
 				sat.setPseudoRangeRate(sat.getPseudoRangeRate() + (SpeedofLight * SatClkDrift));
 				sat.setPseudorange(sat.getPseudorange() + (SpeedofLight * ECEF_SatClkOff[3]));
 				SV.add(new Satellite(sat, Arrays.copyOfRange(ECEF_SatClkOff, 0, 3), ECEF_SatClkOff[3], t, tRX, SatVel,

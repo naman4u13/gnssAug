@@ -3,10 +3,12 @@ package com.gnssAug.helper;
 import java.util.Calendar;
 import java.util.stream.IntStream;
 
+import org.orekit.bodies.GeodeticPoint;
 import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.troposphere.NiellMappingFunctionModel;
 import org.orekit.time.AbsoluteDate;
 import org.orekit.time.TimeScalesFactory;
+import org.orekit.utils.TrackingCoordinates;
 
 public class ComputeTropoCorr {
 
@@ -81,7 +83,7 @@ public class ComputeTropoCorr {
 		y = new double[5];
 		coeffDry = new double[3];
 		coeffWet = new double[3];
-		nmf = new NiellMappingFunctionModel(lat, TimeScalesFactory.getGPS());
+		nmf = new NiellMappingFunctionModel();
 
 		initiate();
 
@@ -142,7 +144,9 @@ public class ComputeTropoCorr {
 		double[] map = computeMappingFun(coeffDry, coeffWet, H, E);
 		double SD = (ZD[0] * map[0]) + (ZD[1] * map[1]);
 		// Orekit API derived mapping function, used to validate estimated mapping func
-		double[] _map = nmf.mappingFactors(E, H, null, date);
+		GeodeticPoint point = new GeodeticPoint(lat,0, H);
+		TrackingCoordinates tracking = new TrackingCoordinates(0, E, 1.0);
+		double[] _map = nmf.mappingFactors(tracking, point, date);
 //		if (Math.abs(_map[0] - map[0]) > 0.1) {
 //			System.err.println("Tropo Dry Coeff is different");
 //		}

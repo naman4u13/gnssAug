@@ -2,22 +2,16 @@ package com.gnssAug;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.TreeMap;
-
-import org.apache.commons.math3.distribution.NormalDistribution;
-
 import com.gnssAug.Android.Android;
 import com.gnssAug.Android.Android_Static;
-import com.gnssAug.Android.fileParser.GNSS_Log;
-import com.gnssAug.Android.fileParser.GroundTruth_GSA;
-import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.IGS.IGS;
+import com.gnssAug.helper.ComputeSolidEarthTide;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.Time;
 
 public class MainApp {
 
@@ -68,7 +62,7 @@ public class MainApp {
 //			clock_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 //			orbit_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 //			ionex_path = base_url + year + "_" + doy + "/igsg" + doy + "0.21I";
-			discardSet =Set.of("C60");
+			discardSet =Set.of("");
 			bias_path = base_url + year + "_" + doy + sep + "CAS0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
 			clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
@@ -78,7 +72,7 @@ public class MainApp {
 			
 //			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
 			IGS.posEstimate(bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C" }, 4, 1, 0, true, true, 5, false, false, false,discardSet);
+					new String[] { "G1C","E1C"}, 4, 1, 0, true, true, 5,false, false, false,discardSet);
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };
@@ -162,9 +156,12 @@ public class MainApp {
 			Android_Static.posEstimate(true, 0, 0,21, obsvCodeList,basePath, trueEcef, bias_path,
 					clock_path, orbit_path, ionex_path, true, true,true, false,false,discardSet,mobName);
 			break;
+	
 		}
 		Instant end = Instant.now();
 		System.out.println("EXECUTION TIME -  " + Duration.between(start, end));
-
+		
+		
+			
 	}
 }

@@ -16,6 +16,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import org.ejml.simple.SimpleMatrix;
+import org.orekit.data.DataContext;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -91,7 +92,7 @@ public class IGS {
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC_GPS_L1_EKF_PPP_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC_PPP_simulateCS_5CS_CSrepair";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -138,7 +139,10 @@ public class IGS {
 
 			}
 			double tRx0 = ObsvMsgs.get(0).getTRX();
+			int gtIndex = 0;
+			double[] refEcef = null;
 			for (ObservationMsg obsvMsg : ObsvMsgs) {
+				gtIndex++;
 				double tRx = obsvMsg.getTRX();
 				double dayTime = tRx % 86400;
 				long weekNo = obsvMsg.getWeekNo();
@@ -149,12 +153,14 @@ public class IGS {
 				}
 				ArrayList<Satellite> satList = null;
 				satList = SingleFreq.process(obsvMsg, NavMsgs, obsvCodeList, useIGS, useBias, ionoCoeff, bias, orbit,
-						clock, antenna, tRx, weekNo, time,discardSet);
+						clock, antenna, tRx, weekNo, time,discardSet,refEcef);
+				
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
-				double[] refEcef = LinearLeastSquare.getEstPos(satList, rxPCO, false);
+				refEcef = LinearLeastSquare.getEstPos(satList, rxPCO, false);
+				
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(rxARP, i.getSatEci())));
 				filterSat(satList, rxARP, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time,estimatorType);
 				if (satList.size() < minSat) {
@@ -300,11 +306,11 @@ public class IGS {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
-			if (estimatorType == 3 || estimatorType == 5) {
+			if (estimatorType == 5) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
-						outlierAnalyze, obsvCodeList,rxARP,true,false);
+						outlierAnalyze, obsvCodeList,rxARP,true,true);
 				
 				int n = timeList.size();
 				for (int i = 1; i < n; i++) {
@@ -564,13 +570,7 @@ public class IGS {
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
 		File orekitData = new File("/Users/naman.agarwal/Documents/orekit/orekit-data-master/orekit-data-master");
-		/*
-		 * File orekitData = new File(
-		 * "C:\\Users\\naman.agarwal\\Downloads\\orekit\\orekit\\orekit-data-master\\orekit-data-master"
-		 * );
-		 */
-
-		DataProvidersManager manager = DataProvidersManager.getInstance();
+		DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
 		manager.addProvider(new DirectoryCrawler(orekitData));
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);
 		Frame frame = FramesFactory.getITRF(ITRFVersion.ITRF_2014, IERSConventions.IERS_2010, true);

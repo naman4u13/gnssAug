@@ -2,7 +2,7 @@ package com.gnssAug.Rinex.constants;
 
 public class GnssDataConfig {
 	
-	final public static double pseudorange_priorVarOfUnitW =0.35;
+	final public static double pseudorange_priorVarOfUnitW =0.02687;
 	final public static double doppler_priorVarOfUnitW =5e-4;//Math.pow(0.0979, 2);
 	final public static double tdcp_priorVarOfUnitW =5e-4;//Math.pow(0.05, 2);
 	final public static double phase_priorVarOfUnitW =3e-4;//Math.pow(0.05, 2);

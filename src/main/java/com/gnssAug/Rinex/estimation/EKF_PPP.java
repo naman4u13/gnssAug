@@ -1,5 +1,6 @@
 package com.gnssAug.Rinex.estimation;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -13,12 +14,15 @@ import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Rinex.models.Satellite;
+import com.gnssAug.helper.ComputeSolidEarthTide;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.helper.lambdaNew.LAMBDA;
 import com.gnssAug.helper.lambdaNew.LAMBDA.LambdaResult;
+import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Matrix;
 import com.gnssAug.utility.SatUtil;
+import com.gnssAug.utility.Time;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
@@ -118,16 +122,78 @@ public class EKF_PPP extends EKFParent {
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			System.out.println("\n\n Epoch : " + i);
-
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
+//			if(i%5==0)
+//			{
+//				Satellite sat_temp = currSatList.get(0);
+//				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
+//				if(!satId.equals("G1C5"))
+//				{
+//					throw new Exception("Not G1C5");
+//				}
+//				int slip = ((int)(i/5))%10;
+//				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
+//				System.out.println("G1C5 : CS value added = "+slip);
+//			}
+//			if(i%8==0)
+//			{
+//				Satellite sat_temp = currSatList.get(1);
+//				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
+//				if(!satId.equals("G1C10"))
+//				{
+//					throw new Exception("Not G1C10");
+//				}
+//				int slip = ((int)(i/8))%10;
+//				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
+//				System.out.println("G1C10 : CS value added = "+slip);
+//			}
+//			if(i%4==0)
+//			{
+//				Satellite sat_temp = currSatList.get(currSatList.size()-2);
+//				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
+//				if(!satId.equals("E1C31"))
+//				{
+//					throw new Exception("Not E1C31");
+//				}
+//				int slip = ((int)(i/4))%10;
+//				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
+//				System.out.println("E1C31 : CS value added = "+slip);
+//			}
+//			if(i%6==0)
+//			{
+//				Satellite sat_temp = currSatList.get(currSatList.size()-1);
+//				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
+//				if(!satId.equals("E1C33"))
+//				{
+//					throw new Exception("Not E1C33");
+//				}
+//				int slip = ((int)(i/6))%10;
+//				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
+//				System.out.println("E1C33 : CS value added = "+slip);
+//			}
+//			if(i%3==0)
+//			{
+//				Satellite sat_temp = currSatList.get(currSatList.size()-3);
+//				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
+//				if(!satId.equals("E1C25"))
+//				{
+//					throw new Exception("Not E1C25");
+//				}
+//				int slip = ((int)(i/3))%10;
+//				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
+//				System.out.println("E1C25 : CS value added = "+slip);
+//			}
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
-			
 			double[] refPos = LinearLeastSquare.getEstPos(currSatList, rxPCO, true);
 			int n_curr = currSatList.size();
 			int n_prev = prevSatList.size();
+			ZonedDateTime zdTime =  Time.convertUsingToInstant(currSatList.get(0).getTime());
+			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos,false, zdTime);
+			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
+			SimpleMatrix earthTide = new SimpleMatrix(3,1,true,Vector.add(timeVaryingTides, permanentTide));
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSVID();
@@ -135,10 +201,14 @@ public class EKF_PPP extends EKFParent {
 					Satellite prev_sat = prevSatList.get(k);
 					String prev_satID = prev_sat.getObsvCode() + prev_sat.getSVID();
 					if (satID.equals(prev_satID)) {
+					
 						SimpleMatrix satEci = new SimpleMatrix(3, 1, true, current_sat.getSatEci());
 						SimpleMatrix prev_satEci = new SimpleMatrix(3, 1, true, prev_sat.getSatEci());
 						SimpleMatrix unitLOS = new SimpleMatrix(1, 3, true,
 								SatUtil.getUnitLOS(current_sat.getSatEci(), refPos));
+						double earthTide_range = unitLOS.mult(earthTide).get(0);
+						current_sat.setPseudorange(current_sat.getPseudorange()+earthTide_range);
+						current_sat.setPhase(current_sat.getPhase()+earthTide_range);
 						double ionoRate = current_sat.getIonoErr() - prev_sat.getIonoErr();
 						double tropoRate = current_sat.getTropoErr() - prev_sat.getTropoErr();
 						double dopplerDR = ((current_sat.getPseudoRangeRate() + prev_sat.getPseudoRangeRate()) / 2)
@@ -151,7 +221,7 @@ public class EKF_PPP extends EKFParent {
 						double[] pco = rxPCO.get(current_sat.getObsvCode());
 						double trueDR = MathUtil.getEuclidean(Vector.add(rxARP,pco), current_sat.getSatEci())
 								- MathUtil.getEuclidean(Vector.add(rxARP,pco), prev_sat.getSatEci());
-
+						
 						if (approxCS < 100 * wavelength) {
 							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
 									wavelength, satVelCorr, unitLOS, currentTime - timeList.get(0), trueDR, prDR));
@@ -171,6 +241,9 @@ public class EKF_PPP extends EKFParent {
 			for (int j = 0; j < 3; j++) {
 				estState[j] = x.get(j);
 			}
+			
+			
+			
 			// Add position estimate to the list
 			estStateMap.put(currentTime, estState);
 			prevTime = currentTime;

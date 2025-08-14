@@ -54,5 +54,19 @@ public class Vector {
 		mod = Math.sqrt(mod);
 		return mod;
 	}
+	
 
+    public static double magnitude(double[] a) {
+        return Math.sqrt((a[0] * a[0]) + (a[1] * a[1]) + (a[2] * a[2]));
+    }
+
+    public static double[] normalize(double[] a) {
+        double mag = magnitude(a);
+        if (mag == 0) 
+        	{	
+        		return  new double[] {0, 0, 0};
+        	}
+        	
+        return new double[] {a[0] / mag, a[1] / mag, a[2] / mag};
+    }
 }

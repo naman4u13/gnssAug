@@ -15,6 +15,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import org.ejml.simple.SimpleMatrix;
+import org.orekit.data.DataContext;
 import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.forces.gravity.potential.GravityFieldFactory;
@@ -1235,12 +1236,10 @@ public class Android {
 		final double spin = 7.2921151467E-5;
 		// Earth's universal gravitational parameter
 		final double GM = 3.986004418E14;
-
 		File orekitData = new File("/Users/naman.agarwal/Documents/orekit/orekit-data-master/orekit-data-master");
-		// "C:\\Users\\naman.agarwal\\Documents\\GNSS\\orekit\\orekit-data-master\\orekit-data-master";
-		// "C:\\Users\\\\Naman\\Desktop\\rinex_parse_files\\orekit\\orekit-data-master\\orekit-data-master"
-		DataProvidersManager manager = DataProvidersManager.getInstance();
+		DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
 		manager.addProvider(new DirectoryCrawler(orekitData));
+		
 		NormalizedSphericalHarmonicsProvider nhsp = GravityFieldFactory.getNormalizedProvider(50, 50);
 		Frame frame = FramesFactory.getITRF(ITRFVersion.ITRF_2014, IERSConventions.IERS_2010, true);
 
