@@ -10,14 +10,14 @@ import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Android.constants.Constellation;
 import com.gnssAug.utility.StringUtil;
 
-public class Bias {
+public class DCB_Bias {
 	private final static double SpeedofLight = 299792458;
 	private String path;
 	private HashMap<Character, HashMap<Integer, HashMap<String, HashMap<String, Double>>>> biasMap;
 	private Map<String, Integer> GPSindexMap;
 	private HashMap<Integer, double[]> C1Wmap;
 
-	public Bias(String path) throws Exception {
+	public DCB_Bias(String path) throws Exception {
 		this.path = path;
 		GPSindexMap = Map.of("C1C", 0, "C1W", 1, "C2C", 2, "C2W", 3, "C2S", 4, "C2L", 5, "C2X", 6, "C5Q", 7, "C5X", 8);
 		C1Wmap = new HashMap<Integer, double[]>();

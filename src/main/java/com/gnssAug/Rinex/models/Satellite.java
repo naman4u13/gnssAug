@@ -19,7 +19,6 @@ public class Satellite extends Observable {
 	private Calendar time;
 	// Elevation and Azimuth Angle
 	private double[] elevAzm;
-	private double phaseWindUp;
 	private double ionoErr;
 	private double tropoErr;
 
@@ -81,14 +80,6 @@ public class Satellite extends Observable {
 
 	}
 
-	public double getSatClkOff() {
-		return satClkOff;
-	}
-
-	public void setSatClkOff(double satClkOff) {
-		this.satClkOff = satClkOff;
-	}
-
 	public double getT() {
 		return t;
 	}
@@ -108,32 +99,16 @@ public class Satellite extends Observable {
 		return satVel;
 	}
 
-	public void setSatVel(double[] satVel) {
-		this.satVel = satVel;
-	}
-
 	public double getSatClkDrift() {
 		return satClkDrift;
-	}
-
-	public void setSatClkDrift(double satClkDrift) {
-		this.satClkDrift = satClkDrift;
 	}
 
 	public double gettRX() {
 		return tRX;
 	}
 
-	public void settRX(double tRX) {
-		this.tRX = tRX;
-	}
-
 	public Calendar getTime() {
 		return time;
-	}
-
-	public void setTime(Calendar time) {
-		this.time = time;
 	}
 
 	public double[] getElevAzm() {
@@ -142,14 +117,6 @@ public class Satellite extends Observable {
 
 	public void setElevAzm(double[] elevAzm) {
 		this.elevAzm = elevAzm;
-	}
-
-	public double getPhaseWindUp() {
-		return phaseWindUp;
-	}
-
-	public void setPhaseWindUp(double phaseWindUp) {
-		this.phaseWindUp = phaseWindUp;
 	}
 
 	public double getIonoErr() {
@@ -193,5 +160,5 @@ public class Satellite extends Observable {
 	public void setWetMF(double wetMF) {
 		this.wetMF = wetMF;
 	}
-	
+
 }

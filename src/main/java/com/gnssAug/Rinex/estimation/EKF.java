@@ -62,7 +62,7 @@ public class EKF {
 		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), rxPCO, true);
 		IntStream.range(0, 3 + m).forEach(i -> x[i][0] = intialECEF[i]);
 
-		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 10);
+		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 1e4);
 		IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e5);
 
 		kfObj.setState_ProcessCov(x, P);

@@ -127,5 +127,31 @@ public class Time {
         // Convert to ZonedDateTime
         return calendar.toInstant().atZone(zoneId);
     }
+	
+	public static double[] getGPSTimeFromYDOY(String[] timeArr) {
+		
+		return getGPSTimeFromYDOY(Integer.parseInt(timeArr[0]), Integer.parseInt(timeArr[1]), Double.parseDouble(timeArr[2]));
+	}
+	
+	public static double[] getGPSTimeFromYDOY(int year, int dayOfYear, double timeOfDaySeconds) {
+		Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+		cal.set(Calendar.YEAR, year);
+		cal.set(Calendar.DAY_OF_YEAR, dayOfYear);
+		cal.set(Calendar.HOUR_OF_DAY, 0);
+		cal.set(Calendar.MINUTE, 0);
+		cal.set(Calendar.SECOND, 0);
+		cal.set(Calendar.MILLISECOND, 0);
+
+		// Add timeOfDaySeconds to the calendar time
+		long unixTime = cal.getTimeInMillis() + (long) (timeOfDaySeconds * 1000);
+
+		cal.set(1980, 0, 6, 0, 0, 0);
+		long GPSEpoch = cal.getTimeInMillis();
+		double GPSTime = ((unixTime - GPSEpoch)) % NumberMilliSecondsWeek;
+		double weekNo = Math.floor(((unixTime - GPSEpoch)) / NumberMilliSecondsWeek);
+
+		GPSTime = GPSTime / 1000;
+		return new double[] { GPSTime, weekNo };
+	}
 
 }

@@ -130,61 +130,45 @@ public class EKF_PPP extends EKFParent {
 //			{
 //				Satellite sat_temp = currSatList.get(0);
 //				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
-//				if(!satId.equals("G1C5"))
-//				{
-//					throw new Exception("Not G1C5");
-//				}
 //				int slip = ((int)(i/5))%10;
 //				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
-//				System.out.println("G1C5 : CS value added = "+slip);
+//				System.out.println(satId+" : CS value added = "+slip);
 //			}
 //			if(i%8==0)
 //			{
 //				Satellite sat_temp = currSatList.get(1);
 //				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
-//				if(!satId.equals("G1C10"))
-//				{
-//					throw new Exception("Not G1C10");
-//				}
+//
 //				int slip = ((int)(i/8))%10;
 //				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
-//				System.out.println("G1C10 : CS value added = "+slip);
+//				System.out.println(satId+" : CS value added = "+slip);
 //			}
 //			if(i%4==0)
 //			{
 //				Satellite sat_temp = currSatList.get(currSatList.size()-2);
 //				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
-//				if(!satId.equals("E1C31"))
-//				{
-//					throw new Exception("Not E1C31");
-//				}
+//
 //				int slip = ((int)(i/4))%10;
 //				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
-//				System.out.println("E1C31 : CS value added = "+slip);
+//				System.out.println(satId+" : CS value added = "+slip);
 //			}
 //			if(i%6==0)
 //			{
 //				Satellite sat_temp = currSatList.get(currSatList.size()-1);
 //				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
-//				if(!satId.equals("E1C33"))
-//				{
-//					throw new Exception("Not E1C33");
-//				}
+//
 //				int slip = ((int)(i/6))%10;
 //				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
-//				System.out.println("E1C33 : CS value added = "+slip);
+//				System.out.println(satId+" : CS value added = "+slip);
 //			}
 //			if(i%3==0)
 //			{
 //				Satellite sat_temp = currSatList.get(currSatList.size()-3);
 //				String satId = sat_temp.getObsvCode()+sat_temp.getSVID();
-//				if(!satId.equals("E1C25"))
-//				{
-//					throw new Exception("Not E1C25");
-//				}
+//
 //				int slip = ((int)(i/3))%10;
 //				sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip));
-//				System.out.println("E1C25 : CS value added = "+slip);
+//				System.out.println(satId+" : CS value added = "+slip);
 //			}
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
 			double[] refPos = LinearLeastSquare.getEstPos(currSatList, rxPCO, true);

@@ -53,7 +53,7 @@ import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.models.TDCP;
-import com.gnssAug.Rinex.fileParser.Bias;
+import com.gnssAug.Rinex.fileParser.DCB_Bias;
 import com.gnssAug.Rinex.fileParser.Clock;
 import com.gnssAug.Rinex.fileParser.IONEX;
 import com.gnssAug.Rinex.fileParser.Orbit;
@@ -93,7 +93,7 @@ public class Android {
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
 
-			Bias bias = null;
+			DCB_Bias bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
@@ -131,7 +131,7 @@ public class Android {
 			if (useIGS) {
 
 				orbit = new Orbit(orbit_path);
-				bias = new Bias(bias_path);
+				bias = new DCB_Bias(bias_path);
 				clock = new Clock(clock_path, bias);
 				ionex = new IONEX(ionex_path);
 				geoid = buildGeoid();

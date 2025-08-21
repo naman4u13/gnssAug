@@ -33,10 +33,11 @@ import com.gnssAug.Android.constants.State;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
 import com.gnssAug.Rinex.estimation.LinearLeastSquare;
 import com.gnssAug.Rinex.fileParser.Antenna;
-import com.gnssAug.Rinex.fileParser.Bias;
+import com.gnssAug.Rinex.fileParser.DCB_Bias;
 import com.gnssAug.Rinex.fileParser.Clock;
 import com.gnssAug.Rinex.fileParser.IONEX;
 import com.gnssAug.Rinex.fileParser.NavigationRNX;
+import com.gnssAug.Rinex.fileParser.OSB_Bias;
 import com.gnssAug.Rinex.fileParser.ObservationRNX;
 import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.Rinex.models.IonoCoeff;
@@ -58,7 +59,7 @@ public class IGS {
 
 	private static Geoid geoid = null;
 
-	public static void posEstimate(String bias_path, String clock_path, String orbit_path, String ionex_path,
+	public static void posEstimate(String osb_bias_path,String dcb_bias_path, String clock_path, String orbit_path, String ionex_path,
 			String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX, String[] obsvCodeList,
 			int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo, int estimatorType,
 			boolean doAnalyze, boolean doTest, boolean outlierAnalyze,Set<String> discardSet) {
@@ -77,7 +78,8 @@ public class IGS {
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
 			ArrayList<Long> timeList = new ArrayList<Long>();
-			Bias bias = null;
+			DCB_Bias dcb_bias = null;
+			OSB_Bias osb_bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 			Antenna antenna = null;
@@ -87,12 +89,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALBH00CAN_R_20242001230_15M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC_PPP_simulateCS_5CS_CSrepair";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALBH/test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -123,14 +125,15 @@ public class IGS {
 			int interval = (int) ObsvMsgComp.get("interval");
 
 			if (useBias) {
-				bias = new Bias(bias_path);
+				osb_bias = new OSB_Bias(osb_bias_path);
+				//dcb_bias = new DCB_Bias(dcb_bias_path);
 
 			}
 			if (useIGS) {
 
 				orbit = new Orbit(orbit_path);
 
-				clock = new Clock(clock_path, bias);
+				clock = new Clock(clock_path, dcb_bias);
 				antenna = new Antenna(antenna_csv_path);
 
 			}
@@ -152,7 +155,7 @@ public class IGS {
 					return;
 				}
 				ArrayList<Satellite> satList = null;
-				satList = SingleFreq.process(obsvMsg, NavMsgs, obsvCodeList, useIGS, useBias, ionoCoeff, bias, orbit,
+				satList = SingleFreq.process(obsvMsg, NavMsgs, obsvCodeList, useIGS, useBias, ionoCoeff, dcb_bias,osb_bias, orbit,
 						clock, antenna, tRx, weekNo, time,discardSet,refEcef);
 				
 				if (satList.size() < minSat) {

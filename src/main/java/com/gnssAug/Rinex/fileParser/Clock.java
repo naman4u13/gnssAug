@@ -15,12 +15,12 @@ public class Clock {
 
 	private ArrayList<IGSClock> IGSClockList;
 	private int[] pts;
-	private Bias bias;
+	private DCB_Bias dcb_bias;
 
-	public Clock(String path, Bias bias) throws Exception {
+	public Clock(String path, DCB_Bias bias) throws Exception {
 		IGSClockList = new ArrayList<IGSClock>();
 		clock_process(path);
-		this.bias = bias;
+		this.dcb_bias = bias;
 
 	}
 
@@ -52,6 +52,10 @@ public class Clock {
 			}
 			String[] data = input.next().split("\r\n|\r|\n");
 			for (int i = 0; i < data.length; i++) {
+				if(data[i].isBlank())
+				{
+					continue;
+				}
 				String clkType = StringUtil.splitter(data[i], false, 3)[0];
 				if (clkType.equalsIgnoreCase("AS")) {
 					String[] strTime = StringUtil.splitter(data[i], false, recFormat[0] + recFormat[1], recFormat[2])[1]
@@ -149,9 +153,9 @@ public class Clock {
 				double gpsFreqRatio = Math.pow(Constellation.frequency.get('G').get(1), 2)
 						/ Math.pow(Constellation.frequency.get('G').get(2), 2);
 
-				double TGD = bias.getISC("G2W", SVID) / (1 - gpsFreqRatio);
+				double TGD = dcb_bias.getISC("G2W", SVID) / (1 - gpsFreqRatio);
 
-				double ISC = bias.getISC(obsvCode, SVID);
+				double ISC = dcb_bias.getISC(obsvCode, SVID);
 				
 				clkBias = clkBias - TGD + ISC;
 
@@ -160,17 +164,17 @@ public class Clock {
 						/ Math.pow(Constellation.frequency.get('E').get(5), 2);
 
 				if (obsvCode == "E1C") {
-					double BGD = bias.getISC("E5Q", SVID) / (1 - galileoFreqRatio);
+					double BGD = dcb_bias.getISC("E5Q", SVID) / (1 - galileoFreqRatio);
 					clkBias = clkBias - BGD;
 
 				} else if (obsvCode == "E5X") {
-					double BGD = bias.getISC("E5X", SVID) / (1 - galileoFreqRatio);
+					double BGD = dcb_bias.getISC("E5X", SVID) / (1 - galileoFreqRatio);
 					clkBias = clkBias - (galileoFreqRatio * BGD);
 				}
 
 			} else if (SSI == 'C') {
 				double ISC = 0;
-				ISC = bias.getISC(obsvCode, SVID);
+				ISC = dcb_bias.getISC(obsvCode, SVID);
 				clkBias = clkBias + ISC;
 			}
 		}
