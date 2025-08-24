@@ -49,17 +49,13 @@ package com.gnssAug.helper.lambdaNew.Estimators;
  * -------------------------------------------------------------------------
  */
 
-import java.util.ArrayList;
 
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
-
 import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficient;
-import com.gnssAug.helper.lambdaNew.ComputeFFRTCoefficientOld;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact;
 import com.gnssAug.helper.lambdaNew.ComputeSR_IBexact.SR_IB;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
-import com.gnssAug.utility.Matrix;
+
 
 public class EstimatorIA_FFRT {
 

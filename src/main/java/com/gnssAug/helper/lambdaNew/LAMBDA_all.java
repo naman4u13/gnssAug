@@ -247,12 +247,12 @@ public class LAMBDA_all {
 			srfrMap.put(EstimatorType.PAR_FFRT,
 					new double[] { (double) parResult_ffrt.getStats()[1], (double) parResult_ffrt.getStats()[2] });
 		} else {
-			qFixMap.put(EstimatorType.ILS, new SimpleMatrix(nn, nn));
-			qFixMap.put(EstimatorType.BIE, new SimpleMatrix(nn, nn));
+			qFixMap.put(EstimatorType.ILS, SimpleMatrix.identity(nn).scale(1e-10));
+			qFixMap.put(EstimatorType.BIE, SimpleMatrix.identity(nn).scale(1e-10));
 			if (iaFfrtResult.getnFixed() == 0) {
 				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(qzHat));
 			} else {
-				qFixMap.put(EstimatorType.IA_FFRT, new SimpleMatrix(nn, nn));
+				qFixMap.put(EstimatorType.IA_FFRT, SimpleMatrix.identity(nn).scale(1e-10));
 			}
 			
 		}

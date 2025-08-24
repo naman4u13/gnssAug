@@ -218,12 +218,12 @@ public class LAMBDA {
 //		double zTransAmbDcrNo = Matrix.computeDecorrelationNumber(qzHat);
 		double orgAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(QaHat).normF());
 		double zTransAmbDcrNo = Math.sqrt(Matrix.computeCorrelationMatrix(QzHat).normF());
-		System.out.println("Original Float Ambiguities Decorrelation no. :"+orgAmbDcrNo);
-		System.out.println("z-tranformed Float Ambiguities Decorrelation no. :"+zTransAmbDcrNo);
-		System.out.println("Increase in decorrelation: " + (orgAmbDcrNo-zTransAmbDcrNo)); 
-		System.out.println("z-transformed float ambiguity variance: \n" + QzHat.toString()); 
-		System.out.println("z-transformed float ambiguity: \n" + zHat.toString()); 
-		System.out.println("z Matrix : \n" + zMat.toString()); 
+//		System.out.println("Original Float Ambiguities Decorrelation no. :"+orgAmbDcrNo);
+//		System.out.println("z-tranformed Float Ambiguities Decorrelation no. :"+zTransAmbDcrNo);
+//		System.out.println("Increase in decorrelation: " + (orgAmbDcrNo-zTransAmbDcrNo)); 
+//		System.out.println("z-transformed float ambiguity variance: \n" + QzHat.toString()); 
+//		System.out.println("z-transformed float ambiguity: \n" + zHat.toString()); 
+//		System.out.println("z Matrix : \n" + zMat.toString()); 
 
 		// ADDITIONAL: computation of success rate & number of fixed components
 		SR_IB srResult = ComputeSR_IBexact.computeSR_IBexact(dzVec);
@@ -269,8 +269,8 @@ public class LAMBDA {
 				QzFix = (SimpleMatrix) stats[0];
 						
 			} else {
-				QzFix = new SimpleMatrix(nn, nn);
-			}
+				QzFix = SimpleMatrix.identity(nn).scale(1e-10);			
+				}
 			break;
 
 		case PAR: // Compute PAR
@@ -298,7 +298,7 @@ public class LAMBDA {
 				}
 				else
 				{
-					QzFix = new SimpleMatrix(nn, nn);
+					QzFix = SimpleMatrix.identity(nn).scale(1e-10);	
 				}
 				
 			}
@@ -342,8 +342,7 @@ public class LAMBDA {
 		aFix = aFix.plus(aOrigin);
 
 		SimpleMatrix QaFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
-		System.out.println("Fixed Ambiguity Variance");
-		System.out.println(QaFix.toString());
+		
 
 		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
 		if (method == EstimatorType.PAR || method == EstimatorType.BIE || method == EstimatorType.PAR_FFRT) {

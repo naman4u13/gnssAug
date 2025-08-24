@@ -89,12 +89,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALBH00CAN_R_20242001230_15M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALBH/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC/test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -320,6 +320,32 @@ public class IGS {
 					long time = timeList.get(i);
 					double[] estPos = estStateMap_pos.get(time);
 					estPosMap.computeIfAbsent("EKF_PPP", k -> new ArrayList<double[]>()).add(estPos);
+					
+				}
+				HashMap<String,int[]> csCountMap = ekf.getCycleSlipCount();
+				System.out.println("These satellite have more than 40% phase data with Cycle Slips");
+				for(String satID:csCountMap.keySet())
+				{
+					int[] csCount = csCountMap.get(satID);
+					double percentage = (csCount[0]*1.0)/csCount[1];
+					if(percentage>0.4)
+					{
+						System.out.print(satID+", ");
+					}
+				}
+				System.out.println();
+			}
+			if (estimatorType == 6) {
+				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
+						outlierAnalyze, obsvCodeList,rxARP,true,true,true);
+				
+				int n = timeList.size();
+				for (int i = 1; i < n; i++) {
+					long time = timeList.get(i);
+					double[] estPos = estStateMap_pos.get(time);
+					estPosMap.computeIfAbsent("EKF_PPP_AR", k -> new ArrayList<double[]>()).add(estPos);
 					
 				}
 				
@@ -550,7 +576,7 @@ public class IGS {
 					tropoErr = tropoParam[0];
 					wetMF = tropoParam[1];
 				}
-				if (estimatorType==5) {
+				if (estimatorType==5||estimatorType==6) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}

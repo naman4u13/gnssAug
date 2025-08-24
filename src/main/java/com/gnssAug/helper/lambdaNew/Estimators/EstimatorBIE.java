@@ -5,11 +5,6 @@ import org.ejml.simple.SimpleMatrix;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import org.ejml.data.DMatrix;
-import org.ejml.data.DMatrixRMaj;
-import org.ejml.simple.SimpleMatrix;
-import org.ejml.simple.SimpleEVD;
-import org.ejml.simple.SimpleSVD;
 
 import com.gnssAug.helper.lambdaNew.GammaIncompleteInverse;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;

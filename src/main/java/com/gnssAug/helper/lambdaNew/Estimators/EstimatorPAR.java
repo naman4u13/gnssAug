@@ -166,7 +166,7 @@ public class EstimatorPAR {
 		SimpleMatrix QMat_22 = QMat.extractMatrix(kk_PAR-1, nn, kk_PAR-1, nn);
 		SimpleMatrix QMat_12 = QMat.extractMatrix(0, kk_PAR-1, kk_PAR-1, nn);
 		SimpleMatrix QMat_21 = QMat_12.transpose();
-		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : new SimpleMatrix(nn - (kk_PAR-1), nn - (kk_PAR-1));
+		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : SimpleMatrix.identity(nn - (kk_PAR-1)).scale(1e-16);
 
 		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
 

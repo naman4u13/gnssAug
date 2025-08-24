@@ -8,6 +8,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 import org.apache.commons.collections.set.ListOrderedSet;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
+import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
@@ -28,8 +29,9 @@ import com.gnssAug.utility.Weight;
 
 public class EKF_PPP extends EKFParent {
 
-	private long ambDetectedCount = 0;
-	private long ambRepairedCount = 0;
+	private long csDetectedCount = 0;
+	private long csRepairedCount = 0;
+	private long ambFixedCount = 0;
 	private KFconfig vel_kfObj;
 	private KFconfig pos_kfObj;
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
@@ -39,13 +41,24 @@ public class EKF_PPP extends EKFParent {
 		pos_kfObj = new KFconfig();
 	}
 
-	private TreeMap<Long, Integer> ambDetectedCountMap;
-	private TreeMap<Long, Integer> ambRepairedCountMap;
+	private TreeMap<Long, Integer> csDetectedCountMap;
+	private TreeMap<Long, Integer> csRepairedCountMap;
+	private TreeMap<Long, Integer> ambFixedCountMap;
+	private HashMap<String, int[]> cycleSlipCount;
 	private TreeMap<Long, ArrayList<CycleSlipDetect>> csdListMap;
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
 			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList,
 			double[] rxARP, boolean isStatic, boolean repairCS) throws Exception {
+
+		return process(SatMap, rxPCO, timeList, doAnalyze, doTest, outlierAnalyze, obsvCodeList, rxARP, isStatic,
+				repairCS, false);
+
+	}
+
+	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
+			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, String[] obsvCodeList,
+			double[] rxARP, boolean isStatic, boolean repairCS, boolean fixAmb) throws Exception {
 
 		int clkOffNum = obsvCodeList.length;
 		ListOrderedSet ssiSet = new ListOrderedSet();
@@ -103,22 +116,24 @@ public class EKF_PPP extends EKFParent {
 			measNoiseMap = new TreeMap<Long, double[]>();
 			csdListMap = new TreeMap<Long, ArrayList<CycleSlipDetect>>();
 		}
-		ambDetectedCountMap = new TreeMap<Long, Integer>();
-		ambRepairedCountMap = new TreeMap<Long, Integer>();
-		return iterate(SatMap, rxPCO, timeList, ssiSet, doAnalyze, doTest, outlierAnalyze, rxARP,
-				obsvCodeList, repairCS);
+		cycleSlipCount = new HashMap<String,int[]>();
+		csDetectedCountMap = new TreeMap<Long, Integer>();
+		csRepairedCountMap = new TreeMap<Long, Integer>();
+		ambFixedCountMap = new TreeMap<Long, Integer>();
+		return iterate(SatMap, rxPCO, timeList, ssiSet, doAnalyze, doTest, outlierAnalyze, rxARP, obsvCodeList,
+				repairCS, fixAmb);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
 			ArrayList<Long> timeList, ListOrderedSet ssiSet, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
-			double[] rxARP, String[] obsvCodeList, boolean repairCS) throws Exception {
+			double[] rxARP, String[] obsvCodeList, boolean repairCS, boolean fixAmb) throws Exception {
 
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		HashMap<String, Integer> ambMap = new HashMap<String, Integer>();
 		HashMap<String, Integer> ionoMap = new HashMap<String, Integer>();
 		long prevTime = timeList.get(0);
-		
+
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			System.out.println("\n\n Epoch : " + i);
@@ -174,10 +189,10 @@ public class EKF_PPP extends EKFParent {
 			double[] refPos = LinearLeastSquare.getEstPos(currSatList, rxPCO, true);
 			int n_curr = currSatList.size();
 			int n_prev = prevSatList.size();
-			ZonedDateTime zdTime =  Time.convertUsingToInstant(currSatList.get(0).getTime());
-			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos,false, zdTime);
+			ZonedDateTime zdTime = Time.convertUsingToInstant(currSatList.get(0).getTime());
+			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
 			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
-			SimpleMatrix earthTide = new SimpleMatrix(3,1,true,Vector.add(timeVaryingTides, permanentTide));
+			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSVID();
@@ -185,14 +200,14 @@ public class EKF_PPP extends EKFParent {
 					Satellite prev_sat = prevSatList.get(k);
 					String prev_satID = prev_sat.getObsvCode() + prev_sat.getSVID();
 					if (satID.equals(prev_satID)) {
-					
+
 						SimpleMatrix satEci = new SimpleMatrix(3, 1, true, current_sat.getSatEci());
 						SimpleMatrix prev_satEci = new SimpleMatrix(3, 1, true, prev_sat.getSatEci());
 						SimpleMatrix unitLOS = new SimpleMatrix(1, 3, true,
 								SatUtil.getUnitLOS(current_sat.getSatEci(), refPos));
 						double earthTide_range = unitLOS.mult(earthTide).get(0);
-						current_sat.setPseudorange(current_sat.getPseudorange()+earthTide_range);
-						current_sat.setPhase(current_sat.getPhase()+earthTide_range);
+						current_sat.setPseudorange(current_sat.getPseudorange() + earthTide_range);
+						current_sat.setPhase(current_sat.getPhase() + earthTide_range);
 						double ionoRate = current_sat.getIonoErr() - prev_sat.getIonoErr();
 						double tropoRate = current_sat.getTropoErr() - prev_sat.getTropoErr();
 						double dopplerDR = ((current_sat.getPseudoRangeRate() + prev_sat.getPseudoRangeRate()) / 2)
@@ -203,9 +218,9 @@ public class EKF_PPP extends EKFParent {
 						double wavelength = SpeedofLight / current_sat.getCarrier_frequency();
 						double approxCS = Math.abs(phaseDR - dopplerDR);
 						double[] pco = rxPCO.get(current_sat.getObsvCode());
-						double trueDR = MathUtil.getEuclidean(Vector.add(rxARP,pco), current_sat.getSatEci())
-								- MathUtil.getEuclidean(Vector.add(rxARP,pco), prev_sat.getSatEci());
-						
+						double trueDR = MathUtil.getEuclidean(Vector.add(rxARP, pco), current_sat.getSatEci())
+								- MathUtil.getEuclidean(Vector.add(rxARP, pco), prev_sat.getSatEci());
+
 						if (approxCS < 100 * wavelength) {
 							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
 									wavelength, satVelCorr, unitLOS, currentTime - timeList.get(0), trueDR, prDR));
@@ -217,7 +232,7 @@ public class EKF_PPP extends EKFParent {
 			runFilter_vel(currentTime, deltaT, csdList, ssiSet, doAnalyze, doTest, outlierAnalyze, true, i, refPos,
 					repairCS);
 
-			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambMap, ionoMap, obsvCodeList,rxPCO);
+			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambMap, ionoMap, obsvCodeList, rxPCO, fixAmb);
 			SimpleMatrix x = pos_kfObj.getState();
 			SimpleMatrix P = pos_kfObj.getCovariance();
 
@@ -225,13 +240,11 @@ public class EKF_PPP extends EKFParent {
 			for (int j = 0; j < 3; j++) {
 				estState[j] = x.get(j);
 			}
-			
-			
-			
+
 			// Add position estimate to the list
 			estStateMap.put(currentTime, estState);
 			prevTime = currentTime;
-			
+
 		}
 		return estStateMap;
 
@@ -256,7 +269,7 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix z = new SimpleMatrix(n, 1);
 
 		SimpleMatrix H = new SimpleMatrix(n, 3 + m);
-		SimpleMatrix unitLOS =null;
+		SimpleMatrix unitLOS = null;
 		unitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(satList, refPos));
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		for (int i = 0; i < n; i++) {
@@ -335,13 +348,19 @@ public class EKF_PPP extends EKFParent {
 
 		// Resume full SatList or CSDList
 		for (int i = 0; i < n; i++) {
+			Satellite sat = csdList.get(i).getIgs_sat();
+			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSVID();
+			int[] record = cycleSlipCount.computeIfAbsent(satID,k->new int[2]);
+			record[1] += 1;
 			if (csdList.get(i).isCS()) {
+				record[0] += 1;
 				ambCount++;
 			}
+			cycleSlipCount.put(satID, record);
 		}
 
-		ambDetectedCountMap.put(currentTime, ambCount);
-		ambDetectedCount += ambCount;
+		csDetectedCountMap.put(currentTime, ambCount);
+		csDetectedCount += ambCount;
 
 		SimpleMatrix x_new = new SimpleMatrix(3 + m + ambCount, 1);
 		x_new.insertIntoThis(0, 0, x);
@@ -393,16 +412,16 @@ public class EKF_PPP extends EKFParent {
 		if (ambCount > 0 && repairCS) {
 			SimpleMatrix floatAmb = x.extractMatrix(3 + m, 3 + m + ambCount, 0, 1);
 			SimpleMatrix floatAmbCov = P.extractMatrix(3 + m, 3 + m + ambCount, 3 + m, 3 + m + ambCount);
-			System.out.println("Float Ambiguity");
+			System.out.println("Float Cyle Slip");
 			System.out.println(floatAmb.toString());
-			System.out.println("Float Ambiguity Covariance");
-			System.out.println(floatAmbCov.toString());
-			System.out.println("Float Ambiguity Correlation Matrix");
+			System.out.println("Float Cyle Slip Covariance");
+//			System.out.println(floatAmbCov.toString());
+//			System.out.println("Float Cyle Slip Correlation Matrix");
 			System.out.println(Matrix.computeCorrelationMatrix(floatAmbCov).toString());
 			System.out.println("SVIDs:");
 			System.out.println(Arrays.toString(sysout_svid));
-			System.out.println("TDCP variance:");
-			System.out.println(Arrays.toString(sysout_var));
+//			System.out.println("TDCP variance:");
+//			System.out.println(Arrays.toString(sysout_var));
 
 			SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
 			SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
@@ -430,12 +449,14 @@ public class EKF_PPP extends EKFParent {
 				x.insertIntoThis(0, 0, b_caron);
 				x.insertIntoThis(3 + m, 0, a_caron);
 				P = new SimpleMatrix(Cbb_caron);
-				System.out.println("Fixed Ambiguity Sequence");
+				System.out.println("Fixed Cyle Slip Sequence");
 				System.out.println(a_caron.toString());
+				System.out.println("Fixed Cyle Slip Variance");
+				System.out.println(Caa_caron.toString());
 				System.out.println(" N Fixed : " + nFixed);
 
-				ambRepairedCountMap.put(currentTime, nFixed);
-				ambRepairedCount += nFixed;
+				csRepairedCountMap.put(currentTime, nFixed);
+				csRepairedCount += nFixed;
 
 				int count = 0;
 				for (int i = 0; i < n; i++) {
@@ -467,7 +488,7 @@ public class EKF_PPP extends EKFParent {
 
 	private void runFilter_pos(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,
 			ListOrderedSet ssiSet, HashMap<String, Integer> ambMap, HashMap<String, Integer> ionoMap,
-			String[] obsvCodeList, HashMap<String, double[]> rxPCO) throws Exception {
+			String[] obsvCodeList, HashMap<String, double[]> rxPCO, boolean fixAmb) throws Exception {
 		HashMap<String, Integer> new_ambMap = new HashMap<String, Integer>();
 		HashMap<String, Integer> new_ionoMap = new HashMap<String, Integer>();
 		ListOrderedSet uniqSat = new ListOrderedSet();
@@ -626,9 +647,11 @@ public class EKF_PPP extends EKFParent {
 		H.insertIntoThis(n, 0, unitLOS.scale(-1));
 		H.insertIntoThis(2 * n, 3 + clkOffNum, unitLOS.scale(-1));
 
-		SimpleMatrix Cyy_pseudorange = SimpleMatrix.identity(n).scale(GnssDataConfig.pseudorange_priorVarOfUnitW);//Weight.igs_getNormCyy(satList, GnssDataConfig.pseudorange_priorVarOfUnitW);
+		SimpleMatrix Cyy_pseudorange = SimpleMatrix.identity(n).scale(GnssDataConfig.pseudorange_priorVarOfUnitW);// Weight.igs_getNormCyy(satList,
+																													// GnssDataConfig.pseudorange_priorVarOfUnitW);
 		SimpleMatrix Cyy_phase = SimpleMatrix.identity(n).scale(GnssDataConfig.phase_priorVarOfUnitW);
-		SimpleMatrix Cyy_doppler = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);//Weight.igs_getNormCyy(satList, GnssDataConfig.doppler_priorVarOfUnitW);
+		SimpleMatrix Cyy_doppler = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);// Weight.igs_getNormCyy(satList,
+																											// GnssDataConfig.doppler_priorVarOfUnitW);
 		SimpleMatrix Cyy_GIM_iono = SimpleMatrix.identity(ionoParamNum).scale(GnssDataConfig.GIM_TECU_variance);
 		R.insertIntoThis(0, 0, Cyy_pseudorange);
 		R.insertIntoThis(n, n, Cyy_phase);
@@ -649,8 +672,9 @@ public class EKF_PPP extends EKFParent {
 			z.set(i, sat.getPseudorange());
 			z.set(i + n, sat.getPhase());
 			z.set(i + (2 * n), csdObj.getDopplerDR() - csdObj.getSatVelCorr());
-			double geometricRange = Math.sqrt(IntStream.range(0, 3).mapToDouble(j -> estPos[j]+pco[j] - sat.getSatEci()[j])
-					.map(j -> j * j).reduce(0, (j, k) -> j + k));
+			double geometricRange = Math
+					.sqrt(IntStream.range(0, 3).mapToDouble(j -> estPos[j] + pco[j] - sat.getSatEci()[j])
+							.map(j -> j * j).reduce(0, (j, k) -> j + k));
 
 			double estPR = geometricRange + (sat.getWetMF() * estTropo) + (ionoCoeff * estIonoTec.get(ionoIndex));
 			double estCP = geometricRange + (sat.getWetMF() * estTropo) - (ionoCoeff * estIonoTec.get(ionoIndex))
@@ -687,20 +711,102 @@ public class EKF_PPP extends EKFParent {
 			H.set(i + (3 * n), coreStateNum + n + i, 1);
 
 		}
-//		System.out.println("\n");
-//		System.out.println("Design Matrix : " + H.toString());
-//		System.out.println("\n");
-//		
-//		System.out.println(
-//				"Pseudorange Innovation:" + z.extractMatrix(0, n, 0, 1).minus(ze.extractMatrix(0, n, 0, 1)).toString());
-//		System.out.println("Phase Innovation:"
-//				+ z.extractMatrix(n, 2 * n, 0, 1).minus(ze.extractMatrix(n, 2 * n, 0, 1)).toString());
-//		System.out.println("Doppler Innovation:"
-//				+ z.extractMatrix(2 * n, 3 * n, 0, 1).minus(ze.extractMatrix(2 * n, 3 * n, 0, 1)).toString());
-//		System.out.println("Iono Innovation:" + z.extractMatrix(3 * n, (3 * n) + ionoParamNum, 0, 1)
-//				.minus(ze.extractMatrix(3 * n, (3 * n) + ionoParamNum, 0, 1)).toString());
 
 		pos_kfObj.update(z, R, ze, H);
+		// Ambiguity fixing for position filter
+		if (n > 0 && fixAmb) {
+			x = pos_kfObj.getState();
+			P = pos_kfObj.getCovariance();
+			SimpleMatrix floatAmb = x.extractMatrix(coreStateNum, coreStateNum + n, 0, 1);
+			SimpleMatrix floatAmbCov = P.extractMatrix(coreStateNum, coreStateNum + n, coreStateNum, coreStateNum + n);
+			System.out.println("Float Ambiguity");
+			System.out.println(floatAmb.toString());
+			System.out.println("Float Ambiguity Covariance");
+			System.out.println(floatAmbCov.toString());
+//			System.out.println("Float Ambiguity Correlation Matrix");
+//			System.out.println(Matrix.computeCorrelationMatrix(floatAmbCov).toString());
+			String[] sysout_svid = new String[n];
+			double[] sysout_var = new double[n];
+			for (int i = 0; i < n; i++) {
+				Satellite sat = satList.get(i);
+				char ssi = sat.getObsvCode().charAt(0);
+				sysout_svid[i] = ssi + "" + sat.getSVID() + "_" + sat.getObsvCode().charAt(1);
+				double wavelength = sat.getCarrier_wavelength();
+				sysout_var[i] = GnssDataConfig.phase_priorVarOfUnitW / Math.pow(wavelength, 2);
+			}
+//			System.out.println("SVIDs:");
+//			System.out.println(Arrays.toString(sysout_svid));
+//			System.out.println("Phase variance:");
+//			System.out.println(Arrays.toString(sysout_var));
+
+			SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+			SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
+			// Optional: Enforce symmetry (redundant but safe)
+			Q_ahat = Q_ahat.plus(Q_ahat.transpose()).scale(0.5);
+			SimpleMatrix afixed = new SimpleMatrix(floatAmb);
+			boolean estimateVar = false;
+			LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat, EstimatorType.PAR, estimateVar, 1, 0.99999);
+			int nFixed = lmd.getnFixed();
+			double Ps = lmd.getSr();
+			afixed = lmd.getaFix();
+			SimpleMatrix QaFixed = lmd.getQaFix();
+			System.out.println(" Failure Rate : " + (1 - Ps));
+			if (nFixed != 0) {
+				int bSize = coreStateNum;
+				int aSize = n;
+				int cSize = ionoParamNum;
+				int ionoStart = coreStateNum + n;
+				int ionoEnd = ionoStart + cSize;
+				SimpleMatrix Cba = P.extractMatrix(0, bSize, coreStateNum, coreStateNum + aSize);
+				SimpleMatrix Cca = P.extractMatrix(ionoStart, ionoEnd, coreStateNum, coreStateNum + aSize);
+				SimpleMatrix Cbc = P.extractMatrix(0, bSize, ionoStart, ionoEnd);
+				SimpleMatrix Cbb_hat = P.extractMatrix(0, bSize, 0, bSize);
+				SimpleMatrix Ccc_hat = P.extractMatrix(ionoStart, ionoEnd, ionoStart, ionoEnd);
+				SimpleMatrix b_hat = x.extractMatrix(0, bSize, 0, 1);
+				SimpleMatrix c_hat = x.extractMatrix(ionoStart, ionoEnd, 0, 1);
+				SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
+				SimpleMatrix Qa_caron = new SimpleMatrix(QaFixed);
+				Qa_caron = Qa_caron.plus(Qa_caron.transpose()).scale(0.5);
+				SimpleMatrix a_caron = new SimpleMatrix(afixed);
+				SimpleMatrix delta_a = a_hat.minus(a_caron);
+				SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(delta_a));
+				SimpleMatrix c_caron = c_hat.minus(Cca.mult(Caa_hat_inv).mult(delta_a));
+				SimpleMatrix temp = Caa_hat_inv.mult(Qa_caron).mult(Caa_hat_inv);
+				SimpleMatrix Pbb_c = Cbb_hat.minus(Cba.mult(Caa_hat_inv).mult(Cba.transpose()))
+						.plus(Cba.mult(temp).mult(Cba.transpose()));
+				SimpleMatrix Pcc_c = Ccc_hat.minus(Cca.mult(Caa_hat_inv).mult(Cca.transpose()))
+						.plus(Cca.mult(temp).mult(Cca.transpose()));
+				SimpleMatrix Pbc_c = Cbc.minus(Cba.mult(Caa_hat_inv).mult(Cca.transpose()))
+						.plus(Cba.mult(temp).mult(Cca.transpose()));
+				SimpleMatrix Pba_c = Cba.mult(Caa_hat_inv).mult(Qa_caron);
+				SimpleMatrix Pca_c = Cca.mult(Caa_hat_inv).mult(Qa_caron);
+				SimpleMatrix x_new = new SimpleMatrix(totalStateNum, 1);
+				x_new.insertIntoThis(0, 0, b_caron);
+				x_new.insertIntoThis(coreStateNum, 0, a_caron);
+				x_new.insertIntoThis(ionoStart, 0, c_caron);
+				SimpleMatrix P_new = new SimpleMatrix(totalStateNum, totalStateNum);
+				P_new.insertIntoThis(0, 0, Pbb_c);
+				P_new.insertIntoThis(coreStateNum, coreStateNum, Qa_caron);
+				P_new.insertIntoThis(ionoStart, ionoStart, Pcc_c);
+				P_new.insertIntoThis(0, coreStateNum, Pba_c);
+				P_new.insertIntoThis(coreStateNum, 0, Pba_c.transpose());
+				P_new.insertIntoThis(0, ionoStart, Pbc_c);
+				P_new.insertIntoThis(ionoStart, 0, Pbc_c.transpose());
+				P_new.insertIntoThis(coreStateNum, ionoStart, Pca_c.transpose());
+				P_new.insertIntoThis(ionoStart, coreStateNum, Pca_c);
+				P_new = P_new.plus(P_new.transpose()).scale(0.5);
+				pos_kfObj.setState_ProcessCov(x_new, P_new);
+				System.out.println("Fixed Ambiguity Sequence");
+				System.out.println(a_caron.toString());
+				System.out.println("Fixed Ambiguity Variance");
+				System.out.println(Qa_caron.toString());
+				System.out.println(" N Fixed : " + nFixed);
+
+				ambFixedCountMap.put(currentTime, nFixed);
+				ambFixedCount += nFixed;
+			}
+		}
+
 	}
 
 	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
@@ -809,24 +915,36 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
-	public long getAmbDetectedCount() {
-		return ambDetectedCount;
+	public long getCsDetectedCount() {
+		return csDetectedCount;
 	}
 
-	public long getAmbRepairedCount() {
-		return ambRepairedCount;
+	public long getCsRepairedCount() {
+		return csRepairedCount;
 	}
 
-	public TreeMap<Long, Integer> getAmbDetectedCountMap() {
-		return ambDetectedCountMap;
+	public TreeMap<Long, Integer> getCsDetectedCountMap() {
+		return csDetectedCountMap;
 	}
 
-	public TreeMap<Long, Integer> getAmbRepairedCountMap() {
-		return ambRepairedCountMap;
+	public TreeMap<Long, Integer> getCsRepairedCountMap() {
+		return csRepairedCountMap;
 	}
 
 	public TreeMap<Long, ArrayList<CycleSlipDetect>> getCsdListMap() {
 		return csdListMap;
 	}
 
+	public long getAmbFixedCount() {
+		return ambFixedCount;
+	}
+
+	public TreeMap<Long, Integer> getAmbFixedCountMap() {
+		return ambFixedCountMap;
+	}
+
+	public HashMap<String, int[]> getCycleSlipCount() {
+		return cycleSlipCount;
+	}
+	
 }
