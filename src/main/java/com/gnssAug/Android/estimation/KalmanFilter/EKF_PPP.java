@@ -25,8 +25,9 @@ import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Weight;
 
 public class EKF_PPP extends EKFParent {
-	private long ambDetectedCount = 0;
-	private long ambRepairedCount = 0;
+	
+	private long csDetectedCount = 0;
+	private long csRepairedCount = 0;
 	private KFconfig vel_kfObj;
 	private KFconfig pos_kfObj;
 
@@ -35,10 +36,11 @@ public class EKF_PPP extends EKFParent {
 		pos_kfObj = new KFconfig();
 	}
 
-	private TreeMap<Long, Integer> ambDetectedCountMap;
-	private TreeMap<Long, Integer> ambRepairedCountMap;
+	private TreeMap<Long, Integer> csDetectedCountMap;
+	private TreeMap<Long, Integer> csRepairedCountMap;
 	private TreeMap<Long, ArrayList<CycleSlipDetect>> csdListMap;
-
+	private HashMap<String, int[]> cycleSlipCount;
+	
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			String[] obsvCodeList, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
 			ArrayList<double[]> truePosEcefList, boolean isStatic, boolean repairCS) throws Exception {
@@ -48,7 +50,7 @@ public class EKF_PPP extends EKFParent {
 		for (int i = 0; i < clkOffNum; i++) {
 			ssiSet.add(obsvCodeList[i].charAt(0));
 		}
-		int clkDriftNum = ssiSet.size();
+		int clkDriftNum = 1;//ssiSet.size();
 
 		SimpleMatrix x_vel = new SimpleMatrix(3 + clkDriftNum, 1);
 		SimpleMatrix P_vel = new SimpleMatrix(3 + clkDriftNum, 3 + clkDriftNum);
@@ -102,8 +104,9 @@ public class EKF_PPP extends EKFParent {
 			measNoiseMap = new TreeMap<Long, double[]>();
 			csdListMap = new TreeMap<Long, ArrayList<CycleSlipDetect>>();
 		}
-		ambDetectedCountMap = new TreeMap<Long, Integer>();
-		ambRepairedCountMap = new TreeMap<Long, Integer>();
+		cycleSlipCount = new HashMap<String, int[]>();
+		csDetectedCountMap = new TreeMap<Long, Integer>();
+		csRepairedCountMap = new TreeMap<Long, Integer>();
 		return iterate(SatMap, timeList, ssiSet, doAnalyze, doTest, outlierAnalyze, truePosEcefList,
 				obsvCodeList,repairCS);
 	}
@@ -280,8 +283,8 @@ public class EKF_PPP extends EKFParent {
 			}
 		}
 
-		ambDetectedCountMap.put(currentTime, ambCount);
-		ambDetectedCount += ambCount;
+		csDetectedCountMap.put(currentTime, ambCount);
+		csDetectedCount += ambCount;
 
 		SimpleMatrix x_new = new SimpleMatrix(3 + m + ambCount, 1);
 		x_new.insertIntoThis(0, 0, x);
@@ -374,8 +377,8 @@ public class EKF_PPP extends EKFParent {
 				System.out.println(a_caron.toString());
 				System.out.println(" N Fixed : " + nFixed);
 
-				ambRepairedCountMap.put(currentTime, nFixed);
-				ambRepairedCount += nFixed;
+				csRepairedCountMap.put(currentTime, nFixed);
+				csRepairedCount += nFixed;
 
 				int count = 0;
 				for (int i = 0; i < n; i++) {
@@ -541,7 +544,7 @@ public class EKF_PPP extends EKFParent {
 		System.out.println("Estimate Covariance : "+_P.toString());
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum,totalStateNum, ionoParams);
+		//pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum,totalStateNum, ionoParams,true);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
@@ -748,19 +751,19 @@ public class EKF_PPP extends EKFParent {
 	}
 
 	public long getAmbDetectedCount() {
-		return ambDetectedCount;
+		return csDetectedCount;
 	}
 
 	public long getAmbRepairedCount() {
-		return ambRepairedCount;
+		return csRepairedCount;
 	}
 
 	public TreeMap<Long, Integer> getAmbDetectedCountMap() {
-		return ambDetectedCountMap;
+		return csDetectedCountMap;
 	}
 
 	public TreeMap<Long, Integer> getAmbRepairedCountMap() {
-		return ambRepairedCountMap;
+		return csRepairedCountMap;
 	}
 
 	public TreeMap<Long, ArrayList<CycleSlipDetect>> getCsdListMap() {

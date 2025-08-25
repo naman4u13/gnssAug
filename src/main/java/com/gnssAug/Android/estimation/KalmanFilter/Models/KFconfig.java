@@ -205,7 +205,7 @@ public class KFconfig extends KF {
 		// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
 		SimpleMatrix _Q = new SimpleMatrix(3 + m, 3 + m);
 		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]));
-		double _sg = 1e2;
+		double _sg = 0.1;
 		IntStream.range(3, 3 + m).forEach(i -> _Q.set(i, i, _sg * deltaT));
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
 		SimpleMatrix R = new SimpleMatrix(n, n);
@@ -221,72 +221,75 @@ public class KFconfig extends KF {
 		super.configure(phi, Q);
 	}
 
-	public void configPPP(double deltaT, int clkOffNum,int clkDriftNum, int totalStateNum,ArrayList<double[]> ionoParams) throws Exception {
+	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
+			ArrayList<double[]> ionoParams, boolean isAndroid) throws Exception {
 
 		double[] refPos = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 		int ionoParamNum = ionoParams.size();
+
 		// Its 16 cm^2/s in TECU^2/s, assuming L1 freq
 		final double TECU_var = 0.0611;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
-		IntStream.range(0, 3).forEach(i -> phi[i][i+3+clkOffNum] = deltaT);
-		
+		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + clkOffNum] = deltaT);
+
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
-		
-		// Position and Velocity 
+
+		// Position and Velocity
 		for (int i = 0; i < 3; i++) {
-			_Q.set(i,i, (qENU[i] * Math.pow(deltaT, 3) / 3)+(1e-10));
-			_Q.set(i,i+3+clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i+3+clkOffNum,i, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i+3+clkOffNum,i+3+clkOffNum, qENU[i] * deltaT);
+			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-10));
+			_Q.set(i, i + 3 + clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + clkOffNum, i, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, qENU[i] * deltaT);
 		}
-		
-		// Clock Offset and Drift 
-		for (int i = 0; i < clkOffNum; i++) {
-			_Q.set(i+3,i+3,10000*deltaT);
-			
+
+		double clkOffVar = 1e5;
+		double clkDriftVar = 0.1;
+		if (isAndroid) {
+			clkOffVar = 100;
+			clkDriftVar = 1;
 		}
+		// Receiver Clock Offset
+		_Q.set(3, 3, clkOffVar*deltaT);
+		// Rx DCB
+		for (int i = 1; i < clkOffNum; i++) {
+			_Q.set(i + 3, i + 3, 1e-4 * deltaT);
+
+		}
+
+		// Clock Drift
 		for (int i = 0; i < clkDriftNum; i++) {
-			_Q.set(i+6+clkOffNum,i+6+clkOffNum,100*deltaT);
-			
+			_Q.set(i + 6 + clkOffNum, i + 6 + clkOffNum, clkDriftVar * deltaT);
+
 		}
-		
+
 		// Tropo: More than 1cm/sqrt(hr)
-		_Q.set(6+clkOffNum+clkDriftNum,6+clkOffNum+clkDriftNum,(1e-8)*deltaT);
-		
-		
+		_Q.set(6 + clkOffNum + clkDriftNum, 6 + clkOffNum + clkDriftNum, (1e-8) * deltaT);
+
 		// Ambiguities
-		for(int i=6+clkOffNum+clkDriftNum+1;i<totalStateNum-ionoParamNum;i++)
-		{
-			_Q.set(i,i,1e-10);
+		for (int i = 6 + clkOffNum + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
+			_Q.set(i, i, 1e-10);
 		}
-		
+
 		// Ionosphere: 4 cm/sqrt(s)*sin(elevation)
-		for(int i=0;i<ionoParamNum;i++)
-		{
-			_Q.set(totalStateNum-ionoParamNum+i,totalStateNum-ionoParamNum+i,(TECU_var*deltaT)/Math.pow(Math.sin(ionoParams.get(i)[0]),2));
+		for (int i = 0; i < ionoParamNum; i++) {
+			_Q.set(totalStateNum - ionoParamNum + i, totalStateNum - ionoParamNum + i,
+					(TECU_var * deltaT) / Math.pow(Math.sin(ionoParams.get(i)[0]), 2));
 		}
-		
-		
-		
+
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
 		SimpleMatrix R = new SimpleMatrix(totalStateNum, totalStateNum);
 		for (int i = 0; i < totalStateNum; i++) {
 			R.set(i, i, 1);
 		}
 		R.insertIntoThis(0, 0, _R);
-		R.insertIntoThis(3+clkOffNum, 3+clkOffNum, _R);
+		R.insertIntoThis(3 + clkOffNum, 3 + clkOffNum, _R);
 
 		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {
 			throw new Exception("PositiveDefinite test Failed");
 		}
-//		System.out.println("Rotation Matrix : "+R.toString());
-//		System.out.println();
-//		System.out.println("Process Covariance : "+Q.toString());
-//		System.out.println();
-//		System.out.println("Transition Matrix : "+new SimpleMatrix(phi).toString());
 		Q = Q.plus(Q.transpose()).scale(0.5);
 		super.configure(phi, Q);
 	}

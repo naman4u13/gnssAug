@@ -63,7 +63,7 @@ public class MainApp {
 //			clock_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 //			orbit_path = base_url + year + "_" + doy + "/COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 //			ionex_path = base_url + year + "_" + doy + "/igsg" + doy + "0.21I";
-			discardSet =Set.of("E25");//Set.of("E25", "C8", "C13", "C38");
+			discardSet =Set.of("E25","E33","C8", "C13", "C38");//Set.of("E25", "C8", "C13", "C38");
 			dcb_bias_path = base_url + year + "_" + doy + sep + "CAS0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
 			osb_bias_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_01D_OSB.BIA";
 			clock_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
@@ -77,7 +77,7 @@ public class MainApp {
 			
 //			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
 			IGS.posEstimate(osb_bias_path,dcb_bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C","E1C","G5Q","E5Q"}, 4, 1, 0, true, true, 6,false, false, false,discardSet);
+					new String[] { "G1C","E1C","G5Q","E5Q"}, 4, 1, 0, true, true, 5,false, false, false,discardSet);
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };

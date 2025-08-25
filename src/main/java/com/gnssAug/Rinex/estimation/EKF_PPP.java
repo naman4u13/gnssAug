@@ -116,7 +116,7 @@ public class EKF_PPP extends EKFParent {
 			measNoiseMap = new TreeMap<Long, double[]>();
 			csdListMap = new TreeMap<Long, ArrayList<CycleSlipDetect>>();
 		}
-		cycleSlipCount = new HashMap<String,int[]>();
+		cycleSlipCount = new HashMap<String, int[]>();
 		csDetectedCountMap = new TreeMap<Long, Integer>();
 		csRepairedCountMap = new TreeMap<Long, Integer>();
 		ambFixedCountMap = new TreeMap<Long, Integer>();
@@ -276,6 +276,7 @@ public class EKF_PPP extends EKFParent {
 			CycleSlipDetect csdObj = csdList.get(i);
 			z.set(i, csdObj.getDopplerDR() - csdObj.getSatVelCorr());
 			char ssi = satList.get(i).getObsvCode().charAt(0);
+
 			for (int j = 0; j < m; j++) {
 				if ((char) ssiSet.get(j) == ssi) {
 					H.set(i, 3 + j, 1);
@@ -327,7 +328,8 @@ public class EKF_PPP extends EKFParent {
 		for (int i = 0; i < tested_n; i++) {
 			CycleSlipDetect csdObj = testedCsdList.get(i);
 			z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
-			char ssi = satList.get(i).getObsvCode().charAt(0);
+
+			char ssi = testedSatList.get(i).getObsvCode().charAt(0);
 			for (int j = 0; j < m; j++) {
 				if ((char) ssiSet.get(j) == ssi) {
 					H.set(i, 3 + j, 1);
@@ -350,7 +352,7 @@ public class EKF_PPP extends EKFParent {
 		for (int i = 0; i < n; i++) {
 			Satellite sat = csdList.get(i).getIgs_sat();
 			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSVID();
-			int[] record = cycleSlipCount.computeIfAbsent(satID,k->new int[2]);
+			int[] record = cycleSlipCount.computeIfAbsent(satID, k -> new int[2]);
 			record[1] += 1;
 			if (csdList.get(i).isCS()) {
 				record[0] += 1;
@@ -385,6 +387,7 @@ public class EKF_PPP extends EKFParent {
 			CycleSlipDetect csdObj = csdList.get(i);
 			z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
 			double wavelength = csdObj.getWavelength();
+
 			char ssi = satList.get(i).getObsvCode().charAt(0);
 			for (int j = 0; j < m; j++) {
 				if ((char) ssiSet.get(j) == ssi) {
@@ -478,7 +481,7 @@ public class EKF_PPP extends EKFParent {
 
 		if (doAnalyze) {
 			SimpleMatrix residual = z.minus((H.mult(x)));
-			performAnalysis(residual, satList, R, H, currentTime, ssiSet, vel_kfObj);
+			performAnalysis(residual, satList, R, H, currentTime, vel_kfObj);
 		}
 		x = x.extractMatrix(0, 3 + m, 0, 1);
 		P = P.extractMatrix(0, 3 + m, 0, 3 + m);
@@ -617,12 +620,9 @@ public class EKF_PPP extends EKFParent {
 		}
 		ionoMap.clear();
 		ionoMap.putAll(new_ionoMap);
-//		System.out.println("Estimate  : " + _x.toString());
-//		System.out.println();
-//		System.out.println("Estimate Covariance : " + _P.toString());
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams);
+		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, false);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
@@ -682,12 +682,18 @@ public class EKF_PPP extends EKFParent {
 			ze.set(i, estPR);
 			ze.set(i + n, estCP);
 			ze.set(i + (2 * n), H.extractMatrix(i, i + 1, 0, 3).mult(new SimpleMatrix(3, 1, true, estVel)).get(0));
+			ze.set(i + n, ze.get(i + n) + rxClkOff[0]);
+			H.set(i + n, 3, 1);
 			for (int j = 0; j < clkOffNum; j++) {
+				double clkOffVal = rxClkOff[0];
 				if (obsvCode.equals(obsvCodeList[j])) {
-					ze.set(i, ze.get(i) + rxClkOff[j]);
-					ze.set(i + n, ze.get(i + n) + rxClkOff[j]);
+					if (j == 0) {
+						clkOffVal = 0;
+					} else {
+						H.set(i, 3, 1);
+					}
+					ze.set(i, ze.get(i) + rxClkOff[j] + clkOffVal);
 					H.set(i, 3 + j, 1);
-					H.set(i + n, 3 + j, 1);
 				}
 			}
 			for (int j = 0; j < clkDriftNum; j++) {
@@ -886,7 +892,7 @@ public class EKF_PPP extends EKFParent {
 	}
 
 	private void performAnalysis(SimpleMatrix e_post_hat, ArrayList<Satellite> satList, SimpleMatrix R, SimpleMatrix H,
-			long currentTime, ListOrderedSet ssiSet, KFconfig kf_Obj) {
+			long currentTime, KFconfig kf_Obj) {
 
 		int _n = satList.size();
 		double[] measNoise = new double[_n];
@@ -946,5 +952,5 @@ public class EKF_PPP extends EKFParent {
 	public HashMap<String, int[]> getCycleSlipCount() {
 		return cycleSlipCount;
 	}
-	
+
 }
