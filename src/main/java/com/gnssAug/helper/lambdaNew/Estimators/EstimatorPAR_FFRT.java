@@ -189,9 +189,9 @@ public class EstimatorPAR_FFRT {
 					stats = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
 							(int) GnssDataConfig.nSamplesMC, null);
 				}
-				if ((double)stats[1] == 0.0 && (double)stats[2] == 0.0) {
-					throw new Exception("PAR-FFRT Variance issue");
-				}
+//				if ((double)stats[1] == 0.0 && (double)stats[2] == 0.0) {
+//					throw new Exception("PAR-FFRT Variance issue");
+//				}
 				// If the ratio test passes, return the index
 				return new Object[] { ilsResult, stats, i };
 			}

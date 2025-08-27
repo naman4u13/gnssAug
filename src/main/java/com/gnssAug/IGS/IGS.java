@@ -89,12 +89,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALBH00CAN_R_20242001230_15M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/AJAC/AJAC_L1_L5_GPS_GAL_PPP_Repair";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALBH/ALBH_test2";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -339,7 +339,7 @@ public class IGS {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
-						outlierAnalyze, obsvCodeList,rxARP,true,true,true);
+						outlierAnalyze, obsvCodeList,rxARP,true,false,true);
 				
 				int n = timeList.size();
 				for (int i = 1; i < n; i++) {
@@ -551,6 +551,7 @@ public class IGS {
 			// Geocentric Latitude
 			double gcLat = LatLonUtil.gd2gc(refLatLon[0], refLatLon[2]);
 			int n = satList.size();
+			ComputeTropoCorr tropo = new ComputeTropoCorr(refLatLon, time, geoid);
 			for (int i = 0; i < n; i++) {
 				Satellite sat = satList.get(i);
 				double[] eleAzm = sat.getElevAzm();
@@ -571,7 +572,7 @@ public class IGS {
 					}
 				}
 				if (corrTropo) {
-					ComputeTropoCorr tropo = new ComputeTropoCorr(refLatLon, time, geoid);
+					
 					double[] tropoParam = tropo.getSlantDelay(eleAzm[0]);
 					tropoErr = tropoParam[0];
 					wetMF = tropoParam[1];

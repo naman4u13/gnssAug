@@ -16,8 +16,8 @@ public class KFconfig extends KF {
 	private final double SpeedofLight = 299792458;
 	private final double c2 = SpeedofLight * SpeedofLight;
 	// Typical Allan Variance Coefficients for TCXO (low quality)
-	private final double sf = ClockAllanVar.TCXO_low_quality.sf;
-	private final double sg = ClockAllanVar.TCXO_low_quality.sg;
+	private final double sf = 1e4;//ClockAllanVar.TCXO_low_quality.sf;
+	private final double sg = 1;//ClockAllanVar.TCXO_low_quality.sg;
 
 	public void config(double deltaT, Flag flag, int m, boolean useDoppler, boolean complementary, boolean useEstVel)
 			throws Exception {
@@ -247,8 +247,8 @@ public class KFconfig extends KF {
 		double clkOffVar = 1e5;
 		double clkDriftVar = 0.1;
 		if (isAndroid) {
-			clkOffVar = 100;
-			clkDriftVar = 1;
+			clkOffVar = 1e5;
+			clkDriftVar = 1e2;
 		}
 		// Receiver Clock Offset
 		_Q.set(3, 3, clkOffVar*deltaT);

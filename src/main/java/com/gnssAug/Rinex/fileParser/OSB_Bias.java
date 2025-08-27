@@ -73,7 +73,11 @@ public class OSB_Bias {
                 	    String[] end = endStr.split(":");
                 	    double start_GPStime = Time.getGPSTimeFromYDOY(start)[0];
                 	    double end_GPStime = Time.getGPSTimeFromYDOY(end)[0];
-                	    double biasValue = Double.parseDouble(valueStr) * 1e-9;  // VALUE in seconds
+                	    double biasValue = 0.0;
+                	    if(!valueStr.equals("nan"))
+                	    {
+                	    	biasValue = Double.parseDouble(valueStr) * 1e-9;
+                	    }
                 	    double std = Double.parseDouble(stdStr);
 
                 	    osbMap.computeIfAbsent(ssi, k -> new HashMap<>())

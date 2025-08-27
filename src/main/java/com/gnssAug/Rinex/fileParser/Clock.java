@@ -35,7 +35,7 @@ public class Clock {
 			int recLen = 60;
 			int[] recFormat = new int[] { 3, 5, 26, 6, 19 };
 
-			if (header[0].split("\\s")[0].trim().equals("3.04")) {
+			if (header[0].split("\\s")[0].trim().equals("3.00")) {
 				recLen = 65;
 				recFormat = new int[] { 3, 10, 27, 5, 19 };
 			}
@@ -128,8 +128,11 @@ public class Clock {
 		}
 
 	}
-
 	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB) throws Exception {
+		return getBiasAndDrift(x, SVID, obsvCode, applyDCB,null);
+	}
+
+	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB,OSB_Bias osb__bias) throws Exception {
 		double[] X = new double[2];
 		double[] Y = new double[2];
 		char SSI = obsvCode.charAt(0);
@@ -148,6 +151,8 @@ public class Clock {
 
 		double clkBias = Interpolator.linear(X, Y, x);
 		double clkDrift = (Y[1] - Y[0]) / (X[1] - X[0]);
+//		double satHardCodeBias = osb__bias.getOSB(SSI,"C"+obsvCode.substring(1), SVID, x);
+		double dcbBias = 0;
 		if (applyDCB) {
 			if (SSI == 'G') {
 				double gpsFreqRatio = Math.pow(Constellation.frequency.get('G').get(1), 2)
@@ -158,6 +163,7 @@ public class Clock {
 				double ISC = dcb_bias.getISC(obsvCode, SVID);
 				
 				clkBias = clkBias - TGD + ISC;
+				dcbBias = TGD-ISC;
 
 			} else if (SSI == 'E') {
 				double galileoFreqRatio = Math.pow(Constellation.frequency.get('E').get(1), 2)
@@ -166,6 +172,7 @@ public class Clock {
 				if (obsvCode == "E1C") {
 					double BGD = dcb_bias.getISC("E5Q", SVID) / (1 - galileoFreqRatio);
 					clkBias = clkBias - BGD;
+					dcbBias = BGD;
 
 				} else if (obsvCode == "E5X") {
 					double BGD = dcb_bias.getISC("E5X", SVID) / (1 - galileoFreqRatio);

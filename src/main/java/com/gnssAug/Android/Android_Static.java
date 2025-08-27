@@ -56,8 +56,10 @@ import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Android.models.TDCP;
 import com.gnssAug.Rinex.fileParser.DCB_Bias;
+import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Clock;
 import com.gnssAug.Rinex.fileParser.IONEX;
+import com.gnssAug.Rinex.fileParser.OSB_Bias;
 import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.ComputeEleAzm;
@@ -76,8 +78,8 @@ public class Android_Static {
 	private static Geoid geoid = null;
 
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
-			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String bias_path, String clock_path,
-			String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
+			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String dcb_bias_path, String clock_path,
+			String orbit_path, String ionex_path,String osb_bias_path, boolean useIGS, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName) {
 		try {
 			
@@ -91,13 +93,16 @@ public class Android_Static {
 			HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>> Cxx_hat_map = new HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
 			HashMap<Measurement, TreeMap<String, ArrayList<Long>>> satCountMap = new HashMap<Measurement, TreeMap<String, ArrayList<Long>>>();
-
-			DCB_Bias bias = null;
+			String base_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";
+			String antenna_csv_path = base_path + "/complementary/antenna.csv";
+			DCB_Bias dcb_bias = null;
 			Orbit orbit = null;
 			Clock clock = null;
 			IONEX ionex = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/"
-					+ mobName + "_test3";
+			Antenna antenna = null;
+			OSB_Bias osb_bias = null;
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/ION_GNSS_2025/Pixel 4/"
+					+ mobName + "_test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -121,10 +126,13 @@ public class Android_Static {
 			if (useIGS) {
 
 				orbit = new Orbit(orbit_path);
-				bias = new DCB_Bias(bias_path);
-				clock = new Clock(clock_path, bias);
+				osb_bias = new OSB_Bias(osb_bias_path);
+				dcb_bias = new DCB_Bias(dcb_bias_path);
+				clock = new Clock(clock_path, dcb_bias);
 				ionex = new IONEX(ionex_path);
 				geoid = buildGeoid();
+				antenna = new Antenna(antenna_csv_path);
+				
 
 			}
 			ListOrderedSet ssiSet = new ListOrderedSet();
@@ -134,6 +142,7 @@ public class Android_Static {
 			}
 			double[] trueLLH = LatLonUtil.ecef2lla(trueEcef);
 			int gtIndex = 0;
+			double[] refUserEcef = null;
 			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
 					.gettRx();
 			for (long tRxMilli : gnssLogMaps.keySet()) {
@@ -148,12 +157,8 @@ public class Android_Static {
 //				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
-				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
-						weekNo, clock, orbit, useIGS, discardSet);
-				
-				
-				
-				
+				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap,osb_bias,antenna, gnssLogMap, time, obsvCodeList,
+						weekNo, clock, orbit, useIGS, discardSet,trueEcef);
 				int m =ssiSet.size();
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
@@ -161,7 +166,7 @@ public class Android_Static {
 					continue;
 
 				}
-				double[] refUserEcef = new double[3];
+				refUserEcef = new double[3];
 				try {
 					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
 				} catch (org.ejml.data.SingularMatrixException e) {
@@ -912,6 +917,18 @@ public class Android_Static {
 						continue;
 					}
 				}
+				HashMap<String,int[]> csCountMap = ekf.getCycleSlipCount();
+				System.out.println("These satellite have more than 40% phase data with Cycle Slips");
+				for(String satID:csCountMap.keySet())
+				{
+					int[] csCount = csCountMap.get(satID);
+					double percentage = (csCount[0]*1.0)/csCount[1];
+					if(percentage>0.4)
+					{
+						System.out.print(satID+", ");
+					}
+				}
+				System.out.println();
 			}
 
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;
@@ -1126,10 +1143,6 @@ public class Android_Static {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}
-//				sat.setIonoErr(ionoErr);
-//				sat.setTropoErr(tropoErr);
-//				sat.setPseudorange(sat.getPseudorange());
-//				sat.setPhase(sat.getPhase());
 				sat.setPseudorange(sat.getPseudorange() - ionoErr - tropoErr);
 				sat.setPhase(sat.getPhase() + ionoErr - tropoErr);
 				sat.setWetMF(wetMF);

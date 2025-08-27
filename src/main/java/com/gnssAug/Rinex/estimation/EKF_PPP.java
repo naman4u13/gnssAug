@@ -4,6 +4,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 import org.apache.commons.collections.set.ListOrderedSet;
@@ -729,87 +730,249 @@ public class EKF_PPP extends EKFParent {
 			System.out.println(floatAmb.toString());
 			System.out.println("Float Ambiguity Covariance");
 			System.out.println(floatAmbCov.toString());
-//			System.out.println("Float Ambiguity Correlation Matrix");
-//			System.out.println(Matrix.computeCorrelationMatrix(floatAmbCov).toString());
-			String[] sysout_svid = new String[n];
-			double[] sysout_var = new double[n];
+
+			// ADD BSD HERE
+
+			// Group satellites by system
+			HashMap<String, ArrayList<Integer>> sysGroups = new HashMap<>();
 			for (int i = 0; i < n; i++) {
-				Satellite sat = satList.get(i);
-				char ssi = sat.getObsvCode().charAt(0);
-				sysout_svid[i] = ssi + "" + sat.getSVID() + "_" + sat.getObsvCode().charAt(1);
-				double wavelength = sat.getCarrier_wavelength();
-				sysout_var[i] = GnssDataConfig.phase_priorVarOfUnitW / Math.pow(wavelength, 2);
+				String groupKey = satList.get(i).getObsvCode(); // e.g., "G1C" for system + freq
+				sysGroups.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(i);
 			}
-//			System.out.println("SVIDs:");
-//			System.out.println(Arrays.toString(sysout_svid));
-//			System.out.println("Phase variance:");
-//			System.out.println(Arrays.toString(sysout_var));
+			boolean skipAR = false;
+			// Select reference satellite per system based on elevation and CN0
+			HashMap<String, Integer> refs = new HashMap<>();
+			for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+				String sys = entry.getKey();
+				ArrayList<Integer> idxs = entry.getValue();
+				int refIdx = -1;
+				double maxWeight = -1.0;
+				for (int idx : idxs) {
+					CycleSlipDetect csdObj = csdList.get(idx);
+					if (csdObj.isCS()) {
+						continue;
+					}
+					Satellite sat = satList.get(idx);
+					double weight = 1.0 / Weight.computeCoVariance(sat.getCNo(), sat.getElevAzm()[0]);
+					if (weight > maxWeight) {
+						maxWeight = weight;
+						refIdx = idx;
+					}
+				}
+				if (refIdx != -1) {
+					refs.put(sys, refIdx);
+				}
+				else
+				{
+					skipAR = true;
+					break;
+				}
+			}
 
-			SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
-			SimpleMatrix Q_ahat = new SimpleMatrix(floatAmbCov);
-			// Optional: Enforce symmetry (redundant but safe)
-			Q_ahat = Q_ahat.plus(Q_ahat.transpose()).scale(0.5);
-			SimpleMatrix afixed = new SimpleMatrix(floatAmb);
-			boolean estimateVar = false;
-			LambdaResult lmd = LAMBDA.computeLambda(a_hat, Q_ahat, EstimatorType.PAR, estimateVar, 1, 0.99999);
-			int nFixed = lmd.getnFixed();
-			double Ps = lmd.getSr();
-			afixed = lmd.getaFix();
-			SimpleMatrix QaFixed = lmd.getQaFix();
-			System.out.println(" Failure Rate : " + (1 - Ps));
-			if (nFixed != 0) {
-				int bSize = coreStateNum;
-				int aSize = n;
-				int cSize = ionoParamNum;
-				int ionoStart = coreStateNum + n;
-				int ionoEnd = ionoStart + cSize;
-				SimpleMatrix Cba = P.extractMatrix(0, bSize, coreStateNum, coreStateNum + aSize);
-				SimpleMatrix Cca = P.extractMatrix(ionoStart, ionoEnd, coreStateNum, coreStateNum + aSize);
-				SimpleMatrix Cbc = P.extractMatrix(0, bSize, ionoStart, ionoEnd);
-				SimpleMatrix Cbb_hat = P.extractMatrix(0, bSize, 0, bSize);
-				SimpleMatrix Ccc_hat = P.extractMatrix(ionoStart, ionoEnd, ionoStart, ionoEnd);
-				SimpleMatrix b_hat = x.extractMatrix(0, bSize, 0, 1);
-				SimpleMatrix c_hat = x.extractMatrix(ionoStart, ionoEnd, 0, 1);
-				SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
-				SimpleMatrix Qa_caron = new SimpleMatrix(QaFixed);
-				Qa_caron = Qa_caron.plus(Qa_caron.transpose()).scale(0.5);
-				SimpleMatrix a_caron = new SimpleMatrix(afixed);
-				SimpleMatrix delta_a = a_hat.minus(a_caron);
-				SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(delta_a));
-				SimpleMatrix c_caron = c_hat.minus(Cca.mult(Caa_hat_inv).mult(delta_a));
-				SimpleMatrix temp = Caa_hat_inv.mult(Qa_caron).mult(Caa_hat_inv);
-				SimpleMatrix Pbb_c = Cbb_hat.minus(Cba.mult(Caa_hat_inv).mult(Cba.transpose()))
-						.plus(Cba.mult(temp).mult(Cba.transpose()));
-				SimpleMatrix Pcc_c = Ccc_hat.minus(Cca.mult(Caa_hat_inv).mult(Cca.transpose()))
-						.plus(Cca.mult(temp).mult(Cca.transpose()));
-				SimpleMatrix Pbc_c = Cbc.minus(Cba.mult(Caa_hat_inv).mult(Cca.transpose()))
-						.plus(Cba.mult(temp).mult(Cca.transpose()));
-				SimpleMatrix Pba_c = Cba.mult(Caa_hat_inv).mult(Qa_caron);
-				SimpleMatrix Pca_c = Cca.mult(Caa_hat_inv).mult(Qa_caron);
-				SimpleMatrix x_new = new SimpleMatrix(totalStateNum, 1);
-				x_new.insertIntoThis(0, 0, b_caron);
-				x_new.insertIntoThis(coreStateNum, 0, a_caron);
-				x_new.insertIntoThis(ionoStart, 0, c_caron);
-				SimpleMatrix P_new = new SimpleMatrix(totalStateNum, totalStateNum);
-				P_new.insertIntoThis(0, 0, Pbb_c);
-				P_new.insertIntoThis(coreStateNum, coreStateNum, Qa_caron);
-				P_new.insertIntoThis(ionoStart, ionoStart, Pcc_c);
-				P_new.insertIntoThis(0, coreStateNum, Pba_c);
-				P_new.insertIntoThis(coreStateNum, 0, Pba_c.transpose());
-				P_new.insertIntoThis(0, ionoStart, Pbc_c);
-				P_new.insertIntoThis(ionoStart, 0, Pbc_c.transpose());
-				P_new.insertIntoThis(coreStateNum, ionoStart, Pca_c.transpose());
-				P_new.insertIntoThis(ionoStart, coreStateNum, Pca_c);
-				P_new = P_new.plus(P_new.transpose()).scale(0.5);
-				pos_kfObj.setState_ProcessCov(x_new, P_new);
-				System.out.println("Fixed Ambiguity Sequence");
-				System.out.println(a_caron.toString());
-				System.out.println("Fixed Ambiguity Variance");
-				System.out.println(Qa_caron.toString());
-				System.out.println(" N Fixed : " + nFixed);
+			int sd_n = 0;
+			for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+			    String sys = entry.getKey();
+			    if (refs.containsKey(sys)) {
+			        sd_n += entry.getValue().size() - 1;
+			    }
+			}
+			if (sd_n <= 0||skipAR) {
+				// No AR possible, skip or handle as float
+				System.out.println("Insufficient satellites for BSD AR");
+			} else {
+				// Build transformation matrix Z (sd_n x n)
+				SimpleMatrix Z = new SimpleMatrix(sd_n, n);
+				int row = 0;
+				for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+					String sys = entry.getKey();
+					if (!refs.containsKey(sys)) {
+						continue;
+					}
+					int ref = refs.get(sys);
+					ArrayList<Integer> idxs = entry.getValue();
+					for (int idx : idxs) {
+						if (idx == ref) {
+							continue;
+						}
+						Z.set(row, idx, 1.0);
+						Z.set(row, ref, -1.0);
+						row++;
+					}
+				}
 
-				ambFixedCountMap.put(currentTime, nFixed);
-				ambFixedCount += nFixed;
+				// Compute SD float ambiguities and covariance
+				SimpleMatrix sd_a = Z.mult(floatAmb);
+				SimpleMatrix sd_Q = Z.mult(floatAmbCov).mult(Z.transpose());
+				sd_Q = sd_Q.plus(sd_Q.transpose()).scale(0.5);
+
+				// Perform LAMBDA on SD
+				boolean estimateVar = false;
+				LambdaResult lmd = LAMBDA.computeLambda(sd_a, sd_Q, EstimatorType.PAR, estimateVar, 1, 0.99999);
+				int nFixed = lmd.getnFixed();
+				double Ps = lmd.getSr();
+				SimpleMatrix sd_fix = lmd.getaFix();
+				SimpleMatrix sd_Qfix = lmd.getQaFix();
+				System.out.println(" Failure Rate : " + (1 - Ps));
+				if (nFixed != 0) {
+//					System.out.println(" N Fixed (SD): " + nFixed);
+//
+//					// Recover undifferenced fixed ambiguities and covariance
+//					SimpleMatrix a_caron = new SimpleMatrix(n, 1);
+//					SimpleMatrix Qa_caron = new SimpleMatrix(n, n);
+//					int sd_row = 0;
+//					for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+//						String sys = entry.getKey();
+//						ArrayList<Integer> idxs = entry.getValue();
+//						if (!refs.containsKey(sys)) {
+//							// Set initial cov block to original float cov for this system
+//							for (int ii = 0; ii < idxs.size(); ii++) {
+//								int i = idxs.get(ii);
+//								a_caron.set(i, floatAmb.get(i));
+//								for (int jj = 0; jj < idxs.size(); jj++) {
+//									int j = idxs.get(jj);
+//									Qa_caron.set(i, j, floatAmbCov.get(i, j));
+//								}
+//							}
+//
+//							continue;
+//						}
+//						int ref = refs.get(sys);
+//
+//						// Set ref to original float value
+//						a_caron.set(ref, floatAmb.get(ref));
+//
+//						// Set initial cov block to original float cov for this system
+//						for (int ii = 0; ii < idxs.size(); ii++) {
+//							int i = idxs.get(ii);
+//							for (int jj = 0; jj < idxs.size(); jj++) {
+//								int j = idxs.get(jj);
+//								Qa_caron.set(i, j, floatAmbCov.get(i, j));
+//							}
+//						}
+//
+//						// Set non-ref a_caron = ref + fixed_sd
+//						int local_k = 0;
+//						for (int ii = 0; ii < idxs.size(); ii++) {
+//							int idx = idxs.get(ii);
+//							if (idx == ref) {
+//								continue;
+//							}
+//							a_caron.set(idx, a_caron.get(ref) + sd_fix.get(sd_row + local_k));
+//							local_k++;
+//						}
+//
+//						// Update Qa_caron for non-ref
+//						double ref_var = Qa_caron.get(ref, ref);
+//						local_k = 0;
+//						for (int ii = 0; ii < idxs.size(); ii++) {
+//							int idx = idxs.get(ii);
+//							if (idx == ref) {
+//								continue;
+//							}
+//
+//							// Var(non-ref)
+//							Qa_caron.set(idx, idx, ref_var + sd_Qfix.get(sd_row + local_k, sd_row + local_k));
+//
+//							// Cov to ref
+//							Qa_caron.set(idx, ref, ref_var);
+//							Qa_caron.set(ref, idx, ref_var);
+//
+//							// Cov to other non-ref
+//							int local_l = local_k + 1;
+//							for (int jj = ii + 1; jj < idxs.size(); jj++) {
+//								int jdx = idxs.get(jj);
+//								if (jdx == ref) {
+//									continue;
+//								}
+//								Qa_caron.set(idx, jdx, ref_var + sd_Qfix.get(sd_row + local_k, sd_row + local_l));
+//								Qa_caron.set(jdx, idx, Qa_caron.get(idx, jdx));
+//								local_l++;
+//							}
+//
+//							local_k++;
+//						}
+//
+//						sd_row += (idxs.size() - 1);
+//					}
+//
+//					// Enforce symmetry on full Qa_caron
+//					Qa_caron = Qa_caron.plus(Qa_caron.transpose()).scale(0.5);
+					
+					System.out.println(" N Fixed (SD): " + nFixed);
+
+				    // Compute pseudoinverse of SD cov for stability (handles rank issues)
+				    SimpleMatrix sd_Q_inv = sd_Q.pseudoInverse();  // Use EJML's pseudoInverse()
+
+				    // Optional regularization if sd_Q is ill-conditioned
+				     double epsilon = 1e-8;
+				     sd_Q_inv = (sd_Q.plus(SimpleMatrix.identity(sd_n).scale(epsilon))).invert();
+
+				    // Recovery: UD fixed mean adjustment
+				    SimpleMatrix delta_sd = sd_fix.minus(Z.mult(floatAmb));
+				    SimpleMatrix adjustment = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(delta_sd);
+				    SimpleMatrix a_caron = floatAmb.plus(adjustment);
+
+				    // Recovery: UD fixed covariance (conditional variance)
+				    SimpleMatrix tempMat = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(Z).mult(floatAmbCov);
+				    SimpleMatrix Qa_caron = floatAmbCov.minus(tempMat);  // Base conditional cov
+				    // Add back fixed SD cov contribution (for partial fixes)
+				    SimpleMatrix fixed_contrib = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(sd_Qfix).mult(sd_Q_inv).mult(Z).mult(floatAmbCov);
+				    Qa_caron = Qa_caron.plus(fixed_contrib);
+				    Qa_caron = Qa_caron.plus(Qa_caron.transpose()).scale(0.5);  // Symmetrize
+
+					// Now use a_caron and Qa_caron in the conditional update
+					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+					SimpleMatrix delta_a = a_hat.minus(a_caron);
+
+					int bSize = coreStateNum;
+					int aSize = n;
+					int cSize = ionoParamNum;
+					int ionoStart = coreStateNum + n;
+					int ionoEnd = ionoStart + cSize;
+					SimpleMatrix Cba = P.extractMatrix(0, bSize, coreStateNum, coreStateNum + aSize);
+					SimpleMatrix Cca = P.extractMatrix(ionoStart, ionoEnd, coreStateNum, coreStateNum + aSize);
+					SimpleMatrix Cbc = P.extractMatrix(0, bSize, ionoStart, ionoEnd);
+					SimpleMatrix Cbb_hat = P.extractMatrix(0, bSize, 0, bSize);
+					SimpleMatrix Ccc_hat = P.extractMatrix(ionoStart, ionoEnd, ionoStart, ionoEnd);
+					SimpleMatrix b_hat = x.extractMatrix(0, bSize, 0, 1);
+					SimpleMatrix c_hat = x.extractMatrix(ionoStart, ionoEnd, 0, 1);
+					SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
+					SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(delta_a));
+					SimpleMatrix c_caron = c_hat.minus(Cca.mult(Caa_hat_inv).mult(delta_a));
+					SimpleMatrix temp = Caa_hat_inv.mult(Qa_caron).mult(Caa_hat_inv);
+					SimpleMatrix Pbb_c = Cbb_hat.minus(Cba.mult(Caa_hat_inv).mult(Cba.transpose()))
+							.plus(Cba.mult(temp).mult(Cba.transpose()));
+					SimpleMatrix Pcc_c = Ccc_hat.minus(Cca.mult(Caa_hat_inv).mult(Cca.transpose()))
+							.plus(Cca.mult(temp).mult(Cca.transpose()));
+					SimpleMatrix Pbc_c = Cbc.minus(Cba.mult(Caa_hat_inv).mult(Cca.transpose()))
+							.plus(Cba.mult(temp).mult(Cca.transpose()));
+					SimpleMatrix Pba_c = Cba.mult(Caa_hat_inv).mult(Qa_caron);
+					SimpleMatrix Pca_c = Cca.mult(Caa_hat_inv).mult(Qa_caron);
+					SimpleMatrix x_new = new SimpleMatrix(totalStateNum, 1);
+					x_new.insertIntoThis(0, 0, b_caron);
+					x_new.insertIntoThis(coreStateNum, 0, a_caron);
+					x_new.insertIntoThis(ionoStart, 0, c_caron);
+					SimpleMatrix P_new = new SimpleMatrix(totalStateNum, totalStateNum);
+					P_new.insertIntoThis(0, 0, Pbb_c);
+					P_new.insertIntoThis(coreStateNum, coreStateNum, Qa_caron);
+					P_new.insertIntoThis(ionoStart, ionoStart, Pcc_c);
+					P_new.insertIntoThis(0, coreStateNum, Pba_c);
+					P_new.insertIntoThis(coreStateNum, 0, Pba_c.transpose());
+					P_new.insertIntoThis(0, ionoStart, Pbc_c);
+					P_new.insertIntoThis(ionoStart, 0, Pbc_c.transpose());
+					P_new.insertIntoThis(coreStateNum, ionoStart, Pca_c.transpose());
+					P_new.insertIntoThis(ionoStart, coreStateNum, Pca_c);
+					P_new = P_new.plus(P_new.transpose()).scale(0.5);
+					pos_kfObj.setState_ProcessCov(x_new, P_new);
+					System.out.println("Fixed Ambiguity Sequence");
+					System.out.println(a_caron.toString());
+					System.out.println("Fixed Ambiguity Variance");
+					System.out.println(Qa_caron.toString());
+					System.out.println(" N Fixed : " + nFixed);
+
+					ambFixedCountMap.put(currentTime, nFixed);
+					ambFixedCount += nFixed;
+				}
 			}
 		}
 

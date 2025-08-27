@@ -7,22 +7,25 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.stream.IntStream;
 
 import com.gnssAug.Android.models.Derived;
 import com.gnssAug.Android.models.GNSSLog;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.Rinex.fileParser.Antenna;
 import com.gnssAug.Rinex.fileParser.Clock;
+import com.gnssAug.Rinex.fileParser.OSB_Bias;
 import com.gnssAug.Rinex.fileParser.Orbit;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Vector;
 
 public class SingleFreq {
 	private final static double SpeedofLight = 299792458;
-
+	private static HashMap<String, Double> phase_windup_map = new HashMap<String, Double>();
 	public static ArrayList<Satellite> process(double tRX,
-			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,
+			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap,OSB_Bias osb__bias,Antenna antenna,
 			HashMap<String, ArrayList<GNSSLog>> gnssLogMap, Calendar time, String[] obsvCodeList, int weekNo,
-			Clock clock, Orbit orbit, boolean useIGS,Set<String> discardSet) throws Exception {
+			Clock clock, Orbit orbit, boolean useIGS,Set<String> discardSet, double[] refEcef) throws Exception {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/YYYY kk:mm:ss.SSS");
 		String errStr = sdf.format(time.getTime());
@@ -117,8 +120,10 @@ public class SingleFreq {
 					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, true);
 					double satClkOff = sat_ClkOff_Drift[0];
 					double satClkDrift = sat_ClkOff_Drift[1];
+					double satHardCodeBias = 0;//osb__bias.getOSB(SSI,"C"+obsvCode.substring(1), svid, tSV);
+					double satHardPhaseBias = osb__bias.getOSB(SSI,"L"+obsvCode.substring(1), svid, tSV);
 					// GPS System transmission time
-					t = tSV - satClkOff;
+					t = tSV - (satClkOff-satHardCodeBias);
 					double[][] satPV = orbit.getPV(t, svid, polyOrder, SSI);
 					if (satPV == null) {
 						System.err.println(SSI + "" + svid + " MGEX data absent");
@@ -130,11 +135,22 @@ public class SingleFreq {
 					double relativistic_error = -2 * (Vector.dotProd(satECEF, satVel)) / Math.pow(SpeedofLight, 2);
 					// Correct sat clock offset for relativistic error and recompute the Sat coords
 					satClkOff += relativistic_error;
-					t = tSV - satClkOff;
+					t = tSV - (satClkOff-satHardCodeBias);
+					String satKey = obsvCode + svid;
+					double prev_previousWindUpCycles = phase_windup_map.containsKey(satKey)?phase_windup_map.get(satKey):0;
+					double[] satPC_windup = antenna.getSatPC_windup_new(svid, obsvCode, tRX, weekNo, satECEF, refEcef,
+							prev_previousWindUpCycles);
+					double phase_windup = satPC_windup[3];
+					phase_windup_map.put(satKey, phase_windup);
+					for(int j=0;j<3;j++)
+					{
+						satECEF[j] = satPC_windup[j];
+					}
+				
 					double rawPR = (logObs.gettRx() - t) * SpeedofLight;
-					corrPR = rawPR;
+					corrPR = rawPR-(SpeedofLight*satHardCodeBias);
 					corrPRrate = logObs.getPseudorangeRateMetersPerSecond() + (SpeedofLight * satClkDrift);
-					corrPhase = logObs.getAccumulatedDeltaRangeMeters()+(SpeedofLight*satClkOff);
+					corrPhase = logObs.getAccumulatedDeltaRangeMeters()+(SpeedofLight*(satClkOff-satHardPhaseBias))-phase_windup;
 
 				} else {
 					if (!navMap.containsKey(svid)) {

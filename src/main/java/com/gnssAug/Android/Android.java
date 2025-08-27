@@ -184,8 +184,8 @@ public class Android {
 				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
-				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,
-						weekNo, clock, orbit, useIGS, discardSet);
+				ArrayList<Satellite> satList = null;
+				//SingleFreq.process(tRx, derivedMap, gnssLogMap, time, obsvCodeList,weekNo, clock, orbit, useIGS, discardSet);
 				int m = obsvCodeList.length;
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
