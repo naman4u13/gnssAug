@@ -9,8 +9,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -33,6 +35,7 @@ import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.Rinex.estimation.EKF_PPP;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.opencsv.CSVWriter;
@@ -236,6 +239,21 @@ public class GraphPlotter extends ApplicationFrame {
 		setContentPane(chartPanel);
 
 	}
+	
+	public GraphPlotter(String title,HashMap<String, ArrayList<Double>> data,
+			ArrayList<Long> timeList) throws IOException {
+		super(title);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(title, "GPS-time", title, createDatasetPostUnitW(data, timeList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
 
 	public GraphPlotter(String name, TreeMap<Long, Integer> ambDetectedCountMap,
 			TreeMap<Long, Integer> ambRepairedCountMap, ArrayList<Long> timeList) throws IOException {
@@ -253,13 +271,13 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(String name, HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
+	public GraphPlotter(HashMap<Measurement,HashMap<String, ArrayList<Double>>> data, ArrayList<Long> timeList)
 			throws IOException {
-		super(name);
+		super("Redundancy Number");
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(name, "GPS-time", name,
-				createDatasetPostUnitW(data, timeList));
+		final JFreeChart chart = ChartFactory.createXYLineChart("Redundancy Number", "GPS-time", "Redundancy Number",
+				createDatasetPPPRedundancy(data, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -427,8 +445,12 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else {
-				type = "TDCP ";
+			} else if (key == Measurement.CarrierPhase){
+				type = "Carrier Phase ";
+			}
+			else
+			{
+				type = "GIM_Iono";
 			}
 			HashMap<String, ArrayList<Double>> subData = data.get(key);
 			GraphPlotter chart = new GraphPlotter(type + " Posteriori Variance of Unit Weight", subData, timeList);
@@ -436,6 +458,16 @@ public class GraphPlotter extends ApplicationFrame {
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
 		}
+	}
+	
+	public static void graphRedundancyPPP(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data,
+			ArrayList<Long> timeList) throws IOException {
+			
+			GraphPlotter chart = new GraphPlotter(data, timeList);
+			chart.pack();
+			RefineryUtilities.positionFrameRandomly(chart);
+			chart.setVisible(true);
+		
 	}
 
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
@@ -627,15 +659,22 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else {
-				type = "TDCP (in Cycles)";
+			} else if (key == Measurement.CarrierPhase){
+				type = "Carrier Phase (in Cycles)";
+			}
+			else
+			{
+				type = "GIM_Iono";
 			}
 			String name = "Satellite-Residual";
 			if (isInnov) {
 				name = "Satellite-Innovation";
 			}
 			for (String subKey : subSatResMap.keySet()) {
-
+				if(subSatResMap.get(subKey).isEmpty())
+				{
+					continue;
+				}
 				// For Satellite Residuals
 				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true,
 						0, outlierAnaylze);
@@ -746,8 +785,8 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "EstType","SVID", "Time", "Angle", "CN0", "Error", "isCS", "isRepaired",
-						"FloatAmb", "IntegerAmb","FloatAmbVar","IntAmbVar" };
+				String[] header = new String[] { "EstType", "SVID", "Time", "Angle", "CN0", "Error", "isCS",
+						"isRepaired", "FloatAmb", "IntegerAmb", "FloatAmbVar", "IntAmbVar" };
 				writer.writeNext(header);
 				for (EstimatorType est : satCSmap.keySet()) {
 					for (String key : satCSmap.get(est).keySet()) {
@@ -782,9 +821,8 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 
 	}
-	
-	public static void graphSRFR(
-			HashMap<EstimatorType, ArrayList<Object[]>> srfrMap) {
+
+	public static void graphSRFR(HashMap<EstimatorType, ArrayList<Object[]>> srfrMap) {
 
 		boolean makeCSV = false;
 		if (makeCSV) {
@@ -797,23 +835,23 @@ public class GraphPlotter extends ApplicationFrame {
 				CSVWriter writer = new CSVWriter(outputfile);
 				// create a List which contains String array
 				List<String[]> dataList = new ArrayList<String[]>();
-				String[] header = new String[] { "EstType","nFloat", "nFixed", "SR", "FR"};
+				String[] header = new String[] { "EstType", "nFloat", "nFixed", "SR", "FR" };
 				writer.writeNext(header);
-				
-					for (EstimatorType est : srfrMap.keySet()) {
-						ArrayList<Object[]> srfrObj =srfrMap.get(est);
-							for(Object[] objList:srfrObj) {
-							String[] entry = new String[5];
-							
-							entry[0] = est.toString();
-							entry[1] = ""+(int)objList[0];
-							entry[2] = ""+(int)objList[1];
-							entry[3] = ""+(double)objList[2];
-							entry[4] = ""+(double)objList[3];
-							dataList.add(entry);
-							}
+
+				for (EstimatorType est : srfrMap.keySet()) {
+					ArrayList<Object[]> srfrObj = srfrMap.get(est);
+					for (Object[] objList : srfrObj) {
+						String[] entry = new String[5];
+
+						entry[0] = est.toString();
+						entry[1] = "" + (int) objList[0];
+						entry[2] = "" + (int) objList[1];
+						entry[3] = "" + (double) objList[2];
+						entry[4] = "" + (double) objList[3];
+						dataList.add(entry);
 					}
-				
+				}
+
 				writer.writeAll(dataList);
 				writer.close();
 			} catch (IOException err) {
@@ -968,8 +1006,12 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange ";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else {
-				type = "TDCP ";
+			} else if(key==Measurement.CarrierPhase) {
+				type = "Carrier Phase ";
+			}
+			else
+			{
+				type = "GIM_Iono ";
 			}
 			for (String subKey : satCountMap.get(key).keySet()) {
 				type += subKey;
@@ -982,7 +1024,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
-			ArrayList<Long> timeList, int freq) throws Exception {
+			ArrayList<Long> timeList) throws Exception {
 
 		List<String[]> dataList = new ArrayList<String[]>();
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
@@ -994,7 +1036,7 @@ public class GraphPlotter extends ApplicationFrame {
 			ArrayList<Double> vdopList = new ArrayList<Double>();
 			ArrayList<Double> tdopList = new ArrayList<Double>();
 			int n = dopList.size();
-			if (n != timeList.size()) {
+			if (n != timeList.size() && n != timeList.size()-1) {
 				throw new Exception("DOP list size does not match timeList size");
 			}
 			for (int i = 0; i < n; i++) {
@@ -1024,10 +1066,10 @@ public class GraphPlotter extends ApplicationFrame {
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
-		chart = new GraphPlotter("", satCountList, timeList, freq);
-		chart.pack();
-		RefineryUtilities.positionFrameRandomly(chart);
-		chart.setVisible(true);
+//		chart = new GraphPlotter("", satCountList, timeList, freq);
+//		chart.pack();
+//		RefineryUtilities.positionFrameRandomly(chart);
+//		chart.setVisible(true);
 
 		boolean makeCSV = false;
 		if (makeCSV) {
@@ -1183,6 +1225,23 @@ public class GraphPlotter extends ApplicationFrame {
 			dataset.addSeries(series);
 		}
 
+		return dataset;
+
+	}
+	
+	private XYDataset createDatasetPPPRedundancy(HashMap<Measurement, HashMap<String, ArrayList<Double>>> dataMap,
+			ArrayList<Long> timeList) {
+		Long t0 = timeList.get(0);
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		for (Measurement key : dataMap.keySet()) {
+			final XYSeries series = new XYSeries(key.name());
+			ArrayList<Double> list = dataMap.get(key).get("PPP");
+			for (int i = 0; i < list.size(); i++) {
+				Double data = list.get(i);
+				series.add((timeList.get(i)-t0)*1e-3, data);
+			}
+			dataset.addSeries(series);
+		}
 		return dataset;
 
 	}
@@ -1991,5 +2050,149 @@ public class GraphPlotter extends ApplicationFrame {
 		}
 		return dataset;
 
+	}
+
+	// ... existing imports and class code ...
+
+	// Existing helper: createDatasetClkOff (unchanged)
+	private XYDataset createDatasetClkOff(TreeMap<Long, double[]> clkOffMap, String[] obsvCodeList, long t0) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		int numClks = obsvCodeList.length;
+		for (int i = 0; i < numClks; i++) {
+			XYSeries series = new XYSeries(obsvCodeList[i]);
+			for (Map.Entry<Long, double[]> entry : clkOffMap.entrySet()) {
+				double timeSec = (entry.getKey() - t0) / 1000.0;
+				series.add(timeSec, entry.getValue()[i]);
+			}
+			dataset.addSeries(series);
+		}
+		return dataset;
+	}
+
+	// New: for clkDriftMap (similar to clkOff, but labels are constellations like
+	// "G", "E")
+	public GraphPlotter(TreeMap<Long, double[]> map, String[] labels, long t0, boolean isClkOff,String title) {
+		super(title);
+		JFreeChart chart = null;
+		if (isClkOff) {
+			chart = ChartFactory.createXYLineChart("Clock Offsets Over Time", "Time (seconds)", "Clock Offset (m)",
+					createDatasetClkOff(map, labels, t0));
+		} else {
+			chart = ChartFactory.createXYLineChart("Clock Drifts Over Time", "Time (seconds)", "Clock Drift (m/s)",
+					createDatasetClkDrift(map, labels, t0));
+		}
+
+		ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		setContentPane(chartPanel);
+	}
+
+	// Helper for clkDriftMap
+	private XYDataset createDatasetClkDrift(TreeMap<Long, double[]> clkDriftMap, String[] ssiLabels, long t0) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		int numDrifts = ssiLabels.length;
+		for (int i = 0; i < numDrifts; i++) {
+			XYSeries series = new XYSeries(ssiLabels[i]);
+			for (Map.Entry<Long, double[]> entry : clkDriftMap.entrySet()) {
+				double timeSec = (entry.getKey() - t0) / 1000.0;
+				series.add(timeSec, entry.getValue()[i]);
+			}
+			dataset.addSeries(series);
+		}
+		return dataset;
+	}
+
+	// New: for ionoMap (similar to ambMap, per satID)
+	public GraphPlotter(TreeMap<Long, HashMap<String, Double>> map, long t0, String title,String value) {
+		super(title);
+		JFreeChart chart = null;
+
+		chart = ChartFactory.createXYLineChart(title + " Over Time", "Time (seconds)", value,
+				createDatasetMapSeries(map, t0));
+
+		ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		setContentPane(chartPanel);
+	}
+
+	// Helper for maps like ionoMap and ambMap (generalized)
+	private XYDataset createDatasetMapSeries(TreeMap<Long, HashMap<String, Double>> map, long t0) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+
+		// Collect all unique keys (satID or obsCode+SVID)
+		HashSet<String> allKeys = new HashSet<>();
+		for (HashMap<String, Double> innerMap : map.values()) {
+			allKeys.addAll(innerMap.keySet());
+		}
+
+		// For each key, create a series
+		for (String key : allKeys) {
+			XYSeries series = new XYSeries(key);
+			for (Map.Entry<Long, HashMap<String, Double>> entry : map.entrySet()) {
+				double timeSec = (entry.getKey() - t0) / 1000.0;
+				Double val = entry.getValue().get(key);
+				series.add(timeSec, val); // Adds null if missing
+			}
+			dataset.addSeries(series);
+		}
+		return dataset;
+	}
+
+	// New: for tropoMap (single series)
+	public GraphPlotter(TreeMap<Long, Double> tropoMap, long t0) {
+		super("Tropospheric Delays");
+		JFreeChart chart = ChartFactory.createXYLineChart("Tropospheric Delays Over Time", "Time (seconds)",
+				"Tropospheric Delay (m)", createDatasetTropo(tropoMap, t0));
+		ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		setContentPane(chartPanel);
+	}
+
+	// Helper for tropoMap
+	private XYDataset createDatasetTropo(TreeMap<Long, Double> tropoMap, long t0) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		XYSeries series = new XYSeries("Troposphere");
+		for (Map.Entry<Long, Double> entry : tropoMap.entrySet()) {
+			double timeSec = (entry.getKey() - t0) / 1000.0;
+			series.add(timeSec, entry.getValue());
+		}
+		dataset.addSeries(series);
+		return dataset;
+	}
+
+	public static void createPPPplots(EKF_PPP ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
+	{
+		// Existing: clkOffMap
+        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
+        clkOffGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkOffGraph);
+        clkOffGraph.setVisible(true);
+        
+        // New: clkDriftMap
+        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
+        clkDriftGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+        clkDriftGraph.setVisible(true);
+        
+        // New: ionoMap
+        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
+        ionoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ionoGraph);
+        ionoGraph.setVisible(true);
+        
+        // New: tropoMap
+        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+        tropoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(tropoGraph);
+        tropoGraph.setVisible(true);
+        
+        // Existing: ambMap
+        GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0,"Ambiguities","Cycles");
+        ambGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ambGraph);
+        ambGraph.setVisible(true);
 	}
 }

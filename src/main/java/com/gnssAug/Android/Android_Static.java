@@ -102,7 +102,7 @@ public class Android_Static {
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
 			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/ION_GNSS_2025/Pixel 4/"
-					+ mobName + "_test2";
+					+ mobName + "_GPS_L1_PPP_noRepair_DCB_simulation";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -927,6 +927,13 @@ public class Android_Static {
 					{
 						System.out.print(satID+", ");
 					}
+				}
+				System.out.println();
+				for(String satID:csCountMap.keySet())
+				{
+					int[] csCount = csCountMap.get(satID);
+					System.out.print(satID+" : " + csCount[0]+ "/"+csCount[1]+" , ");
+					
 				}
 				System.out.println();
 			}

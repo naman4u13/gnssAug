@@ -24,7 +24,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (5) {
+		switch (2) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -77,7 +77,7 @@ public class MainApp {
 			
 //			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
 			IGS.posEstimate(osb_bias_path,dcb_bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C","E1C","G5Q","E5Q"}, 4, 1, 0, true, true, 6,false, false, false,discardSet);
+					new String[] { "G1C","G5Q"}, 4, 1, 0, true, true, 5,true, false, false,discardSet);
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };
@@ -136,7 +136,7 @@ public class MainApp {
 			break;
 		case 5:
 			//obsvCodeList = new String[] { "G5X","E5X","C5X"};
-			obsvCodeList = new String[] {"G1C","E1C"};
+			obsvCodeList = new String[] {"G1C"};
 			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
 
 			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
