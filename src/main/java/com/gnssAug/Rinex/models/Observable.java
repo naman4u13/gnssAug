@@ -43,7 +43,7 @@ public class Observable {
 		this.phase = this.cycle * this.carrier_wavelength;
 		// The negative sign is removed, because the RINEX store doppler with opposite
 		// sign
-		this.pseudoRangeRate = this.doppler * this.carrier_wavelength;
+		this.pseudoRangeRate = -this.doppler * this.carrier_wavelength;
 		this.isLocked = false;
 		this.codeID = codeID;
 		this.obsvCode = SSI + "" + freqID + "" + codeID;

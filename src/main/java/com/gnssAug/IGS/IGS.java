@@ -91,12 +91,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALBH00CAN_R_20242001230_15M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/NYA200NOR_R_20242001200_60M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALBH/ALBH_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/NYA2/NYA2_test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -316,7 +316,7 @@ public class IGS {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
-						rxARP, true, false);
+						rxARP, true, true);
 
 				int n = timeList.size();
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
@@ -362,7 +362,7 @@ public class IGS {
 						long tRx = time / 1000;
 						for (Measurement meas : List.of(Measurement.Pseudorange, Measurement.CarrierPhase,
 								Measurement.Doppler,Measurement.GIM_Iono)) {
-							int size = residualMap.get(meas).length;
+						int size = residualMap.get(meas).length;
 						for (int j = 0; j < size; j++) {
 							Satellite sat = satList.get(j);
 							
@@ -559,7 +559,7 @@ public class IGS {
 					int count = 0;
 					for (int i = 0; i < data.size(); i++) {
 						double val = data.get(i);
-						if (val == 0 || val == -1) {
+						if (val <=0) {
 							continue;
 						}
 						sum += val;

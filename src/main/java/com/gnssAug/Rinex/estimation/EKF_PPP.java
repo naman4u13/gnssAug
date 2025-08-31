@@ -141,13 +141,13 @@ public class EKF_PPP extends EKFParent {
 		csRepairedCountMap = new TreeMap<Long, Integer>();
 		ambFixedCountMap = new TreeMap<Long, Integer>();
 		return iterate(SatMap, rxPCO, timeList, ssiSet, doAnalyze, rxARP, obsvCodeList,
-				repairCS, fixAmb);
+				repairCS, fixAmb,false);
 
 	}
 
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
 			ArrayList<Long> timeList, ListOrderedSet ssiSet, boolean doAnalyze,
-			double[] rxARP, String[] obsvCodeList, boolean repairCS, boolean fixAmb) throws Exception {
+			double[] rxARP, String[] obsvCodeList, boolean repairCS, boolean fixAmb,boolean doPseudorangeTest) throws Exception {
 
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		HashMap<String, Integer> ambMap = new HashMap<String, Integer>();
@@ -252,7 +252,7 @@ public class EKF_PPP extends EKFParent {
 			runFilter_vel(currentTime, deltaT, csdList, ssiSet, true, i, refPos, repairCS);
 
 			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambMap, ionoMap, obsvCodeList, rxPCO, fixAmb,
-					doAnalyze);
+					doAnalyze,doPseudorangeTest);
 			SimpleMatrix x = pos_kfObj.getState();
 			SimpleMatrix P = pos_kfObj.getCovariance();
 
@@ -506,7 +506,7 @@ public class EKF_PPP extends EKFParent {
 
 	private void runFilter_pos(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,
 			ListOrderedSet ssiSet, HashMap<String, Integer> ambMap, HashMap<String, Integer> ionoMap,
-			String[] obsvCodeList, HashMap<String, double[]> rxPCO, boolean fixAmb, boolean doAnalyze)
+			String[] obsvCodeList, HashMap<String, double[]> rxPCO, boolean fixAmb, boolean doAnalyze,boolean doPseudorangeTest)
 			throws Exception {
 		HashMap<String, Integer> new_ambMap = new HashMap<String, Integer>();
 		HashMap<String, Integer> new_ionoMap = new HashMap<String, Integer>();
@@ -655,8 +655,9 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix z = (SimpleMatrix) z_ze_H[0];
 		SimpleMatrix ze = (SimpleMatrix) z_ze_H[1];
 		SimpleMatrix H = (SimpleMatrix) z_ze_H[2];
+		SimpleMatrix e_prior_hat = z.minus(ze);
 		if (doAnalyze) {
-			SimpleMatrix e_prior_hat = z.minus(ze);
+			
 			double[] pseudorange_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(0, n, 0, 1));
 			double[] phase_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(n, 2 * n, 0, 1));
 			double[] doppler_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(2 * n, 3 * n, 0, 1));
@@ -665,9 +666,26 @@ public class EKF_PPP extends EKFParent {
 					Measurement.CarrierPhase, phase_e_prior_hat, Measurement.Doppler, doppler_e_prior_hat,Measurement.GIM_Iono,iono_e_prior_hat);
 			innovationMap.put(currentTime, measMap);
 		}
+		if(doPseudorangeTest)
+		{
+			 P = pos_kfObj.getCovariance();
+			 SimpleMatrix R_pseudorange = performPseudoRangeTesting(e_prior_hat.extractMatrix(0, n, 0, 1),P,R.extractMatrix(0, n, 0, n), H.extractMatrix(0, n, 0, totalStateNum), n);
+			 R.insertIntoThis(0, 0, R_pseudorange);
+		}
 		pos_kfObj.update(z, R, ze, H);
 		if (doAnalyze) {
 			x = pos_kfObj.getState();
+//			P = pos_kfObj.getCovariance();
+//			System.out.println("Design Matrix");
+//			System.out.println(H.toString());
+//			SimpleMatrix mainVar = P.diag();
+//			System.out.println("Position Variance + " + mainVar.extractMatrix(0, 3, 0, 1));
+//			System.out.println("Clock Offsets Variance + " + mainVar.extractMatrix(3, 3 + clkOffNum, 0, 1));
+//			System.out.println("Velocity Variance + " + mainVar.extractMatrix(3 + clkOffNum, 3 + clkOffNum + 3, 0, 1));
+//			System.out.println("Clock Drifts Variance + " + mainVar.extractMatrix(3 + clkOffNum + 3, 3 + clkOffNum + 3 + clkDriftNum, 0, 1));
+//			System.out.println("Troposphere Variance + " + mainVar.extractMatrix(3 + clkOffNum + 3 + clkDriftNum, 3 + clkOffNum + 3 + clkDriftNum + 1, 0, 1));
+//			System.out.println("Ambiguities Variance + " + mainVar.extractMatrix(coreStateNum, coreStateNum + n, 0, 1));
+//			System.out.println("Ionosphere Variance + " + mainVar.extractMatrix(coreStateNum + n, totalStateNum, 0, 1));
 			SimpleMatrix RotMat = new SimpleMatrix(3+clkOffNum, 3+clkOffNum);
 			RotMat.insertIntoThis(0, 0, new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(Matrix.matrix2ArrayVec(x.extractMatrix(0, 3, 0, 1)))));
 			for (int i = 0; i < clkOffNum; i++) {
@@ -929,6 +947,54 @@ public class EKF_PPP extends EKFParent {
 		return new Object[] { R, H, z, ze };
 
 	}
+	
+	private SimpleMatrix performPseudoRangeTesting(SimpleMatrix v,SimpleMatrix P,SimpleMatrix R, SimpleMatrix H, int n) throws Exception {
+		// Pre-fit residual/innovation
+		SimpleMatrix Ht = H.transpose();
+		SimpleMatrix Cvv = ((H.mult(P).mult(Ht)).plus(R));
+		SimpleMatrix Cvv_inv = Cvv.invert();
+		SimpleMatrix K = P.mult(Ht).mult(Cvv_inv);
+		SimpleMatrix HK = H.mult(K);
+		int totalN = HK.numRows();
+		double redunNo = SimpleMatrix.identity(totalN).minus(HK).trace();
+		double globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
+		ChiSquaredDistribution csd = new ChiSquaredDistribution(redunNo);
+		double alpha = 0.005;
+		if (globalTq == 0) {
+			throw new Exception("Error: T stat is zero");
+		}
+		// Detection
+		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
+		while (globalPVal < alpha && redunNo > (n / 2.0)) {
+			double max_w = Double.MIN_VALUE;
+			int index = -1;
+			for (int i = 0; i < n; i++) {
+				SimpleMatrix cv = new SimpleMatrix(n, 1);
+				cv.set(i, 1);
+				double w = Math.abs(cv.transpose().mult(Cvv_inv).mult(v).get(0))
+						/ Math.sqrt(cv.transpose().mult(Cvv_inv).mult(cv).get(0));
+				if (w > max_w) {
+					max_w = w;
+					index = i;
+				}
+			}
+			R.set(index, index, 1e16);	
+			Cvv = ((H.mult(P).mult(H.transpose())).plus(R));
+			Cvv_inv = Cvv.invert();
+			K = P.mult(Ht).mult(Cvv_inv);
+			HK = H.mult(K);
+			totalN = HK.numRows();
+			redunNo = SimpleMatrix.identity(totalN).minus(HK).trace();
+			globalTq = v.transpose().mult(Cvv_inv).mult(v).get(0);
+			if (globalTq == 0) {
+				throw new Exception("Error: T stat is zero");
+			}
+			csd = new ChiSquaredDistribution(redunNo);
+			globalPVal = 1 - csd.cumulativeProbability(globalTq);
+		}
+		return R;
+
+	}
 
 	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum, int ionoParamNum,
 			int n, int totalStateNum, ArrayList<Satellite> satList, String[] obsvCodeList,
@@ -1052,7 +1118,7 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix HK = H.mult(K);
 		int totalN = HK.numRows();
 		SimpleMatrix redunMat = SimpleMatrix.identity(totalN).minus(HK);
-		
+		redunMat = redunMat.plus(redunMat.transpose()).scale(0.5);
 		double pseudorange_redundancyNo = redunMat.extractMatrix(0, n, 0, n).trace();
 		double phase_redundancyNo = redunMat.extractMatrix(n, 2 * n, n, 2 * n).trace();
 		double doppler_redundancyNo = redunMat.extractMatrix(2 * n, 3 * n, 2 * n, 3 * n).trace();
