@@ -4,6 +4,8 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
@@ -29,7 +31,7 @@ import com.gnssAug.utility.Time;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
-public class EKF_PPP extends EKFParent {
+public class EKF_PPP_DF extends EKFParent {
 
 	private TreeMap<Long, Map<Measurement, double[]>> innovationMap;
 	private TreeMap<Long, Map<Measurement, double[]>> residualMap;
@@ -48,7 +50,7 @@ public class EKF_PPP extends EKFParent {
 	private KFconfig pos_kfObj;
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
 
-	public EKF_PPP() {
+	public EKF_PPP_DF() {
 		vel_kfObj = new KFconfig();
 		pos_kfObj = new KFconfig();
 	}
@@ -161,6 +163,55 @@ public class EKF_PPP extends EKFParent {
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
+			
+			// After getting currSatList and prevSatList
+
+			// Filter for multi-frequency satellites in current epoch
+			HashMap<String, List<Satellite>> currGroups = new HashMap<>();
+			for (Satellite s : currSatList) {
+			    String satID = s.getObsvCode().charAt(0) + "" + s.getSVID();
+			    currGroups.computeIfAbsent(satID, k -> new ArrayList<>()).add(s);
+			}
+
+			ArrayList<String> multiFreqIDs = new ArrayList<>();
+			for (Map.Entry<String, List<Satellite>> entry : currGroups.entrySet()) {
+			    List<Satellite> group = entry.getValue();
+			    HashSet<String> freqs = new HashSet<>();
+			    for (Satellite s : group) {
+			        freqs.add(s.getObsvCode().substring(1)); // Frequency part, e.g., "1C" -> "1C"
+			    }
+			    if (freqs.size() >= 2) {
+			        multiFreqIDs.add(entry.getKey());
+			    }
+			}
+
+			// Filter currSatList to only multi-freq satellites
+			ArrayList<Satellite> filteredCurrSatList = new ArrayList<>();
+			for (Satellite s : currSatList) {
+			    String satID = s.getObsvCode().charAt(0) + "" + s.getSVID();
+			    if (multiFreqIDs.contains(satID)) {
+			        filteredCurrSatList.add(s);
+			    }
+			}
+			currSatList = filteredCurrSatList; // Replace original
+
+			// Similarly filter prevSatList for consistency in time-differencing
+			HashMap<String, List<Satellite>> prevGroups = new HashMap<>();
+			for (Satellite s : prevSatList) {
+			    String satID = s.getObsvCode().charAt(0) + "" + s.getSVID();
+			    prevGroups.computeIfAbsent(satID, k -> new ArrayList<>()).add(s);
+			}
+
+			ArrayList<Satellite> filteredPrevSatList = new ArrayList<>();
+			for (Satellite s : prevSatList) {
+			    String satID = s.getObsvCode().charAt(0) + "" + s.getSVID();
+			    if (multiFreqIDs.contains(satID)) { // Use current's multi-freq IDs to ensure matching
+			        filteredPrevSatList.add(s);
+			    }
+			}
+			prevSatList = filteredPrevSatList; // Replace original
+
+			// Proceed with building csdList using filtered lists
 //			if(i%5==0)
 //			{
 //				Satellite sat_temp = currSatList.get(0);
@@ -594,7 +645,7 @@ public class EKF_PPP extends EKFParent {
 			} else {
 				double wl = SpeedofLight / sat.getCarrier_frequency();
 				_x.set(j, (sat.getPhase() - sat.getPseudorange()) / wl);
-				_P.set(j, j, 1e16);
+				_P.set(j, j, 1e6);
 
 			}
 
@@ -629,7 +680,7 @@ public class EKF_PPP extends EKFParent {
 			} else {
 
 				_x.set(j, 0);
-				_P.set(j, j, 1e10);
+				_P.set(j, j, 1e4);
 
 			}
 
@@ -642,16 +693,16 @@ public class EKF_PPP extends EKFParent {
 		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, false);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
-		SimpleMatrix R = new SimpleMatrix((3 * n) + ionoParamNum, (3 * n) + ionoParamNum);
+		SimpleMatrix R = new SimpleMatrix((3 * n), (3 * n));
 		SimpleMatrix Cyy_pseudorange = SimpleMatrix.identity(n).scale(GnssDataConfig.pseudorange_priorVarOfUnitW);// Weight.igs_getNormCyy(satList,GnssDataConfig.pseudorange_priorVarOfUnitW);
 		SimpleMatrix Cyy_phase = SimpleMatrix.identity(n).scale(GnssDataConfig.phase_priorVarOfUnitW);
 		SimpleMatrix Cyy_doppler = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);// Weight.igs_getNormCyy(satList,GnssDataConfig.doppler_priorVarOfUnitW);
-		SimpleMatrix Cyy_GIM_iono = SimpleMatrix.identity(ionoParamNum).scale(GnssDataConfig.GIM_TECU_variance);
+		
 		R.insertIntoThis(0, 0, Cyy_pseudorange);
 		R.insertIntoThis(n, n, Cyy_phase);
 		R.insertIntoThis(2 * n, 2 * n, Cyy_doppler);
-		R.insertIntoThis(3 * n, 3 * n, Cyy_GIM_iono);
-		Object[] z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
+		
+		Object[] z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, n, totalStateNum, satList,
 				obsvCodeList, rxPCO, ionoParams, csdList, uniqSatList, ssiSet,false,currentTime);
 		SimpleMatrix z = (SimpleMatrix) z_ze_H[0];
 		SimpleMatrix ze = (SimpleMatrix) z_ze_H[1];
@@ -662,9 +713,9 @@ public class EKF_PPP extends EKFParent {
 			double[] pseudorange_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(0, n, 0, 1));
 			double[] phase_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(n, 2 * n, 0, 1));
 			double[] doppler_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(2 * n, 3 * n, 0, 1));
-			double[] iono_e_prior_hat = Matrix.matrix2ArrayVec(e_prior_hat.extractMatrix(3 * n,(3 * n)+ionoParamNum, 0, 1));
+			
 			Map<Measurement, double[]> measMap = Map.of(Measurement.Pseudorange, pseudorange_e_prior_hat,
-					Measurement.CarrierPhase, phase_e_prior_hat, Measurement.Doppler, doppler_e_prior_hat,Measurement.GIM_Iono,iono_e_prior_hat);
+					Measurement.CarrierPhase, phase_e_prior_hat, Measurement.Doppler, doppler_e_prior_hat);
 			innovationMap.put(currentTime, measMap);
 		}
 		if(doPseudorangeTest)
@@ -676,10 +727,12 @@ public class EKF_PPP extends EKFParent {
 		pos_kfObj.update(z, R, ze, H);
 		if (doAnalyze) {
 			x = pos_kfObj.getState();
-//			P = pos_kfObj.getCovariance();
+			P = pos_kfObj.getCovariance();
 //			System.out.println("Design Matrix");
 //			System.out.println(H.toString());
-//			SimpleMatrix mainVar = P.diag();
+//			SimpleMatrix mainVar = R.diag();
+//			System.out.println("Measurement Variance + " + mainVar);
+//			mainVar = P.diag();
 //			System.out.println("Position Variance + " + mainVar.extractMatrix(0, 3, 0, 1));
 //			System.out.println("Clock Offsets Variance + " + mainVar.extractMatrix(3, 3 + clkOffNum, 0, 1));
 //			System.out.println("Velocity Variance + " + mainVar.extractMatrix(3 + clkOffNum, 3 + clkOffNum + 3, 0, 1));
@@ -696,7 +749,7 @@ public class EKF_PPP extends EKFParent {
 			SimpleMatrix _dop = RotMat.mult((H_dop.transpose().mult(H_dop)).invert()).mult(RotMat.transpose());
 			double[] dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 			dopMap.put(currentTime, dop);
-			z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
+			z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, n, totalStateNum, satList,
 					obsvCodeList, rxPCO, ionoParams, csdList, uniqSatList, ssiSet,true,currentTime);
 			z = (SimpleMatrix) z_ze_H[0];
 			ze = (SimpleMatrix) z_ze_H[1];
@@ -997,7 +1050,7 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
-	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum, int ionoParamNum,
+	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum,
 			int n, int totalStateNum, ArrayList<Satellite> satList, String[] obsvCodeList,
 			HashMap<String, double[]> rxPCO, ArrayList<double[]> ionoParams, ArrayList<CycleSlipDetect> csdList,
 			ArrayList<String> uniqSatList, ListOrderedSet ssiSet,boolean doAnalyze,long currentTime) {
@@ -1022,9 +1075,9 @@ public class EKF_PPP extends EKFParent {
 			clkDriftMap.put(currentTime, rxClkDrift);
 		}
 		
-		SimpleMatrix H = new SimpleMatrix((3 * n) + ionoParamNum, totalStateNum);
-		SimpleMatrix z = new SimpleMatrix((3 * n) + ionoParamNum, 1);
-		SimpleMatrix ze = new SimpleMatrix((3 * n) + ionoParamNum, 1);
+		SimpleMatrix H = new SimpleMatrix((3 * n), totalStateNum);
+		SimpleMatrix z = new SimpleMatrix((3 * n), 1);
+		SimpleMatrix ze = new SimpleMatrix((3 * n), 1);
 		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(satList, estPos));
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		H.insertIntoThis(n, 0, unitLOS.scale(-1));
@@ -1092,12 +1145,7 @@ public class EKF_PPP extends EKFParent {
 			
 
 		}
-		for (int i = 0; i < ionoParamNum; i++) {
-			z.set(i + (3 * n), ionoParams.get(i)[1]);
-			ze.set(i + (3 * n), x.get(coreStateNum + n + i));
-			H.set(i + (3 * n), coreStateNum + n + i, 1);
-
-		}
+		
 		if(doAnalyze)
 		{
 			ionoMap.put(currentTime, _ionoMap);
@@ -1123,12 +1171,11 @@ public class EKF_PPP extends EKFParent {
 		double pseudorange_redundancyNo = redunMat.extractMatrix(0, n, 0, n).trace();
 		double phase_redundancyNo = redunMat.extractMatrix(n, 2 * n, n, 2 * n).trace();
 		double doppler_redundancyNo = redunMat.extractMatrix(2 * n, 3 * n, 2 * n, 3 * n).trace();
-		double iono_redundancyNo = redunMat.extractMatrix(3 * n,totalN, 3 * n, totalN).trace();
-
+	
 		SimpleMatrix pseudorange_e_post_hat = e_post_hat.extractMatrix(0, n, 0, 1);
 		SimpleMatrix phase_e_post_hat = e_post_hat.extractMatrix(n, 2 * n, 0, 1);
 		SimpleMatrix doppler_e_post_hat = e_post_hat.extractMatrix(2 * n, 3 * n, 0, 1);
-		SimpleMatrix iono_e_post_hat = e_post_hat.extractMatrix(3 * n, totalN, 0, 1);
+	
 		
 		double pseudorange_postVarOfUnitW = pseudorange_e_post_hat.transpose().mult(Cyy_inv.extractMatrix(0, n, 0, n))
 				.mult(pseudorange_e_post_hat).get(0) / pseudorange_redundancyNo;
@@ -1137,20 +1184,17 @@ public class EKF_PPP extends EKFParent {
 		double doppler_postVarOfUnitW = doppler_e_post_hat.transpose()
 				.mult(Cyy_inv.extractMatrix(2 * n, 3 * n, 2 * n, 3 * n)).mult(doppler_e_post_hat).get(0)
 				/ doppler_redundancyNo;
-		double iono_postVarOfUnitW = iono_e_post_hat.transpose()
-				.mult(Cyy_inv.extractMatrix(3 * n,totalN, 3 * n, totalN)).mult(iono_e_post_hat).get(0)
-				/ iono_redundancyNo;
 		
 		Map<Measurement, double[]> measResMap = Map.of(Measurement.Pseudorange,
 				Matrix.matrix2ArrayVec(pseudorange_e_post_hat), Measurement.CarrierPhase,
 				Matrix.matrix2ArrayVec(phase_e_post_hat), Measurement.Doppler,
-				Matrix.matrix2ArrayVec(doppler_e_post_hat),Measurement.GIM_Iono,Matrix.matrix2ArrayVec(iono_e_post_hat));
+				Matrix.matrix2ArrayVec(doppler_e_post_hat));
 		residualMap.put(currentTime, measResMap);
 		Map<Measurement, Double> measPostVarMap = Map.of(Measurement.Pseudorange, pseudorange_postVarOfUnitW,
-				Measurement.CarrierPhase, phase_postVarOfUnitW, Measurement.Doppler, doppler_postVarOfUnitW,Measurement.GIM_Iono,iono_postVarOfUnitW);
+				Measurement.CarrierPhase, phase_postVarOfUnitW, Measurement.Doppler, doppler_postVarOfUnitW);
 		postVarOfUnitWMap.put(currentTime, measPostVarMap);
 		Map<Measurement, Double> measRedunNoMap = Map.of(Measurement.Pseudorange, pseudorange_redundancyNo,
-				Measurement.CarrierPhase, phase_redundancyNo, Measurement.Doppler, doppler_redundancyNo,Measurement.GIM_Iono,iono_redundancyNo);
+				Measurement.CarrierPhase, phase_redundancyNo, Measurement.Doppler, doppler_redundancyNo);
 		redundancyNoMap.put(currentTime, measRedunNoMap);
 		satListMap.put(currentTime, satList);
 		satCountMap.put(currentTime, (long) n);

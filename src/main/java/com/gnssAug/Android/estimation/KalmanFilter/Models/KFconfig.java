@@ -196,21 +196,21 @@ public class KFconfig extends KF {
 
 	public void configTDCP(double deltaT, int m, double[] refPos) throws Exception {
 
-		int n = 3 + m;
+		int n = 3 + (2*m);
 		double[][] phi = new double[n][n];
 
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
-		SimpleMatrix _Q = new SimpleMatrix(3 + m, 3 + m);
-		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]));
+		SimpleMatrix _Q = new SimpleMatrix(3 + (2*m), 3 + (2*m));
+		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]*deltaT));
 		double _sg = 0.1;
-		IntStream.range(3, 3 + m).forEach(i -> _Q.set(i, i, _sg * deltaT));
+		IntStream.range(3, 3 + (2*m)).forEach(i -> _Q.set(i, i, _sg * deltaT));
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
 		SimpleMatrix R = new SimpleMatrix(n, n);
 		R.insertIntoThis(0, 0, _R);
-		for (int i = 0; i < m; i++) {
+		for (int i = 0; i < (2*m); i++) {
 			R.set(3 + i, 3 + i, 1);
 		}
 
@@ -238,13 +238,13 @@ public class KFconfig extends KF {
 
 		// Position and Velocity
 		for (int i = 0; i < 3; i++) {
-			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-10));
+			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-16));
 			_Q.set(i, i + 3 + clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
 			_Q.set(i + 3 + clkOffNum, i, qENU[i] * Math.pow(deltaT, 2) / 2);
 			_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, qENU[i] * deltaT);
 		}
 
-		double clkOffVar = 1e5;
+		double clkOffVar = 1;
 		double clkDriftVar = 0.1;
 		if (isAndroid) {
 			clkOffVar = 1e5;
@@ -269,7 +269,7 @@ public class KFconfig extends KF {
 
 		// Ambiguities
 		for (int i = 6 + clkOffNum + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
-			_Q.set(i, i, 1e-10);
+			_Q.set(i, i, 1e-16);
 		}
 
 		// Ionosphere: 4 cm/sqrt(s)*sin(elevation)

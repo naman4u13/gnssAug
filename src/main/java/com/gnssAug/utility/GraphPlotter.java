@@ -36,6 +36,7 @@ import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
+import com.gnssAug.Rinex.estimation.EKF_PPP_DF;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.opencsv.CSVWriter;
@@ -2164,6 +2165,38 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void createPPPplots(EKF_PPP ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
+	{
+		// Existing: clkOffMap
+        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
+        clkOffGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkOffGraph);
+        clkOffGraph.setVisible(true);
+        
+        // New: clkDriftMap
+        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
+        clkDriftGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+        clkDriftGraph.setVisible(true);
+        
+        // New: ionoMap
+        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
+        ionoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ionoGraph);
+        ionoGraph.setVisible(true);
+        
+        // New: tropoMap
+        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+        tropoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(tropoGraph);
+        tropoGraph.setVisible(true);
+        
+        // Existing: ambMap
+        GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0,"Ambiguities","Cycles");
+        ambGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ambGraph);
+        ambGraph.setVisible(true);
+	}
+	public static void createPPPplots(EKF_PPP_DF ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
 	{
 		// Existing: clkOffMap
         GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");

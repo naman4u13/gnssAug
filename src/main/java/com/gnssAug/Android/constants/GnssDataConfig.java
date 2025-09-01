@@ -18,7 +18,7 @@ public class GnssDataConfig {
 //	final public static double[] qENU_velRandWalk = new double[] { 0.5, 0.5, 0.01 };
 	
 	//Static
-	final public static double[] qENU_velRandWalk = new double[] {  1e-10,1e-10,1e-10 };
+	final public static double[] qENU_velRandWalk = new double[] {  1e-16,1e-16,1e-16 };
 	
 	final public static double nSamplesMC = 1e5;
 }

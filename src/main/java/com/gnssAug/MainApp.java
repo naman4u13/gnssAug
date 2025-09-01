@@ -77,7 +77,7 @@ public class MainApp {
 			
 //			String sinex_path = base_url + year + "_" + doy + "/igs21P21554.SNX";
 			IGS.posEstimate(osb_bias_path,dcb_bias_path, clock_path, orbit_path, ionex_path, sinex_path, true, true, true, true,
-					new String[] { "G1C","E1C"}, 4, 1, 0, true, true, 5,true, false, false,discardSet);
+					new String[] { "G1C","E1C","G5Q","E5Q"}, 4, 1, 0, true, true, 6,true, false, false,discardSet);
 			break;
 		case 3:
 			//obsvCodeList = new String[] {"G5X","E5X" };
