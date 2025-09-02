@@ -36,6 +36,7 @@ import com.gnssAug.Android.models.CycleSlipDetect;
 import com.gnssAug.Android.models.IMUsensor;
 import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
+
 import com.gnssAug.Rinex.estimation.EKF_PPP_DF;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
@@ -1031,11 +1032,11 @@ public class GraphPlotter extends ApplicationFrame {
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 		for (String key : dataMap.keySet()) {
 			ArrayList<double[]> dopList = dataMap.get(key);
-			ArrayList<Double> gdopList = new ArrayList<Double>();
+			//ArrayList<Double> gdopList = new ArrayList<Double>();
 			ArrayList<Double> pdopList = new ArrayList<Double>();
 			ArrayList<Double> hdopList = new ArrayList<Double>();
 			ArrayList<Double> vdopList = new ArrayList<Double>();
-			ArrayList<Double> tdopList = new ArrayList<Double>();
+			//ArrayList<Double> tdopList = new ArrayList<Double>();
 			int n = dopList.size();
 			if (n != timeList.size() && n != timeList.size()-1) {
 				throw new Exception("DOP list size does not match timeList size");
@@ -1043,19 +1044,20 @@ public class GraphPlotter extends ApplicationFrame {
 			for (int i = 0; i < n; i++) {
 
 				double[] dopDiag = dopList.get(i);
-				gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
+				//gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
 				pdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2]));
 				hdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1]));
 				vdopList.add(Math.sqrt(dopDiag[2]));
-				tdopList.add(Math.sqrt(dopDiag[3]));
-				dataList.add(new String[] { timeList.get(i) + "", satCountList.get(i) + "", gdopList.get(i) + "",
-						pdopList.get(i) + "", hdopList.get(i) + "", vdopList.get(i) + "", tdopList.get(i) + "" });
+				//tdopList.add(Math.sqrt(dopDiag[3]));
+				dataList.add(new String[] { timeList.get(i) + "", satCountList.get(i) + "", 
+						pdopList.get(i) + "", hdopList.get(i) + "", vdopList.get(i) + "" });
+				//, tdopList.get(i) + "" });
 			}
-			dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
+			//dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
 			dopMap.computeIfAbsent("PDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, pdopList);
 			dopMap.computeIfAbsent("HDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, hdopList);
 			dopMap.computeIfAbsent("VDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, vdopList);
-			dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
+			//dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
 
 		}
 
@@ -2192,6 +2194,59 @@ public class GraphPlotter extends ApplicationFrame {
         
         // Existing: ambMap
         GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0,"Ambiguities","Cycles");
+        ambGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ambGraph);
+        ambGraph.setVisible(true);
+	}
+	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
+	{
+		// Existing: clkOffMap
+        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
+        clkOffGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkOffGraph);
+        clkOffGraph.setVisible(true);
+        
+        // New: clkDriftMap
+        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
+        clkDriftGraph.pack();
+        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+        clkDriftGraph.setVisible(true);
+        
+        // New: ionoMap
+        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
+        ionoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(ionoGraph);
+        ionoGraph.setVisible(true);
+        
+        // New: tropoMap
+        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+        tropoGraph.pack();
+        RefineryUtilities.positionFrameRandomly(tropoGraph);
+        tropoGraph.setVisible(true);
+        
+        // Existing: ambMap
+        TreeMap<Long, HashMap<String, Double>> ambMap = ekf.getAmbMap();
+        
+        HashMap<String, Double> firstValues = new HashMap<>();
+        for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+            HashMap<String, Double> current = entry.getValue();
+            for (String s : current.keySet()) {
+                if (!firstValues.containsKey(s)) {
+                    firstValues.put(s, current.get(s));
+                }
+            }
+        }
+
+        // Subtract first value from each occurrence in every series
+        for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+            HashMap<String, Double> current = entry.getValue();
+            for (String s : current.keySet()) {
+                double first = firstValues.get(s);
+                current.put(s, current.get(s) - first);
+            }
+        }
+
+        GraphPlotter ambGraph = new GraphPlotter(ambMap, t0,"Ambiguities","Cycles");
         ambGraph.pack();
         RefineryUtilities.positionFrameRandomly(ambGraph);
         ambGraph.setVisible(true);

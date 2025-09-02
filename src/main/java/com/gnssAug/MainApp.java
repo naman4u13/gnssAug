@@ -24,7 +24,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (2) {
+		switch (3) {
 		case 1:
 			//String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] {"G1C","E1C","C2I"};
@@ -107,8 +107,8 @@ public class MainApp {
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			
 			
-			Android_Static.posEstimate(true, 0, 0,22, obsvCodeList,basePath, trueEcef, dcb_bias_path,
-					clock_path, orbit_path, ionex_path,osb_bias_path, true, true,true, true,false,discardSet,mobName);
+			Android_Static.posEstimate(true, 0, 0,1, obsvCodeList,basePath, trueEcef, dcb_bias_path,
+					clock_path, orbit_path, ionex_path,osb_bias_path, true, true,false, false,false,discardSet,mobName);
 			break;
 		case 4:
 			//obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
@@ -136,7 +136,7 @@ public class MainApp {
 			break;
 		case 5:
 			//obsvCodeList = new String[] { "G5X","E5X","C5X"};
-			obsvCodeList = new String[] {"G1C"};
+			obsvCodeList = new String[] {"G1C","E1C","G5X","E5X"};
 			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
 
 			discardSet = true ? Set.of("") : Set.of("C11", "G12", "G2", "G30");// C33
@@ -154,7 +154,7 @@ public class MainApp {
 			clock_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
 			orbit_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			ionex_path = base_url + year + "_" + doy + sep + "IGS0OPSFIN_"+ year + doy + "0000_01D_02H_GIM.INX";
-			osb_bias_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_01D_OSB.BIA";
+			osb_bias_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_30S_OSB.BIA";
 			
 			
 			llh = new double[] {51.081628,-114.134081,1110.130-16.7243};

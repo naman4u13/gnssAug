@@ -244,7 +244,7 @@ public class KFconfig extends KF {
 			_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, qENU[i] * deltaT);
 		}
 
-		double clkOffVar = 1;
+		double clkOffVar = 1e5;
 		double clkDriftVar = 0.1;
 		if (isAndroid) {
 			clkOffVar = 1e5;
