@@ -81,7 +81,8 @@ public class Android_Static {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String dcb_bias_path, String clock_path,
 			String orbit_path, String ionex_path, String osb_bias_path, boolean useIGS, boolean doAnalyze,
-			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName,boolean repairCS) {
+			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName,
+			boolean repairCS) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -102,8 +103,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/ION_GNSS_2025/"
-					+ mobName + "_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/ION_GNSS_2025/Pixel7/"
+					+ mobName + "_L1_L5_GPS_GAL_PPP_noRepair";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -908,8 +909,8 @@ public class Android_Static {
 			if (estimatorType == 22) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new EKF_PPP();
-				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze,
-						trueEcefList, true, repairCS,doTest);
+				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
+						trueEcefList, true, repairCS, false);
 				int n = timeList.size();
 				estPosMap.put("PPP", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {
@@ -1051,6 +1052,21 @@ public class Android_Static {
 					// Haversine Distance
 					posErrList[5].add(gcErr);
 
+					if (i == n - 1) {
+
+						System.out.println("Converged Position RMS:");
+						// error in East direction
+						System.out.println("E  - " + Math.sqrt(enu[0] * enu[0]));
+						// error in North direction
+						System.out.println("N  - " + Math.sqrt(enu[1] * enu[1]));
+						// error in Up direction
+						System.out.println("U  - " + Math.sqrt(enu[2] * enu[2]));
+						// 3d error
+						System.out.println("3d Error - " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+						// 2d error
+						System.out.println("2d Error - " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+					}
+
 				}
 
 				GraphPosMap.put(key, enuPosList);
@@ -1175,7 +1191,7 @@ public class Android_Static {
 
 				}
 			}
-			if (doAnalyze && estimatorType != 21&& estimatorType != 22 ) {
+			if (doAnalyze && estimatorType != 21 && estimatorType != 22) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}

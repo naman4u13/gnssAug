@@ -528,21 +528,7 @@ public class Android_Static_Rinex {
 					GraphPlotter.createPPPplots(ekf, obsvCodeList,ssiLabel, timeList.get(0));
 				}
 			}
-			if (estimatorType == 7) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
-						trueEcef, true, false, true);
-
-				int n = timeList.size();
-				for (int i = 1; i < n; i++) {
-					long time = timeList.get(i);
-					double[] estPos = estStateMap_pos.get(time);
-					estPosMap.computeIfAbsent("EKF_PPP_AR", k -> new ArrayList<double[]>()).add(estPos);
-
-				}
-
-			}
+			
 //			if (estimatorType == 1) {
 //				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap, outlierAnalyze);
 //			}

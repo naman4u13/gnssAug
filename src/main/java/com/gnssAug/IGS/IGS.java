@@ -30,6 +30,7 @@ import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
+import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
@@ -65,7 +66,7 @@ public class IGS {
 	public static void posEstimate(String osb_bias_path, String dcb_bias_path, String clock_path, String orbit_path,
 			String ionex_path, String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
 			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Set<String> discardSet) {
+			int estimatorType, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Set<String> discardSet,boolean repairCS) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
@@ -92,12 +93,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/NYA200NOR_R_20242001200_60M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALGO00CAN_R_20242001200_60M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/NYA2/NYA2_L1_L5_GPS_PPP_noRepair_DualFreq2";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALGO/ALGO_L1_L5_GPS_GAL_PRW_FDE";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -109,6 +110,16 @@ public class IGS {
 				e.printStackTrace();
 			}
 			System.out.println("Discarded Satellites: " + discardSet.toString());
+			System.out.println("Elevation Mask in degrees = " + cutOffAng);
+			System.out
+					.println("pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
+			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
+			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
+			System.out.println("Phase_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
+			System.out.println("GIM_TECU_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
+			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
+			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
+			System.out.println("Number of Samples for MC simulation = " + GnssDataConfig.nSamplesMC);
 			geoid = buildGeoid();
 			Map<String, Object> NavMsgComp = NavigationRNX.rinex_nav_process(nav_path, useIGS);
 			@SuppressWarnings("unchecked")
@@ -233,8 +244,10 @@ public class IGS {
 										.computeIfAbsent(estType, k -> new ArrayList<SimpleMatrix>())
 										.add(LinearLeastSquare.getCxx_hat(type));
 							}
+							if (type == Measurement.Pseudorange) {
 							dopMap.computeIfAbsent(estType, k -> new ArrayList<double[]>())
 									.add(LinearLeastSquare.getDop());
+							}
 						}
 					}
 				}
@@ -276,7 +289,7 @@ public class IGS {
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satResMap.get(Measurement.Pseudorange).get("EKF")
-									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+									.computeIfAbsent(sat.getObsvCode() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residual[j], sat.isOutlier(),
 											sat.getCNo()));
@@ -300,13 +313,28 @@ public class IGS {
 						for (int j = 0; j < m; j++) {
 							Satellite sat = satList.get(j);
 							satInnMap.get(Measurement.Pseudorange).get("EKF")
-									.computeIfAbsent(sat.getSSI() + "" + sat.getSVID(),
+									.computeIfAbsent(sat.getObsvCode() + "" + sat.getSVID(),
 											k -> new ArrayList<SatResidual>())
 									.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovation[j],
 											sat.isOutlier(), sat.getCNo()));
 
 						}
 
+					}
+					if(i==n-1)
+					{
+						double[] enu = LatLonUtil.ecef2enu(estPos, rxARP, true);
+						System.out.println("Converged Position RMS:");
+						// error in East direction
+						System.out.println("E  - "+Math.sqrt(enu[0] * enu[0]));
+						// error in North direction
+						System.out.println("N  - "+Math.sqrt(enu[1] * enu[1]));
+						// error in Up direction
+						System.out.println("U  - "+Math.sqrt(enu[2] * enu[2]));
+						// 3d error
+						System.out.println("3d Error - "+Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+						// 2d error
+						System.out.println("2d Error - "+Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 					}
 				}
 				if (doAnalyze) {
@@ -316,8 +344,8 @@ public class IGS {
 			if (estimatorType == 5) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
-						rxARP, true, false);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze,doTest, obsvCodeList,
+						rxARP, true, repairCS,false);
 
 				int n = timeList.size();
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
@@ -509,8 +537,8 @@ public class IGS {
 			if (estimatorType == 7) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
-						rxARP, true, false, true);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze,doTest, obsvCodeList,
+						rxARP, true,repairCS, true);
 
 				int n = timeList.size();
 				for (int i = 1; i < n; i++) {
@@ -694,7 +722,6 @@ public class IGS {
 
 				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-				
 				GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 				GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"),timeList);
 				
