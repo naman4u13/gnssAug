@@ -1,4 +1,4 @@
-package com.gnssAug.Android.estimation.KalmanFilter;
+package com.gnssAug.Rinex.estimation;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -8,17 +8,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
-
 import org.apache.commons.collections.set.ListOrderedSet;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
+import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
-
-import com.gnssAug.Android.constants.GnssDataConfig;
+import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
-import com.gnssAug.Android.estimation.LinearLeastSquare;
+import  com.gnssAug.Rinex.estimation.LinearLeastSquare;
+import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.KFconfig;
 import com.gnssAug.Android.models.CycleSlipDetect;
-import com.gnssAug.Android.models.Satellite;
+import com.gnssAug.Rinex.models.Satellite;
 import com.gnssAug.helper.ComputeSolidEarthTide;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.helper.lambdaNew.LAMBDA;
@@ -31,7 +31,7 @@ import com.gnssAug.utility.Time;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
-public class EKF_PPP extends EKFParent {
+public class EKF_PPP_LowCostRx extends EKFParent {
 
 	private TreeMap<Long, Map<Measurement, double[]>> innovationMap;
 	private TreeMap<Long, Map<Measurement, double[]>> residualMap;
@@ -50,7 +50,7 @@ public class EKF_PPP extends EKFParent {
 	private KFconfig pos_kfObj;
 	private long ambFixedCount = 0;
 
-	public EKF_PPP() {
+	public EKF_PPP_LowCostRx() {
 		vel_kfObj = new KFconfig();
 		pos_kfObj = new KFconfig();
 	}
@@ -62,13 +62,13 @@ public class EKF_PPP extends EKFParent {
 	private TreeMap<Long, Integer> ambFixedCountMap;
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
 
-	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
+	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap,HashMap<String, double[]> rxPCO, ArrayList<Long> timeList,
 			String[] obsvCodeList, boolean doAnalyze, ArrayList<double[]> truePosEcefList, boolean isStatic,
 			boolean repairCS,boolean doTest) throws Exception {
-		return process(SatMap, timeList, obsvCodeList, doAnalyze, truePosEcefList, isStatic, repairCS,doTest, false);
+		return process(SatMap,rxPCO, timeList, obsvCodeList, doAnalyze, truePosEcefList, isStatic, repairCS,doTest, false);
 	}
 
-	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
+	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,ArrayList<Long> timeList,
 			String[] obsvCodeList, boolean doAnalyze, ArrayList<double[]> truePosEcefList, boolean isStatic,
 			boolean repairCS, boolean doTest,boolean fixAmb) throws Exception {
 
@@ -86,7 +86,7 @@ public class EKF_PPP extends EKFParent {
 				6 + (2 * clkOffNum) + clkDriftNum + 1);
 
 		// Initializing position state
-		double[] intialPos = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, true);
+		double[] intialPos = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), rxPCO, true);
 		for (int i = 0; i < 3; i++) {
 			x_pos.set(i, intialPos[i]);
 			P_pos.set(i, i, 1e4);
@@ -100,7 +100,8 @@ public class EKF_PPP extends EKFParent {
 			IntStream.range(0, 3).forEach(i -> P_vel.set(i, i, 1e-10));
 			IntStream.range(3 + (2 * clkOffNum), 6 + (2 * clkOffNum)).forEach(i -> P_pos.set(i, i, 1e-10));
 		} else {
-			intialVel = LinearLeastSquare.getEstVel(SatMap.firstEntry().getValue(), true, intialPos, true);
+			intialVel = LinearLeastSquare.getEstVel(SatMap.firstEntry().getValue(), rxPCO, true, false, false, false,
+					intialPos);
 			IntStream.range(0, 3).forEach(i -> P_vel.set(i, i, 100));
 			IntStream.range(3 + (2 * clkOffNum), 3 + (2 * clkOffNum) + 3).forEach(i -> P_pos.set(i, i, 100));
 		}
@@ -142,10 +143,10 @@ public class EKF_PPP extends EKFParent {
 		csRepairedCountMap = new TreeMap<Long, Integer>();
 		ambFixedCountMap = new TreeMap<Long, Integer>();
 		consecutiveCSmap = new HashMap<String, Integer>();
-		return iterate(SatMap, timeList, ssiSet, doAnalyze, truePosEcefList, obsvCodeList, repairCS, fixAmb, doTest);
+		return iterate(SatMap,rxPCO, timeList, ssiSet, doAnalyze, truePosEcefList, obsvCodeList, repairCS, fixAmb, doTest);
 	}
 
-	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
+	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap,HashMap<String, double[]> rxPCO, ArrayList<Long> timeList,
 			ListOrderedSet ssiSet, boolean doAnalyze, ArrayList<double[]> truePosEcefList, String[] obsvCodeList,
 			boolean repairCS, boolean fixAmb, boolean doPseudorangeTest) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
@@ -163,21 +164,19 @@ public class EKF_PPP extends EKFParent {
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
 			double[] currentTruePos = truePosEcefList.get(i);
-			double[] refPos = LinearLeastSquare.getEstPos(currSatList, true, true);
+			double[] refPos =  LinearLeastSquare.getEstPos(currSatList, rxPCO, true);
 			int n_curr = currSatList.size();
 			int n_prev = prevSatList.size();
-			Calendar time = Time.getDate(currSatList.get(0).gettRx(), currSatList.get(0).getWeekNo(),
-					LatLonUtil.ecef2lla(refPos, true)[1]);
-			ZonedDateTime zdTime = Time.convertUsingToInstant(time);
+			ZonedDateTime zdTime = Time.convertUsingToInstant(currSatList.get(0).getTime());
 			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
 			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
 			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
-				String satID = current_sat.getObsvCode() + current_sat.getSvid();
+				String satID = current_sat.getObsvCode() + current_sat.getSVID();
 				for (int k = 0; k < n_prev; k++) {
 					Satellite prev_sat = prevSatList.get(k);
-					String prev_satID = prev_sat.getObsvCode() + prev_sat.getSvid();
+					String prev_satID = prev_sat.getObsvCode() + prev_sat.getSVID();
 					if (satID.equals(prev_satID)) {
 						SimpleMatrix satEci = new SimpleMatrix(3, 1, true, current_sat.getSatEci());
 						SimpleMatrix prev_satEci = new SimpleMatrix(3, 1, true, prev_sat.getSatEci());
@@ -188,12 +187,12 @@ public class EKF_PPP extends EKFParent {
 						current_sat.setPhase(current_sat.getPhase() + earthTide_range);
 						double ionoRate = current_sat.getIonoErr() - prev_sat.getIonoErr();
 						double tropoRate = current_sat.getTropoErr() - prev_sat.getTropoErr();
-						double dopplerDR = ((current_sat.getRangeRate() + prev_sat.getRangeRate()) / 2) - tropoRate
+						double dopplerDR = ((current_sat.getPseudoRangeRate() + prev_sat.getPseudoRangeRate()) / 2) - tropoRate
 								+ ionoRate;
 						double phaseDR = current_sat.getPhase() - prev_sat.getPhase() + ionoRate;
 						double prDR = current_sat.getPseudorange() - prev_sat.getPseudorange() - ionoRate;
 						double satVelCorr = unitLOS.mult(satEci.minus(prev_satEci)).get(0);
-						double wavelength = SpeedofLight / current_sat.getCarrierFrequencyHz();
+						double wavelength = SpeedofLight / current_sat.getCarrier_frequency();
 						double approxCS = Math.abs(phaseDR - dopplerDR);
 						double trueDR = MathUtil.getEuclidean(currentTruePos, current_sat.getSatEci())
 								- MathUtil.getEuclidean(prevTruePos, prev_sat.getSatEci());
@@ -222,6 +221,18 @@ public class EKF_PPP extends EKFParent {
 			prevTime = currentTime;
 			prevTruePos = currentTruePos;
 		}
+		double[] enu = LatLonUtil.ecef2enu(estStateMap.get(prevTime), prevTruePos, true);
+		System.out.println("Converged Position RMS:");
+		// error in East direction
+		System.out.println("E  - "+Math.sqrt(enu[0] * enu[0]));
+		// error in North direction
+		System.out.println("N  - "+Math.sqrt(enu[1] * enu[1]));
+		// error in Up direction
+		System.out.println("U  - "+Math.sqrt(enu[2] * enu[2]));
+		// 3d error
+		System.out.println("3d Error - "+Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+		// 2d error
+		System.out.println("2d Error - "+Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 		return estStateMap;
 	}
 
@@ -233,7 +244,7 @@ public class EKF_PPP extends EKFParent {
 		int n = csdList.size();
 		ArrayList<Satellite> satList = new ArrayList<Satellite>();
 		for (int i = 0; i < n; i++) {
-			satList.add(csdList.get(i).getSat());
+			satList.add(csdList.get(i).getIgs_sat());
 		}
 		int m = ssiSet.size();
 
@@ -244,7 +255,7 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix z = new SimpleMatrix(n, 1);
 
 		SimpleMatrix H = new SimpleMatrix(n, 3 + (2 * m));
-		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, refPos));
+		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(satList, refPos));
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
@@ -288,7 +299,7 @@ public class EKF_PPP extends EKFParent {
 
 		for (int i = 0; i < n; i++) {
 			if (!csdList.get(i).isCS()) {
-				testedSatList.add(csdList.get(i).getSat());
+				testedSatList.add(csdList.get(i).getIgs_sat());
 				testedCsdList.add(csdList.get(i));
 			}
 		}
@@ -296,7 +307,7 @@ public class EKF_PPP extends EKFParent {
 
 		z = new SimpleMatrix(tested_n, 1);
 		H = new SimpleMatrix(tested_n, 3 + (2 * m));
-		SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.getUnitLOS(testedSatList, refPos));
+		SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(testedSatList, refPos));
 		H.insertIntoThis(0, 0, testedUnitLOS.scale(-1));
 		for (int i = 0; i < tested_n; i++) {
 			CycleSlipDetect csdObj = testedCsdList.get(i);
@@ -322,8 +333,8 @@ public class EKF_PPP extends EKFParent {
 		HashMap<String, Integer> currConsecutiveCSmap = new HashMap<String, Integer>();
 		// Resume full SatList or CSDList
 		for (int i = 0; i < n; i++) {
-			Satellite sat = csdList.get(i).getSat();
-			String satID = sat.getObsvCode() + "" + sat.getSvid();
+			Satellite sat = csdList.get(i).getIgs_sat();
+			String satID = sat.getObsvCode() + "" + sat.getSVID();
 			int[] record = cycleSlipCount.computeIfAbsent(satID, k -> new int[2]);
 			record[1] += 1;
 			if (csdList.get(i).isCS()) {
@@ -379,7 +390,7 @@ public class EKF_PPP extends EKFParent {
 				}
 
 				if (csdObj.isCS()) {
-					sysout_svid[ctr - 3 - (2 * m)] = satList.get(i).getObsvCode()+""+satList.get(i).getSvid();
+					sysout_svid[ctr - 3 - (2 * m)] = satList.get(i).getObsvCode()+""+satList.get(i).getSVID();
 					H.set(_i, ctr, wavelength);
 					ctr++;
 				}
@@ -481,13 +492,13 @@ public class EKF_PPP extends EKFParent {
 		ArrayList<Satellite> satList = new ArrayList<Satellite>();
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
-			Satellite sat = csdObj.getSat();
-			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
+			Satellite sat = csdObj.getIgs_sat();
+			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSVID();
 			satList.add(sat);
 			list_.add(satID);
 			if (!uniqSat.contains(satID)) {
 				uniqSat.add(satID);
-				double freq2 = Math.pow(sat.getCarrierFrequencyHz(), 2);
+				double freq2 = Math.pow(sat.getCarrier_frequency(), 2);
 				double ionoCoeff = (40.3 * 1e16) / freq2;
 				ionoParams.add(new double[] { sat.getElevAzm()[0], sat.getIonoErr() / ionoCoeff });
 			}
@@ -509,7 +520,7 @@ public class EKF_PPP extends EKFParent {
 		for (int j = coreStateNum; j < totalStateNum - ionoParamNum; j++) {
 			Satellite sat = satList.get(j - coreStateNum);
 			CycleSlipDetect csdObj = csdList.get(j - coreStateNum);
-			String satObsvCode = sat.getObsvCode() + "" + sat.getSvid();
+			String satObsvCode = sat.getObsvCode() + "" + sat.getSVID();
 			boolean flag1 = csdObj.isCS() == false;
 			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isExclude() == false;
 			boolean flag = flag1 || flag2;
@@ -529,7 +540,7 @@ public class EKF_PPP extends EKFParent {
 				}
 				for (int l = j + 1; l < coreStateNum + n; l++) {
 					Satellite _sat = satList.get(l - coreStateNum);
-					String _satObsvCode = _sat.getObsvCode() + "" + _sat.getSvid();
+					String _satObsvCode = _sat.getObsvCode() + "" + _sat.getSVID();
 					CycleSlipDetect _csdObj = csdList.get(l - coreStateNum);
 
 					boolean _flag1 = _csdObj.isCS() == false;
@@ -554,7 +565,7 @@ public class EKF_PPP extends EKFParent {
 				}
 
 			} else {
-				double wl = SpeedofLight / sat.getCarrierFrequencyHz();
+				double wl = SpeedofLight / sat.getCarrier_frequency();
 				_x.set(j, (sat.getPhase() - sat.getPseudorange()) / wl);
 				_P.set(j, j, 1e16);
 
@@ -706,7 +717,7 @@ public class EKF_PPP extends EKFParent {
 						continue;
 					}
 					Satellite sat = satList.get(idx);
-					double weight = 1.0 / Weight.computeCoVariance(sat.getCn0DbHz(), sat.getElevAzm()[0]);
+					double weight = 1.0 / Weight.computeCoVariance(sat.getCNo(), sat.getElevAzm()[0]);
 					if (weight > maxWeight) {
 						maxWeight = weight;
 						refIdx = idx;
@@ -1004,7 +1015,7 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix H = new SimpleMatrix((3 * n) + ionoParamNum, totalStateNum);
 		SimpleMatrix z = new SimpleMatrix((3 * n) + ionoParamNum, 1);
 		SimpleMatrix ze = new SimpleMatrix((3 * n) + ionoParamNum, 1);
-		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, estPos));
+		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(satList, estPos));
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		H.insertIntoThis(n, 0, unitLOS.scale(-1));
 		H.insertIntoThis(2 * n, 3 + (2 * clkOffNum), unitLOS.scale(-1));
@@ -1015,9 +1026,9 @@ public class EKF_PPP extends EKFParent {
 			CycleSlipDetect csdObj = csdList.get(i);
 			String obsvCode = sat.getObsvCode();
 			char ssi = obsvCode.charAt(0);
-			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
-			double wavelength = SpeedofLight / sat.getCarrierFrequencyHz();
-			double freq2 = Math.pow(sat.getCarrierFrequencyHz(), 2);
+			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSVID();
+			double wavelength = SpeedofLight / sat.getCarrier_frequency();
+			double freq2 = Math.pow(sat.getCarrier_frequency(), 2);
 			double ionoCoeff = (40.3 * 1e16) / freq2;
 			int ionoIndex = uniqSatList.indexOf(satID);
 
@@ -1062,7 +1073,7 @@ public class EKF_PPP extends EKFParent {
 			H.set(i + n, coreStateNum + n + ionoIndex, -ionoCoeff);
 			if (doAnalyze) {
 				_ionoMap.put(satID, estIonoTec.get(ionoIndex));
-				_ambMap.put(sat.getObsvCode() + "" + sat.getSvid(), estAmb.get(i));
+				_ambMap.put(sat.getObsvCode() + "" + sat.getSVID(), estAmb.get(i));
 			}
 		}
 		for (int i = 0; i < ionoParamNum; i++) {
@@ -1202,4 +1213,6 @@ public class EKF_PPP extends EKFParent {
 	public TreeMap<Long, double[]> getDopMap() {
 		return dopMap;
 	}
+	
+
 }

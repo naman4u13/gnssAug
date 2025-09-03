@@ -38,6 +38,7 @@ import com.gnssAug.Android.models.Satellite;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
 
 import com.gnssAug.Rinex.estimation.EKF_PPP_DF;
+import com.gnssAug.Rinex.estimation.EKF_PPP_LowCostRx;
 import com.gnssAug.Rinex.models.SatResidual;
 import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.opencsv.CSVWriter;
@@ -241,13 +242,14 @@ public class GraphPlotter extends ApplicationFrame {
 		setContentPane(chartPanel);
 
 	}
-	
-	public GraphPlotter(String title,HashMap<String, ArrayList<Double>> data,
-			ArrayList<Long> timeList) throws IOException {
+
+	public GraphPlotter(String title, HashMap<String, ArrayList<Double>> data, ArrayList<Long> timeList)
+			throws IOException {
 		super(title);
 		// TODO Auto-generated constructor stub
 
-		final JFreeChart chart = ChartFactory.createXYLineChart(title, "GPS-time", title, createDatasetPostUnitW(data, timeList));
+		final JFreeChart chart = ChartFactory.createXYLineChart(title, "GPS-time", title,
+				createDatasetPostUnitW(data, timeList));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -273,7 +275,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	}
 
-	public GraphPlotter(HashMap<Measurement,HashMap<String, ArrayList<Double>>> data, ArrayList<Long> timeList)
+	public GraphPlotter(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data, ArrayList<Long> timeList)
 			throws IOException {
 		super("Redundancy Number");
 		// TODO Auto-generated constructor stub
@@ -447,11 +449,9 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else if (key == Measurement.CarrierPhase){
+			} else if (key == Measurement.CarrierPhase) {
 				type = "Carrier Phase ";
-			}
-			else
-			{
+			} else {
 				type = "GIM_Iono";
 			}
 			HashMap<String, ArrayList<Double>> subData = data.get(key);
@@ -461,15 +461,15 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.setVisible(true);
 		}
 	}
-	
+
 	public static void graphRedundancyPPP(HashMap<Measurement, HashMap<String, ArrayList<Double>>> data,
 			ArrayList<Long> timeList) throws IOException {
-			
-			GraphPlotter chart = new GraphPlotter(data, timeList);
-			chart.pack();
-			RefineryUtilities.positionFrameRandomly(chart);
-			chart.setVisible(true);
-		
+
+		GraphPlotter chart = new GraphPlotter(data, timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
+
 	}
 
 	public static void graphENU(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList, boolean isPos)
@@ -661,11 +661,9 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else if (key == Measurement.CarrierPhase){
+			} else if (key == Measurement.CarrierPhase) {
 				type = "Carrier Phase (in Cycles)";
-			}
-			else
-			{
+			} else {
 				type = "GIM_Iono";
 			}
 			String name = "Satellite-Residual";
@@ -673,8 +671,7 @@ public class GraphPlotter extends ApplicationFrame {
 				name = "Satellite-Innovation";
 			}
 			for (String subKey : subSatResMap.keySet()) {
-				if(subSatResMap.get(subKey).isEmpty())
-				{
+				if (subSatResMap.get(subKey).isEmpty()) {
 					continue;
 				}
 				// For Satellite Residuals
@@ -1008,11 +1005,9 @@ public class GraphPlotter extends ApplicationFrame {
 				type = "PseudoRange ";
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
-			} else if(key==Measurement.CarrierPhase) {
+			} else if (key == Measurement.CarrierPhase) {
 				type = "Carrier Phase ";
-			}
-			else
-			{
+			} else {
 				type = "GIM_Iono ";
 			}
 			for (String subKey : satCountMap.get(key).keySet()) {
@@ -1032,32 +1027,34 @@ public class GraphPlotter extends ApplicationFrame {
 		HashMap<String, HashMap<String, ArrayList<Double>>> dopMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 		for (String key : dataMap.keySet()) {
 			ArrayList<double[]> dopList = dataMap.get(key);
-			//ArrayList<Double> gdopList = new ArrayList<Double>();
+			// ArrayList<Double> gdopList = new ArrayList<Double>();
 			ArrayList<Double> pdopList = new ArrayList<Double>();
 			ArrayList<Double> hdopList = new ArrayList<Double>();
 			ArrayList<Double> vdopList = new ArrayList<Double>();
-			//ArrayList<Double> tdopList = new ArrayList<Double>();
+			// ArrayList<Double> tdopList = new ArrayList<Double>();
 			int n = dopList.size();
-			if (n != timeList.size() && n != timeList.size()-1) {
+			if (n != timeList.size() && n != timeList.size() - 1) {
 				throw new Exception("DOP list size does not match timeList size");
 			}
 			for (int i = 0; i < n; i++) {
 
 				double[] dopDiag = dopList.get(i);
-				//gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
+				// gdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2] + dopDiag[3]));
 				pdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1] + dopDiag[2]));
 				hdopList.add(Math.sqrt(dopDiag[0] + dopDiag[1]));
 				vdopList.add(Math.sqrt(dopDiag[2]));
-				//tdopList.add(Math.sqrt(dopDiag[3]));
-				dataList.add(new String[] { timeList.get(i) + "", satCountList.get(i) + "", 
-						pdopList.get(i) + "", hdopList.get(i) + "", vdopList.get(i) + "" });
-				//, tdopList.get(i) + "" });
+				// tdopList.add(Math.sqrt(dopDiag[3]));
+				dataList.add(new String[] { timeList.get(i) + "", satCountList.get(i) + "", pdopList.get(i) + "",
+						hdopList.get(i) + "", vdopList.get(i) + "" });
+				// , tdopList.get(i) + "" });
 			}
-			//dopMap.computeIfAbsent("GDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, gdopList);
+			// dopMap.computeIfAbsent("GDOP", k -> new HashMap<String,
+			// ArrayList<Double>>()).put(key, gdopList);
 			dopMap.computeIfAbsent("PDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, pdopList);
 			dopMap.computeIfAbsent("HDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, hdopList);
 			dopMap.computeIfAbsent("VDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, vdopList);
-			//dopMap.computeIfAbsent("TDOP", k -> new HashMap<String, ArrayList<Double>>()).put(key, tdopList);
+			// dopMap.computeIfAbsent("TDOP", k -> new HashMap<String,
+			// ArrayList<Double>>()).put(key, tdopList);
 
 		}
 
@@ -1231,7 +1228,7 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 
 	}
-	
+
 	private XYDataset createDatasetPPPRedundancy(HashMap<Measurement, HashMap<String, ArrayList<Double>>> dataMap,
 			ArrayList<Long> timeList) {
 		Long t0 = timeList.get(0);
@@ -1241,7 +1238,7 @@ public class GraphPlotter extends ApplicationFrame {
 			ArrayList<Double> list = dataMap.get(key).get("PPP");
 			for (int i = 0; i < list.size(); i++) {
 				Double data = list.get(i);
-				series.add((timeList.get(i)-t0)*1e-3, data);
+				series.add((timeList.get(i) - t0) * 1e-3, data);
 			}
 			dataset.addSeries(series);
 		}
@@ -1526,7 +1523,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 			for (int i = 0; i < data.size(); i++) {
 				double val = data.get(i);
-				if (val <=0||val>500) {
+				if (val <= 0 || val > 500) {
 					continue;
 				}
 				sum += val;
@@ -2074,7 +2071,7 @@ public class GraphPlotter extends ApplicationFrame {
 
 	// New: for clkDriftMap (similar to clkOff, but labels are constellations like
 	// "G", "E")
-	public GraphPlotter(TreeMap<Long, double[]> map, String[] labels, long t0, boolean isClkOff,String title) {
+	public GraphPlotter(TreeMap<Long, double[]> map, String[] labels, long t0, boolean isClkOff, String title) {
 		super(title);
 		JFreeChart chart = null;
 		if (isClkOff) {
@@ -2107,7 +2104,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	// New: for ionoMap (similar to ambMap, per satID)
-	public GraphPlotter(TreeMap<Long, HashMap<String, Double>> map, long t0, String title,String value) {
+	public GraphPlotter(TreeMap<Long, HashMap<String, Double>> map, long t0, String title, String value) {
 		super(title);
 		JFreeChart chart = null;
 
@@ -2166,121 +2163,181 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 	}
 
-	public static void createPPPplots(EKF_PPP ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
-	{
+	public static void createPPPplots(EKF_PPP ekf, String[] obsvCodeList, String[] ssiLabels, long t0) {
 		// Existing: clkOffMap
-        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
-        clkOffGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkOffGraph);
-        clkOffGraph.setVisible(true);
-        
-        // New: clkDriftMap
-        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
-        clkDriftGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
-        clkDriftGraph.setVisible(true);
-        
-        // New: ionoMap
-        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
-        ionoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ionoGraph);
-        ionoGraph.setVisible(true);
-        
-        // New: tropoMap
-        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
-        tropoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(tropoGraph);
-        tropoGraph.setVisible(true);
-        
-        // Existing: ambMap
-        GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0,"Ambiguities","Cycles");
-        ambGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ambGraph);
-        ambGraph.setVisible(true);
-	}
-	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
-	{
-		// Existing: clkOffMap
-        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
-        clkOffGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkOffGraph);
-        clkOffGraph.setVisible(true);
-        
-        // New: clkDriftMap
-        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
-        clkDriftGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
-        clkDriftGraph.setVisible(true);
-        
-        // New: ionoMap
-        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
-        ionoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ionoGraph);
-        ionoGraph.setVisible(true);
-        
-        // New: tropoMap
-        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
-        tropoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(tropoGraph);
-        tropoGraph.setVisible(true);
-        
-        // Existing: ambMap
-        TreeMap<Long, HashMap<String, Double>> ambMap = ekf.getAmbMap();
-        
-        HashMap<String, Double> firstValues = new HashMap<>();
-        for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
-            HashMap<String, Double> current = entry.getValue();
-            for (String s : current.keySet()) {
-                if (!firstValues.containsKey(s)) {
-                    firstValues.put(s, current.get(s));
-                }
-            }
-        }
+		GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0, true, "Clock Offset");
+		clkOffGraph.pack();
+		RefineryUtilities.positionFrameRandomly(clkOffGraph);
+		clkOffGraph.setVisible(true);
 
-        // Subtract first value from each occurrence in every series
-        for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
-            HashMap<String, Double> current = entry.getValue();
-            for (String s : current.keySet()) {
-                double first = firstValues.get(s);
-                current.put(s, current.get(s) - first);
-            }
-        }
+		// New: clkDriftMap
+		GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0, false, "Clock Drift");
+		clkDriftGraph.pack();
+		RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+		clkDriftGraph.setVisible(true);
 
-        GraphPlotter ambGraph = new GraphPlotter(ambMap, t0,"Ambiguities","Cycles");
-        ambGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ambGraph);
-        ambGraph.setVisible(true);
+		// New: ionoMap
+		GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)", "TEC");
+		ionoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ionoGraph);
+		ionoGraph.setVisible(true);
+
+		// New: tropoMap
+		GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+		tropoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(tropoGraph);
+		tropoGraph.setVisible(true);
+
+		// Existing: ambMap
+		GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0, "Ambiguities", "Cycles");
+		ambGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ambGraph);
+		ambGraph.setVisible(true);
 	}
-	public static void createPPPplots(EKF_PPP_DF ekf,String[] obsvCodeList,String[] ssiLabels, long t0)
-	{
+	public static void createPPPplots(EKF_PPP_LowCostRx ekf, String[] obsvCodeList, String[] ssiLabels, long t0) {
+		for (Measurement meas : ekf.getClkOffMap().keySet()) {
+			GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap().get(meas), obsvCodeList, t0, true,
+					meas.name() + " Clock Offset");
+			clkOffGraph.pack();
+			RefineryUtilities.positionFrameRandomly(clkOffGraph);
+			clkOffGraph.setVisible(true);
+		}
+
+		// New: clkDriftMap
+		for (Measurement meas : ekf.getClkDriftMap().keySet()) {
+			GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap().get(meas), ssiLabels, t0, false,
+					meas.name() + " Clock Drift");
+			clkDriftGraph.pack();
+			RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+			clkDriftGraph.setVisible(true);
+		}
+
+		// New: ionoMap
+		GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)", "TEC");
+		ionoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ionoGraph);
+		ionoGraph.setVisible(true);
+
+		// New: tropoMap
+		GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+		tropoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(tropoGraph);
+		tropoGraph.setVisible(true);
+		// Existing: ambMap
+				TreeMap<Long, HashMap<String, Double>> ambMap = ekf.getAmbMap();
+		HashMap<String, Double> firstValues = new HashMap<>();
+		for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+			HashMap<String, Double> current = entry.getValue();
+			for (String s : current.keySet()) {
+				if (!firstValues.containsKey(s)) {
+					firstValues.put(s, current.get(s));
+				}
+			}
+		}
+
+		// Subtract first value from each occurrence in every series
+		for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+			HashMap<String, Double> current = entry.getValue();
+			for (String s : current.keySet()) {
+				double first = firstValues.get(s);
+				current.put(s, current.get(s) - first);
+			}
+		}
+		
+		// Existing: ambMap
+		GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0, "Ambiguities", "Cycles");
+		ambGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ambGraph);
+		ambGraph.setVisible(true);
+	}
+
+	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP ekf, String[] obsvCodeList,
+			String[] ssiLabels, long t0) {
+		for (Measurement meas : ekf.getClkOffMap().keySet()) {
+			GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap().get(meas), obsvCodeList, t0, true,
+					meas.name() + " Clock Offset");
+			clkOffGraph.pack();
+			RefineryUtilities.positionFrameRandomly(clkOffGraph);
+			clkOffGraph.setVisible(true);
+		}
+
+		// New: clkDriftMap
+		for (Measurement meas : ekf.getClkDriftMap().keySet()) {
+			GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap().get(meas), ssiLabels, t0, false,
+					meas.name() + " Clock Drift");
+			clkDriftGraph.pack();
+			RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+			clkDriftGraph.setVisible(true);
+		}
+		// New: ionoMap
+		GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)", "TEC");
+		ionoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ionoGraph);
+		ionoGraph.setVisible(true);
+
+		// New: tropoMap
+		GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+		tropoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(tropoGraph);
+		tropoGraph.setVisible(true);
+
+		// Existing: ambMap
+		TreeMap<Long, HashMap<String, Double>> ambMap = ekf.getAmbMap();
+
+		HashMap<String, Double> firstValues = new HashMap<>();
+		for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+			HashMap<String, Double> current = entry.getValue();
+			for (String s : current.keySet()) {
+				if (!firstValues.containsKey(s)) {
+					firstValues.put(s, current.get(s));
+				}
+			}
+		}
+
+		// Subtract first value from each occurrence in every series
+		for (Map.Entry<Long, HashMap<String, Double>> entry : ambMap.entrySet()) {
+			HashMap<String, Double> current = entry.getValue();
+			for (String s : current.keySet()) {
+				double first = firstValues.get(s);
+				current.put(s, current.get(s) - first);
+			}
+		}
+
+		GraphPlotter ambGraph = new GraphPlotter(ambMap, t0, "Ambiguities", "Cycles");
+		ambGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ambGraph);
+		ambGraph.setVisible(true);
+	}
+
+	public static void createPPPplots(EKF_PPP_DF ekf, String[] obsvCodeList, String[] ssiLabels, long t0) {
 		// Existing: clkOffMap
-        GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0,true,"Clock Offset");
-        clkOffGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkOffGraph);
-        clkOffGraph.setVisible(true);
-        
-        // New: clkDriftMap
-        GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0,false,"Clock Drift");
-        clkDriftGraph.pack();
-        RefineryUtilities.positionFrameRandomly(clkDriftGraph);
-        clkDriftGraph.setVisible(true);
-        
-        // New: ionoMap
-        GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)","TEC");
-        ionoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ionoGraph);
-        ionoGraph.setVisible(true);
-        
-        // New: tropoMap
-        GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
-        tropoGraph.pack();
-        RefineryUtilities.positionFrameRandomly(tropoGraph);
-        tropoGraph.setVisible(true);
-        
-        // Existing: ambMap
-        GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0,"Ambiguities","Cycles");
-        ambGraph.pack();
-        RefineryUtilities.positionFrameRandomly(ambGraph);
-        ambGraph.setVisible(true);
+		GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0, true, "Clock Offset");
+		clkOffGraph.pack();
+		RefineryUtilities.positionFrameRandomly(clkOffGraph);
+		clkOffGraph.setVisible(true);
+
+		// New: clkDriftMap
+		GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap(), ssiLabels, t0, false, "Clock Drift");
+		clkDriftGraph.pack();
+		RefineryUtilities.positionFrameRandomly(clkDriftGraph);
+		clkDriftGraph.setVisible(true);
+
+		// New: ionoMap
+		GraphPlotter ionoGraph = new GraphPlotter(ekf.getIonoMap(), t0, "Ionospheric Delays (TECU)", "TEC");
+		ionoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ionoGraph);
+		ionoGraph.setVisible(true);
+
+		// New: tropoMap
+		GraphPlotter tropoGraph = new GraphPlotter(ekf.getTropoMap(), t0);
+		tropoGraph.pack();
+		RefineryUtilities.positionFrameRandomly(tropoGraph);
+		tropoGraph.setVisible(true);
+
+		// Existing: ambMap
+		GraphPlotter ambGraph = new GraphPlotter(ekf.getAmbMap(), t0, "Ambiguities", "Cycles");
+		ambGraph.pack();
+		RefineryUtilities.positionFrameRandomly(ambGraph);
+		ambGraph.setVisible(true);
 	}
 }

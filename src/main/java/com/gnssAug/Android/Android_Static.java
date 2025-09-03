@@ -81,7 +81,7 @@ public class Android_Static {
 	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
 			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String dcb_bias_path, String clock_path,
 			String orbit_path, String ionex_path, String osb_bias_path, boolean useIGS, boolean doAnalyze,
-			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName) {
+			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName,boolean repairCS) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -103,7 +103,7 @@ public class Android_Static {
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
 			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/ION_GNSS_2025/"
-					+ mobName + "_GPS_L1_LS_DCB";
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -116,6 +116,7 @@ public class Android_Static {
 			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
 			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
 			System.out.println("Phase_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
+			System.out.println("GIM_TECU_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
 			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
 			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
 			System.out.println("Number of Samples for MC simulation = " + GnssDataConfig.nSamplesMC);
@@ -128,7 +129,7 @@ public class Android_Static {
 			if (useIGS) {
 
 				orbit = new Orbit(orbit_path);
-				//osb_bias = new OSB_Bias(osb_bias_path);
+//				osb_bias = new OSB_Bias(osb_bias_path);
 				dcb_bias = new DCB_Bias(dcb_bias_path);
 				clock = new Clock(clock_path, dcb_bias);
 				ionex = new IONEX(ionex_path);
@@ -908,7 +909,7 @@ public class Android_Static {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new EKF_PPP();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze,
-						trueEcefList, true, false);
+						trueEcefList, true, repairCS,doTest);
 				int n = timeList.size();
 				estPosMap.put("PPP", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {

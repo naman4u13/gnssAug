@@ -231,7 +231,7 @@ public class KFconfig extends KF {
 		final double TECU_var = 0.0611;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
-		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + clkOffNum] = deltaT);
+		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + (2*clkOffNum)] = deltaT);
 
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
@@ -239,9 +239,9 @@ public class KFconfig extends KF {
 		// Position and Velocity
 		for (int i = 0; i < 3; i++) {
 			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-16));
-			_Q.set(i, i + 3 + clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + clkOffNum, i, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, qENU[i] * deltaT);
+			_Q.set(i, i + 3 + (2*clkOffNum), qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + (2*clkOffNum), i, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + (2*clkOffNum), i + 3 + (2*clkOffNum), qENU[i] * deltaT);
 		}
 
 		double clkOffVar = 1e5;
@@ -250,25 +250,32 @@ public class KFconfig extends KF {
 			clkOffVar = 1e5;
 			clkDriftVar = 1e2;
 		}
-		// Receiver Clock Offset
+		// Receiver Code Clock Offset
 		_Q.set(3, 3, clkOffVar*deltaT);
 		// Rx DCB
 		for (int i = 1; i < clkOffNum; i++) {
 			_Q.set(i + 3, i + 3, 1e-4 * deltaT);
 
 		}
+		// Receiver Phase Clock Offset
+		_Q.set(3+clkOffNum, 3+clkOffNum, 1*deltaT);
+		// Rx Differential Phase Bias
+		for (int i = 1; i < clkOffNum; i++) {
+			_Q.set(i + 3+clkOffNum, i + 3+clkOffNum, 1e-4 * deltaT);
+
+		}
 
 		// Clock Drift
 		for (int i = 0; i < clkDriftNum; i++) {
-			_Q.set(i + 6 + clkOffNum, i + 6 + clkOffNum, clkDriftVar * deltaT);
+			_Q.set(i + 6 + (2*clkOffNum), i + 6 + (2*clkOffNum), clkDriftVar * deltaT);
 
 		}
 
 		// Tropo: More than 1cm/sqrt(hr)
-		_Q.set(6 + clkOffNum + clkDriftNum, 6 + clkOffNum + clkDriftNum, (1e-8) * deltaT);
+		_Q.set(6 + (2*clkOffNum) + clkDriftNum, 6 + (2*clkOffNum) + clkDriftNum, (1e-8) * deltaT);
 
 		// Ambiguities
-		for (int i = 6 + clkOffNum + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
+		for (int i = 6 + (2*clkOffNum) + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
 			_Q.set(i, i, 1e-16);
 		}
 
@@ -284,7 +291,7 @@ public class KFconfig extends KF {
 			R.set(i, i, 1);
 		}
 		R.insertIntoThis(0, 0, _R);
-		R.insertIntoThis(3 + clkOffNum, 3 + clkOffNum, _R);
+		R.insertIntoThis(3 + (2*clkOffNum), 3 + (2*clkOffNum), _R);
 
 		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {

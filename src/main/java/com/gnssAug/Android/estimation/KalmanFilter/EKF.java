@@ -90,7 +90,7 @@ public class EKF {
 		 */
 		double[] intialECEF = LinearLeastSquare.getEstPos(SatMap.firstEntry().getValue(), true, useIGS);
 		
-		IntStream.range(0, 3 + m).forEach(i -> x[i][0] = intialECEF[i]);
+		IntStream.range(0, 3).forEach(i -> x[i][0] = intialECEF[i]);
 		IntStream.range(0, 3 + m).forEach(i -> P[i][i] = 100);
 		if (flag == Flag.POSITION) {
 			IntStream.range(3 + m, 3 + (2 * m)).forEach(i -> P[i][i] = 1e13);

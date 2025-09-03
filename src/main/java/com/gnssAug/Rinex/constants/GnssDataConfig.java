@@ -2,9 +2,9 @@ package com.gnssAug.Rinex.constants;
 
 public class GnssDataConfig {
 	
-	final public static double pseudorange_priorVarOfUnitW =1e-2;
-	final public static double doppler_priorVarOfUnitW =3e-4;//Math.pow(0.0979, 2);
-	final public static double tdcp_priorVarOfUnitW =3e-4;//Math.pow(0.05, 2);
+	final public static double pseudorange_priorVarOfUnitW =10;
+	final public static double doppler_priorVarOfUnitW =1e-3;//Math.pow(0.0979, 2);
+	final public static double tdcp_priorVarOfUnitW =1e-3;//Math.pow(0.05, 2);
 	final public static double phase_priorVarOfUnitW =1e-4;//Math.pow(0.05, 2);
 	final public static double GIM_TECU_variance= Math.pow(3,2);//0.0006;
 	final public static double clkDriftVar = 1e5;
@@ -12,4 +12,5 @@ public class GnssDataConfig {
 	final public static double[] qENU_posRandWalk = new double[] { 1e-10,1e-10,1e-10};
 	//final public static double[] qENU_velRandWalk = new double[] { 0.0005, 0.5, 0.01};
 	final public static double[] qENU_velRandWalk = new double[] {  1e-16,1e-16,1e-16 };
+	final public static double nSamplesMC = 1e5;
 }

@@ -25,7 +25,7 @@ public class CycleSlipDetect {
 	private double successRate;
 	private double failureRate;
 	private boolean isWLcomb = false;
-	
+	private boolean exclude = false;
 	public CycleSlipDetect(CycleSlipDetect csdObj) {
 		this( csdObj.getSat(),  csdObj.getDopplerDR(), csdObj.getCarrierPhaseDR(),  csdObj.getIonoRate(),  csdObj.isCS(),
 				csdObj.getWavelength(),  csdObj.getSatVelCorr(),  csdObj.getUnitLOS(),  csdObj.getTime(),csdObj.getTrueDR());
@@ -209,6 +209,14 @@ public class CycleSlipDetect {
 		return igs_sat;
 	}
 
+	public boolean isExclude() {
+		return exclude;
+	}
+
+	public void setExclude(boolean exclude) {
+		this.exclude = exclude;
+	}
+	
 	
 	
 }
