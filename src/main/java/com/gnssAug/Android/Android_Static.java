@@ -104,7 +104,7 @@ public class Android_Static {
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
 			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/ION_GNSS_2025/Pixel7/"
-					+ mobName + "_L1_L5_GPS_GAL_PPP_noRepair";
+					+ mobName + "_L1_GPS_GAL_BEI_PPP_Repair_FDE_lowerFFRT";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
