@@ -97,17 +97,9 @@ public class EKF {
 		} else {
 			double[] intialVel = LinearLeastSquare.getEstVel(SatUtil.createCopy(SatMap.firstEntry().getValue()), isWeighted,
 					true, doTest, false, intialECEF, useIGS);
-			SimpleMatrix intialVelCov =  LinearLeastSquare.getCxx_hat(Measurement.Doppler, "ECEF");
-			IntStream.range(3 + m, 6 + (2 * m)).forEach(i -> x[i][0] = 1e-10);//intialVel[i - (3 + m)]);
-			for(int i=3+m;i<6+(2*m);i++)
-			{
-				for(int j=3+m;j<6+(2*m);j++)
-				{
-					P[i][j] = 1e-10;//intialVelCov.get(i-(3+m), j-(3+m));
-				}
-			}
-			//IntStream.range(3 + m, 6 + m).forEach(i -> P[i][i] = 4);
-			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] += 1e5);
+			IntStream.range(3 + m, 6 + m).forEach(i -> x[i][0] = intialVel[i-3-m]);
+			IntStream.range(3 + m, 6 + m).forEach(i -> P[i][i] = 1e2);
+			IntStream.range(6 + m, 6 + (2 * m)).forEach(i -> P[i][i] = 1e5);
 		}
 
 		kfObj.setState_ProcessCov(x, P);

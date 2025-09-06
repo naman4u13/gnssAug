@@ -98,7 +98,7 @@ public class SingleFreq {
 
 				GNSSLog logObs = gnssLog.get(i);
 				int svid = logObs.getSvid();
-				String code = SSI+""+svid;
+				String code = logObs.getObsvCode()+""+svid;
 				
 				if(discardSet.contains(code))
 				{

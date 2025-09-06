@@ -229,10 +229,21 @@ public class KFconfig extends KF {
 			m = 2;
 		}
 		configPPP( deltaT,  clkOffNum,  clkDriftNum,  totalStateNum,
-			 ionoParams, isAndroid, m);
+			 ionoParams, isAndroid, false);
 	}
 	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
-			ArrayList<double[]> ionoParams,boolean isAndroid,int m) throws Exception {
+			ArrayList<double[]> ionoParams, boolean isAndroid,boolean predictPhaseClock) throws Exception 
+	{
+		int m = 1;
+		if(isAndroid)
+		{
+			m = 2;
+		}
+		configPPP( deltaT,  clkOffNum,  clkDriftNum,  totalStateNum,
+			 ionoParams, isAndroid, m, predictPhaseClock);
+	}
+	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
+			ArrayList<double[]> ionoParams,boolean isAndroid,int m,boolean predictPhaseClock) throws Exception {
 
 		double[] refPos = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 		int ionoParamNum = ionoParams.size();
@@ -242,7 +253,7 @@ public class KFconfig extends KF {
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
 		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + (m*clkOffNum)] = deltaT);
-
+		
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
 
@@ -258,7 +269,7 @@ public class KFconfig extends KF {
 		double clkDriftVar = 0.1;
 		if (isAndroid) {
 			clkOffVar = 1e5;
-			clkDriftVar = 1e2;
+			clkDriftVar = 1;
 		}
 		// Receiver Code Clock Offset
 		_Q.set(3, 3, clkOffVar*deltaT);
@@ -274,6 +285,13 @@ public class KFconfig extends KF {
 			for (int i = 1; i < clkOffNum; i++) {
 				_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, 1e-4 * deltaT);
 
+			}
+			if(predictPhaseClock)
+			{
+				phi[3+clkOffNum][6+(m*clkOffNum)] = deltaT;
+				_Q.set(3 + clkOffNum, 3 + clkOffNum, (clkDriftVar *  Math.pow(deltaT, 3) / 3)+1);
+				_Q.set(3 + clkOffNum, 6 + (m*clkOffNum),clkDriftVar * Math.pow(deltaT, 2) / 2);
+				_Q.set(6 + (m*clkOffNum),3 + clkOffNum, clkDriftVar * Math.pow(deltaT, 2) / 2);
 			}
 		}
 		// Clock Drift

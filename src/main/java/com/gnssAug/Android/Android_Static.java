@@ -103,8 +103,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/ION_GNSS_2025/Pixel7/"
-					+ mobName + "_L1_GPS_GAL_BEI_PPP_Repair_FDE_lowerFFRT";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/ION_GNSS_2025/RxX_Samsung_Galaxy_S20+_5G/"
+					+ mobName + "_L1_L5_GPS_GAL_PPP_Repair_clkDrift_FDE_satExcluded";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -153,7 +153,7 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-//				if(gtIndex>100)
+//				if(gtIndex>880)
 //				{
 //					break;
 //				}
@@ -922,11 +922,11 @@ public class Android_Static {
 					}
 				}
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
-				System.out.println("These satellite have more than 40% phase data with Cycle Slips");
+				System.out.println("These satellite have more than 20% phase data with Cycle Slips");
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
 					double percentage = (csCount[0] * 1.0) / csCount[1];
-					if (percentage > 0.4) {
+					if (percentage > 0.2) {
 						System.out.print(satID + ", ");
 					}
 				}

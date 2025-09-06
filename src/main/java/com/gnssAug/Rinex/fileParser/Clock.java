@@ -35,7 +35,7 @@ public class Clock {
 			int recLen = 60;
 			int[] recFormat = new int[] { 3, 5, 26, 6, 19 };
 
-			if (header[0].split("\\s")[0].trim().equals("3.00")) {
+			if (header[0].split("\\s")[0].trim().startsWith("3.")) {
 				recLen = 65;
 				recFormat = new int[] { 3, 10, 27, 5, 19 };
 			}
