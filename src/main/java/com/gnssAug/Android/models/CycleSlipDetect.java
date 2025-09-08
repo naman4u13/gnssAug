@@ -64,6 +64,7 @@ public class CycleSlipDetect {
 		this.trueDR = trueDR;
 		this.prDR = prDR;
 		
+		
 	}
 	public CycleSlipDetect(com.gnssAug.Rinex.models.Satellite igs_sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,
 			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR,double prDR) {

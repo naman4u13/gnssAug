@@ -91,7 +91,7 @@ public class MainApp {
 //			GNSS_Log.process(basePath);
 //			TreeMap<Long, HashMap<String, ArrayList<GNSSLog>>> gnssLogMaps = GNSS_Log.getGnssLogMaps();
 
-			discardSet = true ? Set.of("C2I22","C2I5", "G1C23", "E5X18", "E5X2", "E5X12", "E5X36", "E1C25", "C2I13", "E1C18") : Set.of("C11", "G12", "G2", "G30");// C33
+			discardSet = true ? Set.of("C2I22") : Set.of("C11", "G12", "G2", "G30");// C33
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);
@@ -110,8 +110,8 @@ public class MainApp {
 			// Urban Static
 			double[] trueEcef = new double[] { 4183777.518, 862857.121, 4721221.153 };
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
-
-			Android_Static.posEstimate(true, 0, 0, 22, obsvCodeList, basePath, trueEcef, dcb_bias_path, clock_path,
+			Set<String> phaseDiscardSet = Set.of("C2I22","C2I5", "G1C23", "E5X18", "E5X2", "E5X12", "E5X36", "E1C25", "C2I13", "E1C18");
+			Android_Static.posEstimate(true, 0, 0, 5, obsvCodeList, basePath, trueEcef, dcb_bias_path, clock_path,
 					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, true);
 			break;
 		case 4:
@@ -143,7 +143,7 @@ public class MainApp {
 			obsvCodeList = new String[] { "G1C"};
 			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 8a/gnss_log_2025_02_16_16_32_22.txt";
 
-			discardSet = true ? Set.of("") : Set.of("E8", "C30", "C43");
+			discardSet = true ? Set.of("C2I22") : Set.of("E8", "C30", "C43");
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);
@@ -162,7 +162,7 @@ public class MainApp {
 
 			llh = new double[] { 51.081628, -114.134081, 1110.130 - 16.7243 };
 			trueEcef = LatLonUtil.lla2ecef(llh, true);
-
+			phaseDiscardSet = Set.of("C2I22","C2I5", "G1C23", "E5X18", "E5X2", "E5X12", "E5X36", "E1C25", "C2I13", "E1C18");
 			Android_Static.posEstimate(true, 0, 0, 22, obsvCodeList, basePath, trueEcef, dcb_bias_path, clock_path,
 					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, false);
 			break;
