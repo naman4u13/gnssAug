@@ -114,6 +114,7 @@ public class DCB_Bias {
 			
 		} else if (SSI == 'E') {
 			HashMap<String, HashMap<String, Double>> galileoMap = biasMap.get(SSI).get(PRN);
+			
 			if (_obsvCode.equals("C5Q")) {
 				ISC = galileoMap.get("C1C").getOrDefault("C5Q", null);
 			} else if (_obsvCode.equals("C5X")) {

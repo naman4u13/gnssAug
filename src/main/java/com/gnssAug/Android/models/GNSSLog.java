@@ -5,8 +5,19 @@ import java.util.Map;
 public class GNSSLog implements Cloneable {
 
 	private static final long nanosInWeek = (long) (604800 * 1e9);
-	private static final Map<Integer, String> freqMap = Map.of(1176450050, "5",1176450000, "5", 1575420000, "1", 1575420030, "1", 1602000000, "1",
-			1561097980, "2",1561098000, "2");
+	private static final Map<Integer, String> freqMap = Map.ofEntries(
+			Map.entry(1176450050, "5"),
+			Map.entry(1176450000, "5"),
+			Map.entry(1176450048, "5"),
+			Map.entry(1575420000, "1"),
+			Map.entry(1575420032, "1"),
+			Map.entry(1575420030, "1"),
+			Map.entry(1602000000, "1"),
+			Map.entry(1561097980, "2"),
+			Map.entry(1561097984, "2"),
+			Map.entry(1561098000, "2"),
+			Map.entry(1207139970, "7")
+			);
 	private static final Map<Integer, String> SSIMap = Map.of(1, "G", 2, "S", 3, "R", 4, "J", 5, "C", 6, "E", 7, "I");
 	private static final Map<Integer, Integer> qzssMap = Map.of(193, 1, 194, 2, 199, 3, 195, 4);
 
@@ -54,10 +65,10 @@ public class GNSSLog implements Cloneable {
 	// GPS week;
 	private int weekNo;
 
-	public GNSSLog()
-	{
+	public GNSSLog() {
 		super();
 	}
+
 	public GNSSLog(GNSSLog log) {
 		super();
 		this.utcTimeMillis = log.utcTimeMillis;
@@ -111,10 +122,10 @@ public class GNSSLog implements Cloneable {
 		this.leapSecond = data[3].isBlank() ? 0 : Integer.parseInt(data[3]);
 		this.timeUncertaintyNanos = data[4].isBlank() ? 0 : Double.parseDouble(data[4]);
 		this.fullBiasNanos = Long.parseLong(data[5]);
-		this.biasNanos = Double.parseDouble(data[6]);
-		this.biasUncertaintyNanos = Double.parseDouble(data[7]);
-		this.driftNanosPerSecond = data[8].isBlank()?0:Double.parseDouble(data[8]);
-		this.driftUncertaintyNanosPerSecond = data[9].isBlank()?0:Double.parseDouble(data[9]);
+		this.biasNanos = data[6].isEmpty()?0:Double.parseDouble(data[6]);
+		this.biasUncertaintyNanos = data[7].isEmpty()?0:Double.parseDouble(data[7]);
+		this.driftNanosPerSecond = data[8].isBlank() ? 0 : Double.parseDouble(data[8]);
+		this.driftUncertaintyNanosPerSecond = data[9].isBlank() ? 0 : Double.parseDouble(data[9]);
 		this.hardwareClockDiscontinuityCount = Integer.parseInt(data[10]);
 		this.svid = Integer.parseInt(data[11]);
 		this.timeOffsetNanos = Double.parseDouble(data[12]);
@@ -135,51 +146,45 @@ public class GNSSLog implements Cloneable {
 		this.multipathIndicator = Integer.parseInt(data[26]);
 		this.snrInDb = data[27].isBlank() ? 0 : Double.parseDouble(data[27]);
 		this.constellationType = Integer.parseInt(data[28]);
-		this.agcDb = data[29].isBlank() ? 0 : Double.parseDouble(data[29]);
-		if (data.length > 30) {
+
+		if (data.length > 29) {
+			this.agcDb = data[29].isBlank() ? 0 : Double.parseDouble(data[29]);
 			this.basebandCn0DbHz = data[30].isBlank() ? 0 : Double.parseDouble(data[30]);
 			this.fullInterSignalBiasNanos = data[31].isBlank() ? 0 : Double.parseDouble(data[31]);
 			this.fullInterSignalBiasUncertaintyNanos = data[32].isBlank() ? 0 : Double.parseDouble(data[32]);
 			this.satelliteInterSignalBiasNanos = data[33].isBlank() ? 0 : Double.parseDouble(data[33]);
 			this.satelliteInterSignalBiasUncertaintyNanos = data[34].isBlank() ? 0 : Double.parseDouble(data[34]);
 			this.codeType = data[35];
-			if(data.length>36)
-			{
-				this.chipsetElapsedRealtimeNanos = data[36].isBlank()?0:Long.parseLong(data[36]);
+			if (data.length > 36) {
+				this.chipsetElapsedRealtimeNanos = data[36].isBlank() ? 0 : Long.parseLong(data[36]);
 			}
 		}
 		int freq = (int) carrierFrequencyHz;
-		if (freq >= 1598062460 && freq <= 1608750000) {
+		if (freq >= 1597781250 && freq <= 1608750000) {
 			freq = (int) 1602e6;
 		}
 
 		String ssi = SSIMap.get(constellationType);
 		String freqID = freqMap.get(freq);
-		String channel = freqID.equals("1") ? "C" : freqID.equals("2") ? "I" : "X";
-
-		if(this.codeType!=null&&!this.codeType.isEmpty())
-		{
-			if(this.codeType.equals("P"))
-			{
-				if(ssi.equals("C"))
-				{
+		String channel = null;
+		channel = freqID.equals("1") ? "C" : freqID.equals("2") ? "I" : freqID.equals("7") ? "Q" : "X";
+		
+		if (this.codeType != null && !this.codeType.isEmpty()) {
+			if (this.codeType.equals("P")) {
+				if (ssi.equals("C")) {
 					channel = "P";
-				}
-				else
-				{
+				} else {
 					throw new Exception("Beidou BDS-3 constellation B1C error");
 				}
 			}
 		}
-		
-		
-		
+
 		if (ssi.equals("J")) {
 			svid = qzssMap.get(svid);
 		}
 		// Temporary solution to correct for time scale offset b/w BDS and GPS time
 		if (ssi.equals("C")) {
-			this.tTx +=14;
+			this.tTx += 14;
 		}
 		obsvCode = ssi + freqID + channel;
 		// Only integer value, haven't subtracted the fractional value
@@ -373,7 +378,7 @@ public class GNSSLog implements Cloneable {
 
 	@Override
 	public GNSSLog clone() throws CloneNotSupportedException {
-	    GNSSLog cloned = (GNSSLog) super.clone();
-	    return cloned;
+		GNSSLog cloned = (GNSSLog) super.clone();
+		return cloned;
 	}
 }

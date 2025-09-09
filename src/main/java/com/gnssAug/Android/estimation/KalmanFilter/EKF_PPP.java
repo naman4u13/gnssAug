@@ -51,6 +51,7 @@ public class EKF_PPP extends EKFParent {
 	private long ambFixedCount = 0;
 	final private int csThresh = 100;
 	final private int consecutiveSlips = 1;
+
 	public EKF_PPP() {
 		vel_kfObj = new KFconfig();
 		pos_kfObj = new KFconfig();
@@ -67,7 +68,7 @@ public class EKF_PPP extends EKFParent {
 			String[] obsvCodeList, boolean doAnalyze, boolean doTest, ArrayList<double[]> truePosEcefList,
 			boolean isStatic, boolean repairCS, boolean fixAmb) throws Exception {
 
-		boolean predictPhaseClock = true;
+		boolean predictPhaseClock = false;
 		int clkOffNum = obsvCodeList.length;
 		ListOrderedSet ssiSet = new ListOrderedSet();
 		for (int i = 0; i < clkOffNum; i++) {
@@ -138,12 +139,13 @@ public class EKF_PPP extends EKFParent {
 		csRepairedCountMap = new TreeMap<Long, Integer>();
 		ambFixedCountMap = new TreeMap<Long, Integer>();
 		consecutiveCSmap = new HashMap<String, Integer>();
-		return iterate(SatMap, timeList, ssiSet, doAnalyze, doTest, truePosEcefList, obsvCodeList, repairCS, fixAmb,predictPhaseClock);
+		return iterate(SatMap, timeList, ssiSet, doAnalyze, doTest, truePosEcefList, obsvCodeList, repairCS, fixAmb,
+				predictPhaseClock);
 	}
 
 	TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
 			ListOrderedSet ssiSet, boolean doAnalyze, boolean doTest, ArrayList<double[]> truePosEcefList,
-			String[] obsvCodeList, boolean repairCS, boolean fixAmb,boolean predictPhaseClock) throws Exception {
+			String[] obsvCodeList, boolean repairCS, boolean fixAmb, boolean predictPhaseClock) throws Exception {
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
 		HashMap<String, Integer> ambMap = new HashMap<String, Integer>();
 		HashMap<String, Integer> ionoMap = new HashMap<String, Integer>();
@@ -153,9 +155,6 @@ public class EKF_PPP extends EKFParent {
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
 			System.out.println("\n\n Epoch : " + i);
-//			if (i == 148||i==147) {
-//				System.out.println();
-//			}
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
@@ -208,7 +207,7 @@ public class EKF_PPP extends EKFParent {
 			runFilter_vel(currentTime, deltaT, csdList, ssiSet, true, i, refPos, repairCS, doAnalyze, doTest);
 
 			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambMap, ionoMap, obsvCodeList, fixAmb, doAnalyze,
-					doTest,predictPhaseClock);
+					doTest, predictPhaseClock);
 			SimpleMatrix x = pos_kfObj.getState();
 			SimpleMatrix P = pos_kfObj.getCovariance();
 
@@ -470,7 +469,8 @@ public class EKF_PPP extends EKFParent {
 
 	private void runFilter_pos(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,
 			ListOrderedSet ssiSet, HashMap<String, Integer> ambMap, HashMap<String, Integer> ionoMap,
-			String[] obsvCodeList, boolean fixAmb, boolean doAnalyze, boolean doTest,boolean predictPhaseClock) throws Exception {
+			String[] obsvCodeList, boolean fixAmb, boolean doAnalyze, boolean doTest, boolean predictPhaseClock)
+			throws Exception {
 		HashMap<String, Integer> new_ambMap = new HashMap<String, Integer>();
 		HashMap<String, Integer> new_ionoMap = new HashMap<String, Integer>();
 		ListOrderedSet uniqSat = new ListOrderedSet();
@@ -478,7 +478,6 @@ public class EKF_PPP extends EKFParent {
 		ArrayList<String> list_ = new ArrayList<String>();
 		// Satellite count
 		int n = csdList.size();
-		int ambCount = 0;
 		ArrayList<Satellite> satList = new ArrayList<Satellite>();
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
@@ -492,20 +491,12 @@ public class EKF_PPP extends EKFParent {
 				double ionoCoeff = (40.3 * 1e16) / freq2;
 				ionoParams.add(new double[] { sat.getElevAzm()[0], sat.getIonoErr() / ionoCoeff });
 			}
-			if(!csdObj.isExclude())
-			{
-				ambCount++;
-			}
-		}
-		if(ambCount!=n)
-		{
-			System.out.println();
 		}
 		int clkOffNum = obsvCodeList.length;
 		int clkDriftNum = ssiSet.size();
 		int ionoParamNum = uniqSat.size();
 		int coreStateNum = 6 + (2 * clkOffNum) + clkDriftNum + 1;
-		int totalStateNum = coreStateNum + ambCount + ionoParamNum;
+		int totalStateNum = coreStateNum + n + ionoParamNum;
 
 		ArrayList<String> uniqSatList = new ArrayList<String>(uniqSat);
 
@@ -515,17 +506,12 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix _P = new SimpleMatrix(totalStateNum, totalStateNum);
 		_x.insertIntoThis(0, 0, x.extractMatrix(0, coreStateNum, 0, 1));
 		_P.insertIntoThis(0, 0, P.extractMatrix(0, coreStateNum, 0, coreStateNum));
-		int _i = coreStateNum;
-		for (int i = 0; i < n; i++) {
-			CycleSlipDetect csdObj = csdList.get(i);
-			if(csdObj.isExclude()){
-				
-				continue;
-			}
-			Satellite sat = satList.get(i);
+		for (int j = coreStateNum; j < totalStateNum - ionoParamNum; j++) {
+			Satellite sat = satList.get(j - coreStateNum);
+			CycleSlipDetect csdObj = csdList.get(j - coreStateNum);
 			String satObsvCode = sat.getObsvCode() + "" + sat.getSvid();
 			boolean flag1 = csdObj.isCS() == false;
-			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true;
+			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isExclude() == false;
 			boolean flag = flag1 || flag2;
 			if (ambMap.containsKey(satObsvCode) && flag) {
 				int k = ambMap.get(satObsvCode);
@@ -535,40 +521,35 @@ public class EKF_PPP extends EKFParent {
 					repairedCSval = csdObj.getIntAmb();
 					repairedCSVar = csdObj.getIntAmbCov();
 				}
-				_x.set(_i, x.get(k) + repairedCSval);
-				_P.set(_i, _i, P.get(k, k) + repairedCSVar);
+				_x.set(j, x.get(k) + repairedCSval);
+				_P.set(j, j, P.get(k, k) + repairedCSVar);
 				for (int l = 0; l < coreStateNum; l++) {
-					_P.set(l, _i, P.get(l, k));
-					_P.set(_i, l, P.get(k, l));
+					_P.set(l, j, P.get(l, k));
+					_P.set(j, l, P.get(k, l));
 				}
-				int _j = _i+1;
-				for (int j = i + 1; j < n; j++) {
-					CycleSlipDetect _csdObj = csdList.get(j);
-					if(_csdObj.isExclude()){
-						
-						continue;
-					}
-					Satellite _sat = satList.get(j);
+				for (int l = j + 1; l < coreStateNum + n; l++) {
+					Satellite _sat = satList.get(l - coreStateNum);
 					String _satObsvCode = _sat.getObsvCode() + "" + _sat.getSvid();
+					CycleSlipDetect _csdObj = csdList.get(l - coreStateNum);
+
 					boolean _flag1 = _csdObj.isCS() == false;
-					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true;
-							
+					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true
+							&& _csdObj.isExclude() == false;
 					boolean _flag = _flag1 || _flag2;
 					if (ambMap.containsKey(_satObsvCode) && _flag) {
 						int _k = ambMap.get(_satObsvCode);
-						_P.set(_i, _j, P.get(k, _k));
-						_P.set(_j, _i, P.get(_k, k));
+						_P.set(j, l, P.get(k, _k));
+						_P.set(l, j, P.get(_k, k));
 
 					}
-					_j++;
 				}
-				for (int j = coreStateNum + ambCount; j < totalStateNum; j++) {
+				for (int l = coreStateNum + n; l < totalStateNum; l++) {
 
-					String satID = uniqSatList.get(j - (coreStateNum + ambCount));
+					String satID = uniqSatList.get(l - (coreStateNum + n));
 					if (ionoMap.containsKey(satID)) {
 						int _k = ionoMap.get(satID);
-						_P.set(_i, j, P.get(k, _k));
-						_P.set(j, _i, P.get(_k, k));
+						_P.set(j, l, P.get(k, _k));
+						_P.set(l, j, P.get(_k, k));
 
 					}
 				}
@@ -581,57 +562,60 @@ public class EKF_PPP extends EKFParent {
 //					_x.set(j, x.get(k));
 //				}
 //				else {
-				_x.set(_i, (sat.getPhase() - sat.getPseudorange()-x.get(3+clkOffNum)) / wl);
-				//}
-				_P.set(_i, _i, 1e16);
+				double codeClkOffVal = 0;
+				for (int l = 0; l < clkOffNum; l++) {
+					if (sat.getObsvCode().equals(obsvCodeList[l])) {
+						codeClkOffVal = x.get(3 + l);
+					}
+
+				}
+				_x.set(j, (sat.getPhase() - (sat.getPseudorange() - codeClkOffVal) - x.get(3 + clkOffNum)+50) / wl);
+				_P.set(j, j, 1e16);
 
 			}
 
-			new_ambMap.put(satObsvCode, _i);
-			System.out.println(satObsvCode + " value: " + _x.get(_i) + "  variance  " + _P.get(_i, _i));
-			_i++;
+			new_ambMap.put(satObsvCode, j);
+			System.out.println(satObsvCode + " value: " + _x.get(j) + "  variance  " + _P.get(j, j));
 		}
 		System.out.println("\n");
 		ambMap.clear();
 		ambMap.putAll(new_ambMap);
-		
-		for (int i = coreStateNum + ambCount; i < totalStateNum; i++) {
 
-			String satID = uniqSatList.get(i-(coreStateNum + ambCount));
+		for (int j = coreStateNum + n; j < totalStateNum; j++) {
+
+			String satID = uniqSatList.get(j - (coreStateNum + n));
 			if (ionoMap.containsKey(satID)) {
 				int k = ionoMap.get(satID);
-				_x.set(i, x.get(k));
-				_P.set(i, i, P.get(k, k));
+				_x.set(j, x.get(k));
+				_P.set(j, j, P.get(k, k));
 				for (int l = 0; l < coreStateNum; l++) {
-					_P.set(l, i, P.get(l, k));
-					_P.set(i, l, P.get(k, l));
+					_P.set(l, j, P.get(l, k));
+					_P.set(j, l, P.get(k, l));
 				}
-				
-				for (int j = i + 1; j < totalStateNum; j++) {
-					String _satID = uniqSatList.get(j-(coreStateNum + ambCount));
+				for (int l = j + 1; l < totalStateNum; l++) {
+					String _satID = uniqSatList.get(l - (coreStateNum + n));
 					if (ionoMap.containsKey(_satID)) {
 						int _k = ionoMap.get(_satID);
-						_P.set(i, j, P.get(k, _k));
-						_P.set(j, i, P.get(_k, k));
+						_P.set(j, l, P.get(k, _k));
+						_P.set(l, j, P.get(_k, k));
 
 					}
 				}
 
 			} else {
 
-				_x.set(i, 0);
-				_P.set(i, i, 1e6);
+				_x.set(j, 0);
+				_P.set(j, j, 1e6);
 
 			}
 
-			new_ionoMap.put(satID, i);
-			
+			new_ionoMap.put(satID, j);
 		}
 		ionoMap.clear();
 		ionoMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, true,predictPhaseClock);
+		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, true, predictPhaseClock);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 
@@ -639,13 +623,6 @@ public class EKF_PPP extends EKFParent {
 		SimpleMatrix Cyy_pseudorange = SimpleMatrix.identity(n).scale(GnssDataConfig.pseudorange_priorVarOfUnitW);// Weight.getNormCyy(satList,
 		// GnssDataConfig.pseudorange_priorVarOfUnitW);
 		SimpleMatrix Cyy_phase = SimpleMatrix.identity(n).scale(GnssDataConfig.phase_priorVarOfUnitW);
-		for(int i=0;i<n;i++)
-		{
-			if(csdList.get(i).isExclude())
-			{
-				Cyy_phase.set(i, i,1e16);
-			}
-		}
 		SimpleMatrix Cyy_doppler = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);// Weight.getNormCyy(satList,
 		// GnssDataConfig.doppler_priorVarOfUnitW);
 		SimpleMatrix Cyy_GIM_iono = SimpleMatrix.identity(ionoParamNum).scale(GnssDataConfig.GIM_TECU_variance);
@@ -653,7 +630,7 @@ public class EKF_PPP extends EKFParent {
 		R.insertIntoThis(n, n, Cyy_phase);
 		R.insertIntoThis(2 * n, 2 * n, Cyy_doppler);
 		R.insertIntoThis(3 * n, 3 * n, Cyy_GIM_iono);
-		Object[] z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum,ambCount, n, totalStateNum, satList,
+		Object[] z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
 				obsvCodeList, ionoParams, csdList, uniqSatList, ssiSet, false, currentTime);
 		SimpleMatrix z = (SimpleMatrix) z_ze_H[0];
 		SimpleMatrix ze = (SimpleMatrix) z_ze_H[1];
@@ -686,18 +663,18 @@ public class EKF_PPP extends EKFParent {
 //			System.out.println("Design Matrix");
 //			System.out.println(H.toString());
 			SimpleMatrix mainVar = P.diag();
-			System.out.println("Position Variance + " + mainVar.extractMatrix(0, 3, 0, 1));
-			System.out.println("Code Clock Offsets Variance + " + mainVar.extractMatrix(3, 3 + clkOffNum, 0, 1));
-			System.out.println("Phase Clock Offsets Variance + "
-					+ mainVar.extractMatrix(3 + clkOffNum, 3 + (2 * clkOffNum), 0, 1));
-			System.out.println(
-					"Velocity Variance + " + mainVar.extractMatrix(3 + (2 * clkOffNum), 3 + (2 * clkOffNum) + 3, 0, 1));
-			System.out.println("Clock Drifts Variance + "
-					+ mainVar.extractMatrix(3 + (2 * clkOffNum) + 3, 3 + (2 * clkOffNum) + 3 + clkDriftNum, 0, 1));
-			System.out.println("Troposphere Variance + " + mainVar.extractMatrix(3 + (2 * clkOffNum) + 3 + clkDriftNum,
-					3 + (2 * clkOffNum) + 3 + clkDriftNum + 1, 0, 1));
-			System.out.println("Ambiguities Variance + " + mainVar.extractMatrix(coreStateNum, coreStateNum + ambCount, 0, 1));
-			System.out.println("Ionosphere Variance + " + mainVar.extractMatrix(coreStateNum + ambCount, totalStateNum, 0, 1));
+//			System.out.println("Position Variance + " + mainVar.extractMatrix(0, 3, 0, 1));
+//			System.out.println("Code Clock Offsets Variance + " + mainVar.extractMatrix(3, 3 + clkOffNum, 0, 1));
+//			System.out.println("Phase Clock Offsets Variance + "
+//					+ mainVar.extractMatrix(3 + clkOffNum, 3 + (2 * clkOffNum), 0, 1));
+//			System.out.println(
+//					"Velocity Variance + " + mainVar.extractMatrix(3 + (2 * clkOffNum), 3 + (2 * clkOffNum) + 3, 0, 1));
+//			System.out.println("Clock Drifts Variance + "
+//					+ mainVar.extractMatrix(3 + (2 * clkOffNum) + 3, 3 + (2 * clkOffNum) + 3 + clkDriftNum, 0, 1));
+//			System.out.println("Troposphere Variance + " + mainVar.extractMatrix(3 + (2 * clkOffNum) + 3 + clkDriftNum,
+//					3 + (2 * clkOffNum) + 3 + clkDriftNum + 1, 0, 1));
+//			System.out.println("Ambiguities Variance + " + mainVar.extractMatrix(coreStateNum, coreStateNum + n, 0, 1));
+//			System.out.println("Ionosphere Variance + " + mainVar.extractMatrix(coreStateNum + n, totalStateNum, 0, 1));
 			SimpleMatrix RotMat = new SimpleMatrix(3, 3);
 			RotMat.insertIntoThis(0, 0, new SimpleMatrix(
 					LatLonUtil.getEcef2EnuRotMat(Matrix.matrix2ArrayVec(x.extractMatrix(0, 3, 0, 1)))));
@@ -706,12 +683,182 @@ public class EKF_PPP extends EKFParent {
 //			SimpleMatrix _dop = RotMat.mult((H_dop.transpose().mult(H_dop)).invert()).mult(RotMat.transpose());
 //			double[] dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2) };
 			dopMap.put(currentTime, new double[] { 0, 0, 0 });
-			z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum,ambCount, n, totalStateNum, satList,
+			z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
 					obsvCodeList, ionoParams, csdList, uniqSatList, ssiSet, true, currentTime);
 			z = (SimpleMatrix) z_ze_H[0];
 			ze = (SimpleMatrix) z_ze_H[1];
 			performAnalysis(z, ze, satList, R, H, currentTime, pos_kfObj);
 
+		}
+		// Ambiguity fixing for position filter
+		if (n > 0 && fixAmb) {
+			x = pos_kfObj.getState();
+			P = pos_kfObj.getCovariance();
+			SimpleMatrix floatAmb = x.extractMatrix(coreStateNum, coreStateNum + n, 0, 1);
+			SimpleMatrix floatAmbCov = P.extractMatrix(coreStateNum, coreStateNum + n, coreStateNum, coreStateNum + n);
+			System.out.println("Float Ambiguity");
+			System.out.println(floatAmb.toString());
+			System.out.println("Float Ambiguity Covariance");
+			System.out.println(floatAmbCov.toString());
+
+			// ADD BSD HERE
+
+			// Group satellites by system
+			HashMap<String, ArrayList<Integer>> sysGroups = new HashMap<>();
+			for (int i = 0; i < n; i++) {
+				String groupKey = satList.get(i).getObsvCode(); // e.g., "G1C" for system + freq
+				sysGroups.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(i);
+			}
+			boolean skipAR = false;
+			// Select reference satellite per system based on elevation and CN0
+			HashMap<String, Integer> refs = new HashMap<>();
+			for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+				String sys = entry.getKey();
+				ArrayList<Integer> idxs = entry.getValue();
+				int refIdx = -1;
+				double maxWeight = -1.0;
+				for (int idx : idxs) {
+					CycleSlipDetect csdObj = csdList.get(idx);
+					if (csdObj.isCS()) {
+						continue;
+					}
+					Satellite sat = satList.get(idx);
+					double weight = 1.0 / Weight.computeCoVariance(sat.getCn0DbHz(), sat.getElevAzm()[0]);
+					if (weight > maxWeight) {
+						maxWeight = weight;
+						refIdx = idx;
+					}
+				}
+				if (refIdx != -1) {
+					refs.put(sys, refIdx);
+				} else {
+					skipAR = true;
+					break;
+				}
+			}
+
+			int sd_n = 0;
+			for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+				String sys = entry.getKey();
+				if (refs.containsKey(sys)) {
+					sd_n += entry.getValue().size() - 1;
+				}
+			}
+			if (sd_n <= 0 || skipAR) {
+				// No AR possible, skip or handle as float
+				System.out.println("Insufficient satellites for BSD AR");
+			} else {
+				// Build transformation matrix Z (sd_n x n)
+				SimpleMatrix Z = new SimpleMatrix(sd_n, n);
+				int row = 0;
+				for (Map.Entry<String, ArrayList<Integer>> entry : sysGroups.entrySet()) {
+					String sys = entry.getKey();
+					if (!refs.containsKey(sys)) {
+						continue;
+					}
+					int ref = refs.get(sys);
+					ArrayList<Integer> idxs = entry.getValue();
+					for (int idx : idxs) {
+						if (idx == ref) {
+							continue;
+						}
+						Z.set(row, idx, 1.0);
+						Z.set(row, ref, -1.0);
+						row++;
+					}
+				}
+
+				// Compute SD float ambiguities and covariance
+				SimpleMatrix sd_a = Z.mult(floatAmb);
+				SimpleMatrix sd_Q = Z.mult(floatAmbCov).mult(Z.transpose());
+				sd_Q = sd_Q.plus(sd_Q.transpose()).scale(0.5);
+
+				// Perform LAMBDA on SD
+				boolean estimateVar = false;
+				LambdaResult lmd = LAMBDA.computeLambda(sd_a, sd_Q, EstimatorType.PAR, estimateVar, 1, 0.99999);
+				int nFixed = lmd.getnFixed();
+				double Ps = lmd.getSr();
+				SimpleMatrix sd_fix = lmd.getaFix();
+				SimpleMatrix sd_Qfix = lmd.getQaFix();
+				System.out.println(" Failure Rate : " + (1 - Ps));
+				if (nFixed != 0) {
+					System.out.println(" N Fixed (SD): " + nFixed);
+
+					// Compute pseudoinverse of SD cov for stability (handles rank issues)
+					SimpleMatrix sd_Q_inv = sd_Q.pseudoInverse(); // Use EJML's pseudoInverse()
+
+					// Optional regularization if sd_Q is ill-conditioned
+					double epsilon = 1e-8;
+					sd_Q_inv = (sd_Q.plus(SimpleMatrix.identity(sd_n).scale(epsilon))).invert();
+
+					// Recovery: UD fixed mean adjustment
+					SimpleMatrix delta_sd = sd_fix.minus(Z.mult(floatAmb));
+					SimpleMatrix adjustment = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(delta_sd);
+					SimpleMatrix a_caron = floatAmb.plus(adjustment);
+
+					// Recovery: UD fixed covariance (conditional variance)
+					SimpleMatrix tempMat = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(Z).mult(floatAmbCov);
+					SimpleMatrix Qa_caron = floatAmbCov.minus(tempMat); // Base conditional cov
+					// Add back fixed SD cov contribution (for partial fixes)
+					SimpleMatrix fixed_contrib = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(sd_Qfix)
+							.mult(sd_Q_inv).mult(Z).mult(floatAmbCov);
+					Qa_caron = Qa_caron.plus(fixed_contrib);
+					Qa_caron = Qa_caron.plus(Qa_caron.transpose()).scale(0.5); // Symmetrize
+
+					// Now use a_caron and Qa_caron in the conditional update
+					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
+					SimpleMatrix delta_a = a_hat.minus(a_caron);
+
+					int bSize = coreStateNum;
+					int aSize = n;
+					int cSize = ionoParamNum;
+					int ionoStart = coreStateNum + n;
+					int ionoEnd = ionoStart + cSize;
+					SimpleMatrix Cba = P.extractMatrix(0, bSize, coreStateNum, coreStateNum + aSize);
+					SimpleMatrix Cca = P.extractMatrix(ionoStart, ionoEnd, coreStateNum, coreStateNum + aSize);
+					SimpleMatrix Cbc = P.extractMatrix(0, bSize, ionoStart, ionoEnd);
+					SimpleMatrix Cbb_hat = P.extractMatrix(0, bSize, 0, bSize);
+					SimpleMatrix Ccc_hat = P.extractMatrix(ionoStart, ionoEnd, ionoStart, ionoEnd);
+					SimpleMatrix b_hat = x.extractMatrix(0, bSize, 0, 1);
+					SimpleMatrix c_hat = x.extractMatrix(ionoStart, ionoEnd, 0, 1);
+					SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
+					SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(delta_a));
+					SimpleMatrix c_caron = c_hat.minus(Cca.mult(Caa_hat_inv).mult(delta_a));
+					SimpleMatrix temp = Caa_hat_inv.mult(Qa_caron).mult(Caa_hat_inv);
+					SimpleMatrix Pbb_c = Cbb_hat.minus(Cba.mult(Caa_hat_inv).mult(Cba.transpose()))
+							.plus(Cba.mult(temp).mult(Cba.transpose()));
+					SimpleMatrix Pcc_c = Ccc_hat.minus(Cca.mult(Caa_hat_inv).mult(Cca.transpose()))
+							.plus(Cca.mult(temp).mult(Cca.transpose()));
+					SimpleMatrix Pbc_c = Cbc.minus(Cba.mult(Caa_hat_inv).mult(Cca.transpose()))
+							.plus(Cba.mult(temp).mult(Cca.transpose()));
+					SimpleMatrix Pba_c = Cba.mult(Caa_hat_inv).mult(Qa_caron);
+					SimpleMatrix Pca_c = Cca.mult(Caa_hat_inv).mult(Qa_caron);
+					SimpleMatrix x_new = new SimpleMatrix(totalStateNum, 1);
+					x_new.insertIntoThis(0, 0, b_caron);
+					x_new.insertIntoThis(coreStateNum, 0, a_caron);
+					x_new.insertIntoThis(ionoStart, 0, c_caron);
+					SimpleMatrix P_new = new SimpleMatrix(totalStateNum, totalStateNum);
+					P_new.insertIntoThis(0, 0, Pbb_c);
+					P_new.insertIntoThis(coreStateNum, coreStateNum, Qa_caron);
+					P_new.insertIntoThis(ionoStart, ionoStart, Pcc_c);
+					P_new.insertIntoThis(0, coreStateNum, Pba_c);
+					P_new.insertIntoThis(coreStateNum, 0, Pba_c.transpose());
+					P_new.insertIntoThis(0, ionoStart, Pbc_c);
+					P_new.insertIntoThis(ionoStart, 0, Pbc_c.transpose());
+					P_new.insertIntoThis(coreStateNum, ionoStart, Pca_c.transpose());
+					P_new.insertIntoThis(ionoStart, coreStateNum, Pca_c);
+					P_new = P_new.plus(P_new.transpose()).scale(0.5);
+					pos_kfObj.setState_ProcessCov(x_new, P_new);
+					System.out.println("Fixed Ambiguity Sequence");
+					System.out.println(a_caron.toString());
+					System.out.println("Fixed Ambiguity Variance");
+					System.out.println(Qa_caron.toString());
+					System.out.println(" N Fixed : " + nFixed);
+
+					ambFixedCountMap.put(currentTime, nFixed);
+					ambFixedCount += nFixed;
+				}
+			}
 		}
 	}
 
@@ -813,7 +960,8 @@ public class EKF_PPP extends EKFParent {
 		}
 		// Detection
 		double globalPVal = 1 - csd.cumulativeProbability(globalTq);
-		while (globalPVal < alpha && redunNo > (n / 2.0)) {
+		int count = 0;
+		while (globalPVal < alpha && redunNo > (n / 2.0)&&count<(n/2)) {
 			double max_w = Double.MIN_VALUE;
 			int index = -1;
 			for (int i = 0; i < n; i++) {
@@ -839,13 +987,14 @@ public class EKF_PPP extends EKFParent {
 			}
 			csd = new ChiSquaredDistribution(redunNo);
 			globalPVal = 1 - csd.cumulativeProbability(globalTq);
+			count++;
 		}
 
 		return R;
 
 	}
 
-	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum, int ionoParamNum,int ambCount,
+	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum, int ionoParamNum,
 			int n, int totalStateNum, ArrayList<Satellite> satList, String[] obsvCodeList,
 			ArrayList<double[]> ionoParams, ArrayList<CycleSlipDetect> csdList, ArrayList<String> uniqSatList,
 			ListOrderedSet ssiSet, boolean doAnalyze, long currentTime) {
@@ -863,8 +1012,8 @@ public class EKF_PPP extends EKFParent {
 			rxClkDrift[i] = x.get(6 + (2 * clkOffNum) + i);
 		}
 		double estTropo = x.get(coreStateNum - 1);
-		SimpleMatrix estAmb = x.extractMatrix(coreStateNum, coreStateNum + ambCount, 0, 1);
-		SimpleMatrix estIonoTec = x.extractMatrix(coreStateNum + ambCount, totalStateNum, 0, 1);
+		SimpleMatrix estAmb = x.extractMatrix(coreStateNum, coreStateNum + n, 0, 1);
+		SimpleMatrix estIonoTec = x.extractMatrix(coreStateNum + n, totalStateNum, 0, 1);
 		if (doAnalyze) {
 			tropoMap.put(currentTime, estTropo);
 			clkOffMap.get(Measurement.Pseudorange).put(currentTime, rxCodeClkOff);
@@ -880,7 +1029,6 @@ public class EKF_PPP extends EKFParent {
 		H.insertIntoThis(2 * n, 3 + (2 * clkOffNum), unitLOS.scale(-1));
 		HashMap<String, Double> _ionoMap = new HashMap<String, Double>();
 		HashMap<String, Double> _ambMap = new HashMap<String, Double>();
-		int _i = 0;
 		for (int i = 0; i < n; i++) {
 			Satellite sat = satList.get(i);
 			CycleSlipDetect csdObj = csdList.get(i);
@@ -891,17 +1039,7 @@ public class EKF_PPP extends EKFParent {
 			double freq2 = Math.pow(sat.getCarrierFrequencyHz(), 2);
 			double ionoCoeff = (40.3 * 1e16) / freq2;
 			int ionoIndex = uniqSatList.indexOf(satID);
-			double estAmbVal = 0;
-			if(!csdObj.isExclude())
-			{
-				estAmbVal = estAmb.get(_i);
-				H.set(i + n, coreStateNum + _i, wavelength);
-				if (doAnalyze) {
-					_ionoMap.put(satID, estIonoTec.get(ionoIndex));
-					_ambMap.put(sat.getObsvCode() + "" + sat.getSvid(), estAmb.get(_i));
-				}
-				_i++;
-			}
+
 			z.set(i, sat.getPseudorange());
 			z.set(i + n, sat.getPhase());
 			z.set(i + (2 * n), csdObj.getDopplerDR() - csdObj.getSatVelCorr());
@@ -909,7 +1047,7 @@ public class EKF_PPP extends EKFParent {
 					.map(j -> j * j).reduce(0, (j, k) -> j + k));
 			double estPR = geometricRange + (sat.getWetMF() * estTropo) + (ionoCoeff * estIonoTec.get(ionoIndex));
 			double estCP = geometricRange + (sat.getWetMF() * estTropo) - (ionoCoeff * estIonoTec.get(ionoIndex))
-					+ (wavelength * estAmbVal);
+					+ (wavelength * estAmb.get(i));
 			ze.set(i, estPR);
 			ze.set(i + n, estCP);
 			ze.set(i + (2 * n), H.extractMatrix(i, i + 1, 0, 3).mult(new SimpleMatrix(3, 1, true, estVel)).get(0));
@@ -938,17 +1076,18 @@ public class EKF_PPP extends EKFParent {
 			}
 			H.set(i, coreStateNum - 1, sat.getWetMF());
 			H.set(i + n, coreStateNum - 1, sat.getWetMF());
-			
-			H.set(i, coreStateNum + ambCount + ionoIndex, ionoCoeff);
-			H.set(i + n, coreStateNum + ambCount + ionoIndex, -ionoCoeff);
+			H.set(i + n, coreStateNum + i, wavelength);
+			H.set(i, coreStateNum + n + ionoIndex, ionoCoeff);
+			H.set(i + n, coreStateNum + n + ionoIndex, -ionoCoeff);
 			if (doAnalyze) {
 				_ionoMap.put(satID, estIonoTec.get(ionoIndex));
+				_ambMap.put(sat.getObsvCode() + "" + sat.getSvid(), estAmb.get(i));
 			}
 		}
 		for (int i = 0; i < ionoParamNum; i++) {
 			z.set(i + (3 * n), ionoParams.get(i)[1]);
-			ze.set(i + (3 * n), x.get(coreStateNum + ambCount + i));
-			H.set(i + (3 * n), coreStateNum + ambCount + i, 1);
+			ze.set(i + (3 * n), x.get(coreStateNum + n + i));
+			H.set(i + (3 * n), coreStateNum + n + i, 1);
 		}
 		if (doAnalyze) {
 			ionoMap.put(currentTime, _ionoMap);

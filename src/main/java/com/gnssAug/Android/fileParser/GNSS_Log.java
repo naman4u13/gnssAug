@@ -44,13 +44,17 @@ public class GNSS_Log {
 			// Map<String, AndroidSensor> imuMap = Map.of("Unc",
 			for (String line : lines) {
 				String[] data = line.trim().split(",");
-				if (data[0].equals("Raw")) {
+				if (data[0].equals("Raw")||data[0].equals("RAW")) {
+					if(data.length<29)
+					{
+						continue;
+					}
 					GNSSLog log = new GNSSLog(data);
 					long tRx = Math.round(log.gettRx() * 1e3);
 					String obsvCode = log.getObsvCode();
 					gnssLogMaps.computeIfAbsent(tRx, k -> new HashMap<String, ArrayList<GNSSLog>>())
 							.computeIfAbsent(obsvCode, k -> new ArrayList<GNSSLog>()).add(log);
-					logs.add(log.toString().split(","));
+//					logs.add(log.toString().split(","));
 					if ((log.getBootGPStime() - bootGPStime) / 1e6 > 2) {
 						if (bootGPStime == 0) {
 							bootGPStime = log.getBootGPStime();

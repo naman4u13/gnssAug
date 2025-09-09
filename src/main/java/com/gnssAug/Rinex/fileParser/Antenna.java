@@ -241,7 +241,7 @@ public class Antenna {
 		if (magJ < 1e-6) {
 			// Near collinear (potential eclipse): Use arbitrary perpendicular basis
 			// TODO: Implement full eclipse yaw model (e.g., Kouba 2009)
-			System.err.println("Near eclipse detected for Sat " + SVID + "; using fallback basis.");
+			System.err.println("Near eclipse detected for Sat "+obsvCode + SVID + "; using fallback basis.");
 			// Arbitrary j perpendicular to nadir (e.g., cross with [0,0,1] or fixed)
 			double[] arbitrary = { 0.0, 0.0, 1.0 };
 			j = Vector.crossProd(unitNadir, arbitrary);
