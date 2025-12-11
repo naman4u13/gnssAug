@@ -103,8 +103,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-10_urban_static/ION_GNSS_2025/Redmi_Note_9T/"
-					+ mobName + "_L1_GPS_GAL_BEI_PPP_noRepair_FDE";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/ION_GNSS_2025/RxX_Samsung_Galaxy_S20+_5G_final/"
+					+ mobName + "_test2";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -153,7 +153,7 @@ public class Android_Static {
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if(gtIndex>3600)
+				if(gtIndex>330)
 				{
 					break;
 				}
@@ -168,15 +168,14 @@ public class Android_Static {
 					continue;
 
 				}
-				refUserEcef = new double[] { 4183748.339, 862806.185, 4721229.282 };// new double[3];
-//				try {
-//					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
-//				} catch (org.ejml.data.SingularMatrixException e) {
-//					// TODO: handle exception
-//
-//					e.printStackTrace();
-//					continue;
-//				}
+				try {
+					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
+				} catch (org.ejml.data.SingularMatrixException e) {
+					// TODO: handle exception
+
+					e.printStackTrace();
+					continue;
+				}
 
 				for (Satellite sat : satList) {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(trueEcef, sat.getSatEci()));
@@ -1008,6 +1007,8 @@ public class Android_Static {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
 					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0));
+					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
+					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());  
 				}
 			}
 
@@ -1188,6 +1189,7 @@ public class Android_Static {
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"), timeList);
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
+					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
 
 				}
 			}

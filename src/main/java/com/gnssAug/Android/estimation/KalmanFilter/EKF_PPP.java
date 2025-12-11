@@ -68,7 +68,7 @@ public class EKF_PPP extends EKFParent {
 			String[] obsvCodeList, boolean doAnalyze, boolean doTest, ArrayList<double[]> truePosEcefList,
 			boolean isStatic, boolean repairCS, boolean fixAmb) throws Exception {
 
-		boolean predictPhaseClock = false;
+		boolean predictPhaseClock = true;
 		int clkOffNum = obsvCodeList.length;
 		ListOrderedSet ssiSet = new ListOrderedSet();
 		for (int i = 0; i < clkOffNum; i++) {
@@ -320,6 +320,7 @@ public class EKF_PPP extends EKFParent {
 		// Testing for CS
 		performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true, vel_kfObj);
 		HashMap<String, Integer> currConsecutiveCSmap = new HashMap<String, Integer>();
+		int _ambCount = 0;
 		// Resume full SatList or CSDList
 		for (int i = 0; i < n; i++) {
 			Satellite sat = csdList.get(i).getSat();
@@ -327,6 +328,7 @@ public class EKF_PPP extends EKFParent {
 			int[] record = cycleSlipCount.computeIfAbsent(satID, k -> new int[2]);
 			record[1] += 1;
 			if (csdList.get(i).isCS()) {
+				_ambCount++;
 				record[0] += 1;
 				cycleSlipCount.put(satID, record);
 				if (consecutiveCSmap.containsKey(satID)) {
@@ -345,8 +347,8 @@ public class EKF_PPP extends EKFParent {
 
 		}
 		consecutiveCSmap = new HashMap<String, Integer>(currConsecutiveCSmap);
-		csDetectedCountMap.put(currentTime, ambCount);
-		csDetectedCount += ambCount;
+		csDetectedCountMap.put(currentTime, _ambCount);
+		csDetectedCount += _ambCount;
 
 		SimpleMatrix x_new = new SimpleMatrix(3 + (2 * m) + ambCount, 1);
 		x_new.insertIntoThis(0, 0, x);
@@ -475,7 +477,7 @@ public class EKF_PPP extends EKFParent {
 		HashMap<String, Integer> new_ionoMap = new HashMap<String, Integer>();
 		ListOrderedSet uniqSat = new ListOrderedSet();
 		ArrayList<double[]> ionoParams = new ArrayList<double[]>();
-		ArrayList<String> list_ = new ArrayList<String>();
+		
 		// Satellite count
 		int n = csdList.size();
 		ArrayList<Satellite> satList = new ArrayList<Satellite>();
@@ -484,7 +486,7 @@ public class EKF_PPP extends EKFParent {
 			Satellite sat = csdObj.getSat();
 			String satID = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
 			satList.add(sat);
-			list_.add(satID);
+			
 			if (!uniqSat.contains(satID)) {
 				uniqSat.add(satID);
 				double freq2 = Math.pow(sat.getCarrierFrequencyHz(), 2);
@@ -563,7 +565,7 @@ public class EKF_PPP extends EKFParent {
 //				}
 //				else {
 				double codeClkOffVal = 0;
-				for (int l = 0; l < clkOffNum; l++) {
+				for (int l = 1; l < clkOffNum; l++) {
 					if (sat.getObsvCode().equals(obsvCodeList[l])) {
 						codeClkOffVal = x.get(3 + l);
 					}
@@ -615,7 +617,7 @@ public class EKF_PPP extends EKFParent {
 		ionoMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, true, predictPhaseClock);
+		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, true, predictPhaseClock,false);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 

@@ -49,12 +49,12 @@ public class GraphPlotter extends ApplicationFrame {
 			boolean outlierAnalyze) {
 
 		super(name);
-		name = name.split(":")[1];
+//		name = name.split(":")[1];
 		ArrayList<JFreeChart> charts = new ArrayList<JFreeChart>();
 		if (isSatRes) {
 
 			if (flag == 0) {
-				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in m or m/s)",
+				charts.add(ChartFactory.createScatterPlot(name, "GPS-time", name + "(in cycles)",
 						createDatasetSatRes(satResMap, isSatRes, flag, outlierAnalyze)));
 
 			} else if (flag == 1) {
@@ -186,6 +186,20 @@ public class GraphPlotter extends ApplicationFrame {
 
 		final JFreeChart chart = ChartFactory.createXYLineChart("Z measurement redundancy", "GPS-time", "Count",
 				createDatasetRedundancy(dataList));
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
+		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
+		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+	public GraphPlotter(TreeMap<Long,HashMap<String,Double>> timeParamMap,String title) throws IOException {
+		super(title);
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart(title, "GPS-time", title,
+				createAndroidRawGNSSTimeParamDataset(timeParamMap));
 		final ChartPanel chartPanel = new ChartPanel(chart);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
@@ -385,8 +399,29 @@ public class GraphPlotter extends ApplicationFrame {
 		// chartPanel.setBackground(Color.WHITE);
 		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
 		chartPanel.setMouseZoomable(true, false);
-		// ChartUtils.saveChartAsJPEG(new File(path + chartTitle + ".jpeg"), chart,
-		// 1000, 600);
+		setContentPane(chartPanel);
+
+	}
+	
+	public GraphPlotter(boolean flag,HashMap<String, ArrayList<double[]>> dataMap,
+			ArrayList<Long> timeList) throws IOException {
+		super("Positioning Error");
+		// TODO Auto-generated constructor stub
+
+		final JFreeChart chart = ChartFactory.createXYLineChart("Positioning Error", "Time-Elapsed(in sec)",
+				"Positioning Error", createDatasetENUfull(dataMap, timeList));
+
+//		chart.getPlot().setBackgroundPaint(Color.WHITE);
+//		chart.getXYPlot().setDomainGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().setRangeGridlinePaint(Color.BLACK);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(3, Color.ORANGE);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(4, Color.MAGENTA);
+//		chart.getXYPlot().getRenderer().setSeriesPaint(5, Color.CYAN);
+
+		final ChartPanel chartPanel = new ChartPanel(chart);
+		// chartPanel.setBackground(Color.WHITE);
+		chartPanel.setPreferredSize(new java.awt.Dimension(560, 370));
+		chartPanel.setMouseZoomable(true, false);
 		setContentPane(chartPanel);
 
 	}
@@ -485,6 +520,11 @@ public class GraphPlotter extends ApplicationFrame {
 			unit = "(m/s)";
 		}
 		String[] chartNames = new String[] { "East", "North", "Up" };
+		GraphPlotter chart = new GraphPlotter(true,dataMap,
+				timeList);
+		chart.pack();
+		RefineryUtilities.positionFrameRandomly(chart);
+		chart.setVisible(true);
 		for (int i = 0; i < 3; i++) {
 			final int index = i;
 			HashMap<String, double[]> subDataMap = new HashMap<String, double[]>();
@@ -493,7 +533,7 @@ public class GraphPlotter extends ApplicationFrame {
 				double[] arr = data.stream().mapToDouble(j -> j[index]).toArray();
 				subDataMap.put(key, arr);
 			}
-			GraphPlotter chart = new GraphPlotter(name + "(" + chartNames[i] + ")", chartNames[i] + unit, subDataMap,
+			 chart = new GraphPlotter(name + "(" + chartNames[i] + ")", chartNames[i] + unit, subDataMap,
 					timeList, true);
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
@@ -536,7 +576,7 @@ public class GraphPlotter extends ApplicationFrame {
 			}
 
 		}
-		GraphPlotter chart = new GraphPlotter(name + " 2D-Error", dataMap, unit);
+		chart = new GraphPlotter(name + " 2D-Error", dataMap, unit);
 		chart.pack();
 		RefineryUtilities.positionFrameRandomly(chart);
 		chart.setVisible(true);
@@ -662,32 +702,32 @@ public class GraphPlotter extends ApplicationFrame {
 			} else if (key == Measurement.Doppler) {
 				type = "Doppler ";
 			} else if (key == Measurement.CarrierPhase) {
-				type = "Carrier Phase (in Cycles)";
+				type = "Carrier Phase";
 			} else {
 				type = "GIM_Iono";
 			}
-			String name = "Satellite-Residual";
+			String name = "Residual";
 			if (isInnov) {
-				name = "Satellite-Innovation";
+				name = "Innovation";
 			}
 			for (String subKey : subSatResMap.keySet()) {
 				if (subSatResMap.get(subKey).isEmpty()) {
 					continue;
 				}
 				// For Satellite Residuals
-				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true,
+				GraphPlotter chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + name, true,
 						0, outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
-				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, 1,
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + name, true, 1,
 						outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
 				chart.setVisible(true);
 
-				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + subKey + ": " + name, true, 2,
+				chart = new GraphPlotter(subSatResMap.get(subKey), type + " " + name, true, 2,
 						outlierAnaylze);
 				chart.pack();
 				RefineryUtilities.positionFrameRandomly(chart);
@@ -1018,6 +1058,48 @@ public class GraphPlotter extends ApplicationFrame {
 				chart.setVisible(true);
 			}
 		}
+	}
+	public static void graphAndroidRawGNSStimeParams(TreeMap<Long, ArrayList<Satellite>> satMap) throws IOException {
+		
+			HashMap<String,TreeMap<Long,HashMap<String,Double>>> timeParamMap = new HashMap<String,TreeMap<Long,HashMap<String,Double>>>();
+			ArrayList<String> timeParamNames =new ArrayList<>(List.of("TimeNanos","TimeOffsetNanos","FullBiasNanos","BiasNanos"));
+			for(String paramName:timeParamNames)	
+			{
+				timeParamMap.put(paramName,new TreeMap<Long,HashMap<String,Double>>());
+			}
+			for(Long t:satMap.keySet())
+			{
+				ArrayList<Satellite> satList = satMap.get(t);
+				for(String paramName:timeParamNames)	
+				{
+					timeParamMap.get(paramName).put(t, new HashMap<String,Double>());
+				}
+				
+				for(Satellite sat:satList)
+				{
+					String obsvCode = sat.getObsvCode();
+					int prn = sat.getSvid();
+					String satId = obsvCode + prn;
+					double TimeNanos = sat.getTimeNanos()/1e9;	
+					double TimeOffsetNanos = sat.getTimeOffsetNanos()/1e9;
+					double FullBiasNanos = sat.getFullBiasNanos()/1e9;
+					double BiasNanos = sat.getBiasNanos()/1e9;
+					timeParamMap.get("TimeNanos").get(t).put(satId,TimeNanos);
+					timeParamMap.get("TimeOffsetNanos").get(t).put(satId,TimeOffsetNanos);
+					timeParamMap.get("FullBiasNanos").get(t).put(satId,FullBiasNanos);
+					timeParamMap.get("BiasNanos").get(t).put(satId,BiasNanos);
+				}
+			}
+			for(String paramName:timeParamNames)	
+			{
+
+				GraphPlotter chart = new GraphPlotter(timeParamMap.get(paramName),paramName);
+				chart.pack();
+				RefineryUtilities.positionFrameRandomly(chart);
+				chart.setVisible(true);
+			}
+					
+				
 	}
 
 	public static void graphDOP(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> satCountList,
@@ -1489,6 +1571,28 @@ public class GraphPlotter extends ApplicationFrame {
 		return dataset;
 
 	}
+	private XYDataset createDatasetENUfull(HashMap<String, ArrayList<double[]>> dataMap, ArrayList<Long> timeList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		
+		for (String key : dataMap.keySet()) {
+			// for (String key : new String[] { "Proposed Filter", "VRWD", "VRW", "PRW",
+			// "WLS" }) {
+			final XYSeries east = new XYSeries("East");
+			final XYSeries north = new XYSeries("North");
+			final XYSeries up = new XYSeries("Up");
+			ArrayList<double[]> data= dataMap.get(key);
+			for (int i = 0; i < data.size(); i++) {
+				east.add(timeList.get(i), Double.valueOf(data.get(i)[0]));
+				north.add(timeList.get(i), Double.valueOf(data.get(i)[1]));
+				up.add(timeList.get(i), Double.valueOf(data.get(i)[2]));
+			}
+			dataset.addSeries(east);
+			dataset.addSeries(north);
+			dataset.addSeries(up);
+		}
+		return dataset;
+
+	}
 
 	private XYDataset createDatasetENU2(HashMap<String, double[][]> dataMap, ArrayList<Long> timeList) {
 		XYSeriesCollection dataset = new XYSeriesCollection();
@@ -1600,6 +1704,28 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(rW);
 		dataset.addSeries(rZ);
 		// dataset.addSeries(rSum);
+
+		return dataset;
+
+	}
+	
+	private XYDataset createAndroidRawGNSSTimeParamDataset(TreeMap<Long,HashMap<String,Double>> timeParamList) {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		HashMap<String,XYSeries> xySeriesMap = new HashMap<String,XYSeries>();
+		long t0 = timeParamList.firstKey();
+		
+		for (Long t:timeParamList.keySet()) {
+			HashMap<String,Double> timeParamMap = timeParamList.get(t);		
+			for(String satId:timeParamMap.keySet())
+			{
+				xySeriesMap.computeIfAbsent(satId,k->new XYSeries(satId)).add(t-t0, timeParamMap.get(satId));
+			}
+		}
+		
+		for(String satId:xySeriesMap.keySet())
+		{
+			dataset.addSeries(xySeriesMap.get(satId));
+		}
 
 		return dataset;
 
@@ -1885,10 +2011,10 @@ public class GraphPlotter extends ApplicationFrame {
 			double q50 = dataSeries.get((int) (n * 0.5));
 			double q75 = dataSeries.get((int) (n * 0.75));
 			double q95 = dataSeries.get((int) (n * 0.95));
-			dataset.addSeries(new XYSeries("Average: " + avg));
-			dataset.addSeries(new XYSeries("Q50: " + q50));
-			dataset.addSeries(new XYSeries("Q75: " + q75));
-			dataset.addSeries(new XYSeries("Q95: " + q95));
+//			dataset.addSeries(new XYSeries("Average: " + avg));
+//			dataset.addSeries(new XYSeries("Q50: " + q50));
+//			dataset.addSeries(new XYSeries("Q75: " + q75));
+//			dataset.addSeries(new XYSeries("Q95: " + q95));
 		}
 
 		return dataset;

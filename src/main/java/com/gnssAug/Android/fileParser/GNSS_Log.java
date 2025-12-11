@@ -45,10 +45,6 @@ public class GNSS_Log {
 			for (String line : lines) {
 				String[] data = line.trim().split(",");
 				if (data[0].equals("Raw")||data[0].equals("RAW")) {
-					if(data.length<29)
-					{
-						continue;
-					}
 					GNSSLog log = new GNSSLog(data);
 					long tRx = Math.round(log.gettRx() * 1e3);
 					String obsvCode = log.getObsvCode();

@@ -523,14 +523,8 @@ public class LinearLeastSquare {
 				H = H.concatColumns(C);
 				SimpleMatrix Ht = H.transpose();
 				SimpleMatrix W = new SimpleMatrix(weight);
-				SimpleMatrix HtWHinv= null;
-				try {
-				HtWHinv = (Ht.mult(W).mult(H)).invert();
-				}
-				catch (Exception e) {
-					// TODO: handle exception
-					System.out.println();
-				}
+				SimpleMatrix HtWHinv= (Ht.mult(W).mult(H)).invert();
+				
 				
 				SimpleMatrix DeltaPR = new SimpleMatrix(deltaPR);
 				SimpleMatrix DeltaX = HtWHinv.mult(Ht).mult(W).mult(DeltaPR);

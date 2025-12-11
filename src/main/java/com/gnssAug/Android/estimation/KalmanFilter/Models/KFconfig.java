@@ -16,8 +16,8 @@ public class KFconfig extends KF {
 	private final double SpeedofLight = 299792458;
 	private final double c2 = SpeedofLight * SpeedofLight;
 	// Typical Allan Variance Coefficients for TCXO (low quality)
-	private final double sf = 1e4;//ClockAllanVar.TCXO_low_quality.sf;
-	private final double sg = 1;//ClockAllanVar.TCXO_low_quality.sg;
+	private final double sf = 1;//ClockAllanVar.TCXO_low_quality.sf;
+	private final double sg = 0.1;//ClockAllanVar.TCXO_low_quality.sg;
 
 	public void config(double deltaT, Flag flag, int m, boolean useDoppler, boolean complementary, boolean useEstVel)
 			throws Exception {
@@ -202,7 +202,7 @@ public class KFconfig extends KF {
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
-		// Samsung 29th double[] qENU = new double[] { 0.05, 0.03, 0.0001 };
+		
 		SimpleMatrix _Q = new SimpleMatrix(3 + (2*m), 3 + (2*m));
 		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]*deltaT));
 		double _sg = 0.1;
@@ -220,30 +220,32 @@ public class KFconfig extends KF {
 		}
 		super.configure(phi, Q);
 	}
-	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
+	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
 			ArrayList<double[]> ionoParams, boolean isAndroid) throws Exception 
 	{
-		int m = 1;
-		if(isAndroid)
-		{
-			m = 2;
-		}
-		configPPP( deltaT,  clkOffNum,  clkDriftNum,  totalStateNum,
-			 ionoParams, isAndroid, false);
+		configPPP( deltaT,  codeClkOffNum,  clkDriftNum,  totalStateNum,
+			 ionoParams, isAndroid, false,false);
 	}
-	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
-			ArrayList<double[]> ionoParams, boolean isAndroid,boolean predictPhaseClock) throws Exception 
+	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
+			ArrayList<double[]> ionoParams, boolean isAndroid,boolean predictPhaseClock,boolean isPPP2) throws Exception 
 	{
-		int m = 1;
+		int phaseClKOffNum = 0;
 		if(isAndroid)
 		{
-			m = 2;
+			if(isPPP2)
+			{
+				phaseClKOffNum = 1;
+				
+			}
+			else {			
+				phaseClKOffNum = codeClkOffNum;
+			}
 		}
-		configPPP( deltaT,  clkOffNum,  clkDriftNum,  totalStateNum,
-			 ionoParams, isAndroid, m, predictPhaseClock);
+		configPPP( deltaT,  codeClkOffNum,  clkDriftNum,  totalStateNum,
+			 ionoParams, isAndroid, phaseClKOffNum, predictPhaseClock);
 	}
-	public void configPPP(double deltaT, int clkOffNum, int clkDriftNum, int totalStateNum,
-			ArrayList<double[]> ionoParams,boolean isAndroid,int m,boolean predictPhaseClock) throws Exception {
+	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
+			ArrayList<double[]> ionoParams,boolean isAndroid,int phaseClKOffNum,boolean predictPhaseClock) throws Exception {
 
 		double[] refPos = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 		int ionoParamNum = ionoParams.size();
@@ -252,7 +254,7 @@ public class KFconfig extends KF {
 		final double TECU_var = 0.0611;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
-		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + (m*clkOffNum)] = deltaT);
+		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + (codeClkOffNum+phaseClKOffNum)] = deltaT);
 		
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
@@ -260,12 +262,12 @@ public class KFconfig extends KF {
 		// Position and Velocity
 		for (int i = 0; i < 3; i++) {
 			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-16));
-			_Q.set(i, i + 3 + (m*clkOffNum), qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + (m*clkOffNum), i, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + (m*clkOffNum), i + 3 + (m*clkOffNum), qENU[i] * deltaT);
+			_Q.set(i, i + 3 + (codeClkOffNum+phaseClKOffNum), qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + (codeClkOffNum+phaseClKOffNum), i, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + (codeClkOffNum+phaseClKOffNum), i + 3 + (codeClkOffNum+phaseClKOffNum), qENU[i] * deltaT);
 		}
 
-		double clkOffVar = 1e5;
+		double clkOffVar = 1;
 		double clkDriftVar = 0.1;
 		if (isAndroid) {
 			clkOffVar = 1e5;
@@ -274,37 +276,37 @@ public class KFconfig extends KF {
 		// Receiver Code Clock Offset
 		_Q.set(3, 3, clkOffVar*deltaT);
 		// Rx DCB
-		for (int i = 1; i < clkOffNum; i++) {
+		for (int i = 1; i < codeClkOffNum; i++) {
 			_Q.set(i + 3, i + 3, 1e-4 * deltaT);
 
 		}
 		if (isAndroid) {
 			// Receiver Phase Clock Offset
-			_Q.set(3 + clkOffNum, 3 + clkOffNum, clkOffVar * deltaT);
+			_Q.set(3 + phaseClKOffNum, 3 + phaseClKOffNum, clkOffVar * deltaT);
 			// Rx Differential Phase Bias
-			for (int i = 1; i < clkOffNum; i++) {
-				_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, 1e-4 * deltaT);
+			for (int i = 1; i < phaseClKOffNum; i++) {
+				_Q.set(i + 3 + phaseClKOffNum, i + 3 + phaseClKOffNum, 1e-4 * deltaT);
 
 			}
 			if(predictPhaseClock)
 			{
-				phi[3+clkOffNum][6+(m*clkOffNum)] = deltaT;
-				_Q.set(3 + clkOffNum, 3 + clkOffNum, (clkDriftVar *  Math.pow(deltaT, 3) / 3)+1);
-				_Q.set(3 + clkOffNum, 6 + (m*clkOffNum),clkDriftVar * Math.pow(deltaT, 2) / 2);
-				_Q.set(6 + (m*clkOffNum),3 + clkOffNum, clkDriftVar * Math.pow(deltaT, 2) / 2);
+				phi[3+codeClkOffNum][6+(codeClkOffNum+phaseClKOffNum)] = deltaT;
+				_Q.set(3 + codeClkOffNum, 3 + codeClkOffNum, (clkDriftVar *  Math.pow(deltaT, 3) / 3)+1);
+				_Q.set(3 + codeClkOffNum, 6 + (codeClkOffNum+phaseClKOffNum),clkDriftVar * Math.pow(deltaT, 2) / 2);
+				_Q.set(6 + (codeClkOffNum+phaseClKOffNum),3 + codeClkOffNum, clkDriftVar * Math.pow(deltaT, 2) / 2);
 			}
 		}
 		// Clock Drift
 		for (int i = 0; i < clkDriftNum; i++) {
-			_Q.set(i + 6 + (m*clkOffNum), i + 6 + (m*clkOffNum), clkDriftVar * deltaT);
+			_Q.set(i + 6 + (codeClkOffNum+phaseClKOffNum), i + 6 + (codeClkOffNum+phaseClKOffNum), clkDriftVar * deltaT);
 
 		}
 
 		// Tropo: More than 1cm/sqrt(hr)
-		_Q.set(6 + (m*clkOffNum) + clkDriftNum, 6 + (m*clkOffNum) + clkDriftNum, (1e-8) * deltaT);
+		_Q.set(6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum, 6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum, (1e-8) * deltaT);
 
 		// Ambiguities
-		for (int i = 6 + (m*clkOffNum) + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
+		for (int i = 6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
 			_Q.set(i, i, 1e-16);
 		}
 
@@ -320,7 +322,7 @@ public class KFconfig extends KF {
 			R.set(i, i, 1);
 		}
 		R.insertIntoThis(0, 0, _R);
-		R.insertIntoThis(3 + (m*clkOffNum), 3 + (m*clkOffNum), _R);
+		R.insertIntoThis(3 + (codeClkOffNum+phaseClKOffNum), 3 + (codeClkOffNum+phaseClKOffNum), _R);
 
 		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {

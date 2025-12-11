@@ -116,7 +116,13 @@ public class DCB_Bias {
 			HashMap<String, HashMap<String, Double>> galileoMap = biasMap.get(SSI).get(PRN);
 			
 			if (_obsvCode.equals("C5Q")) {
+				try {
 				ISC = galileoMap.get("C1C").getOrDefault("C5Q", null);
+				}
+				catch (Exception e) {
+					// TODO: handle exception
+					System.out.println();
+				}
 			} else if (_obsvCode.equals("C5X")) {
 				ISC = galileoMap.get("C1X").getOrDefault("C5X", null);
 			}

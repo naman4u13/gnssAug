@@ -93,12 +93,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/ALGO00CAN_R_20242001200_60M_01S_MO.rnx";
+			String obs_path = "/Users/naman.agarwal/Downloads/rover.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/ALGO/ALGO_L1_L5_GPS_GAL_PRW_FDE";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/Swarm/test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -321,21 +321,7 @@ public class IGS {
 						}
 
 					}
-					if(i==n-1)
-					{
-						double[] enu = LatLonUtil.ecef2enu(estPos, rxARP, true);
-						System.out.println("Converged Position RMS:");
-						// error in East direction
-						System.out.println("E  - "+Math.sqrt(enu[0] * enu[0]));
-						// error in North direction
-						System.out.println("N  - "+Math.sqrt(enu[1] * enu[1]));
-						// error in Up direction
-						System.out.println("U  - "+Math.sqrt(enu[2] * enu[2]));
-						// 3d error
-						System.out.println("3d Error - "+Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
-						// 2d error
-						System.out.println("2d Error - "+Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
-					}
+					
 				}
 				if (doAnalyze) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
@@ -349,13 +335,19 @@ public class IGS {
 
 				int n = timeList.size();
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
-				System.out.println("These satellite have more than 40% phase data with Cycle Slips");
+				System.out.println("These satellite have more than 20% phase data with Cycle Slips");
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
 					double percentage = (csCount[0] * 1.0) / csCount[1];
-					if (percentage > 0.4) {
+					if (percentage > 0.2) {
 						System.out.print(satID + ", ");
 					}
+				}
+				System.out.println();
+				for (String satID : csCountMap.keySet()) {
+					int[] csCount = csCountMap.get(satID);
+					System.out.print(satID + " : " + csCount[0] + "/" + csCount[1] + " , ");
+
 				}
 				System.out.println();
 				HashMap<Measurement, HashMap<String, ArrayList<Double>>> RedundancyNoMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
@@ -585,6 +577,21 @@ public class IGS {
 					posErrList[3].add(Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
 					// 2d error
 					posErrList[4].add(Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+					
+					if (i == n - 1) {
+
+						System.out.println("Converged Position RMS:");
+						// error in East direction
+						System.out.println("E  - " + Math.sqrt(enu[0] * enu[0]));
+						// error in North direction
+						System.out.println("N  - " + Math.sqrt(enu[1] * enu[1]));
+						// error in Up direction
+						System.out.println("U  - " + Math.sqrt(enu[2] * enu[2]));
+						// 3d error
+						System.out.println("3d Error - " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+						// 2d error
+						System.out.println("2d Error - " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+					}
 
 				}
 
@@ -723,7 +730,7 @@ public class IGS {
 				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList, 1);
-				GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"),timeList);
+				GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("LS"),timeList);
 				
 			}
 		} catch (
