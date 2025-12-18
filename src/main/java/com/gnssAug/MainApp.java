@@ -25,7 +25,7 @@ public class MainApp {
 		// "C:\\D drive\\Study\\Google Decimeter Challenge\\input_files\\";
 		boolean isMac = true;
 		String sep = isMac ? "/" : "\\";
-		switch (3) {
+		switch (5) {
 		case 1:
 			// String[] obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
 			String[] obsvCodeList = new String[] { "G1C", "E1C", "C2I" };
@@ -111,7 +111,7 @@ public class MainApp {
 			double[] trueEcef = new double[] { 4183777.518, 862857.121, 4721221.153 };//{4183748.339, 862806.185, 4721229.282};
 			double[] llh = LatLonUtil.ecef2lla(trueEcef);
 			Android_Static.posEstimate(true, 0, 0,22, obsvCodeList, basePath, trueEcef, dcb_bias_path, clock_path,
-					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, false);
+					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, true);
 			break;
 		case 4:
 			// obsvCodeList = new String[] { "G5X", "E5X", "C2I" };
@@ -139,10 +139,10 @@ public class MainApp {
 			break;
 		case 5:
 			// obsvCodeList = new String[] { "G5X","E5X","C5X"};
-			obsvCodeList = new String[] {"G1C","E1C"};
-			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Pixel 4/gnss_log_2025_01_28_21_51_43.txt";
+			obsvCodeList = new String[] {"G1C","E1C","C2I","G5X","E5X","C5P"};
+			basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/Personal Data Collection/Static/ASCM419739/Nov212025/Pixel 7 pro/gnss_log_2025_11_21_18_58_53.txt";
 
-			discardSet = false ? Set.of("GC2I30", "E5X26", "E5X27", "E1C5", "E1C8", "G5X27", "E1C27", "C2I43", "E5X5") : Set.of("G1C30", "E1C34", "G1C7");
+			discardSet = false ? Set.of("GC2I30", "E5X26", "E5X27", "E1C5", "E1C8", "G5X27", "E1C27", "C2I43", "E5X5") : Set.of("G5X24","E5X19","E5X36","C5P28","C5P19");
 			strList = basePath.split("/");
 			date = strList[strList.length - 1].split("_");
 			year = Integer.parseInt(date[2]);
@@ -150,19 +150,19 @@ public class MainApp {
 			day = Integer.parseInt(date[4]);
 			cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 			cal.set(year, month - 1, day, 0, 0, 0);
-			doy = String.format("%03d", cal.get(Calendar.DAY_OF_YEAR));
+			doy = String.format("%03d", cal.get(Calendar.DAY_OF_YEAR)+1);
 			mobName = strList[strList.length - 2];
 
-			dcb_bias_path = base_url + year + "_" + doy + sep + "GFZ0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
-			clock_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
-			orbit_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
+			dcb_bias_path = base_url + year + "_" + doy + sep + "CAS1OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
+			clock_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_30S_CLK.CLK";
+			orbit_path = base_url + year + "_" + doy + sep + "COD0MGXFIN_" + year + doy + "0000_01D_05M_ORB.SP3";
 			ionex_path = base_url + year + "_" + doy + sep + "IGS0OPSFIN_" + year + doy + "0000_01D_02H_GIM.INX";
 			osb_bias_path = base_url + year + "_" + doy + sep + "WUM0MGXFIN_" + year + doy + "0000_01D_30S_OSB.BIA";
 
-			llh = new double[] { 51.081628, -114.134081, 1110.130 - 16.7243 };
+			llh = new double[] { 51.081628, -114.134081, 1110.130 - 16.7243 + 1.195 };
 			trueEcef = LatLonUtil.lla2ecef(llh, true);
 			Android_Static.posEstimate(true, 0, 0,22, obsvCodeList, basePath, trueEcef, dcb_bias_path, clock_path,
-					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, true);
+					orbit_path, ionex_path, osb_bias_path, true, true, true, false, false, discardSet, mobName, false);
 			break;
 		case 6:
 			// obsvCodeList = new String[] { "G5X","E5X","C5X"};

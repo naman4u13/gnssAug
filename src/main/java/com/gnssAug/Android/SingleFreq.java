@@ -117,11 +117,11 @@ public class SingleFreq {
 				if (useIGS) {
 					
 					double tSV = logObs.gettTx();
-					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, false);
+					double[] sat_ClkOff_Drift = clock.getBiasAndDrift(tSV, svid, obsvCode, true);
 					double satClkOff = sat_ClkOff_Drift[0];
 					double satClkDrift = sat_ClkOff_Drift[1];
-					double satHardCodeBias = osb__bias.getOSB(SSI,"C"+obsvCode.substring(1), svid, tSV);
-					double satHardPhaseBias = osb__bias.getOSB(SSI,"L"+obsvCode.substring(1), svid, tSV);
+					double satHardCodeBias = 0;//osb__bias.getOSB(SSI,"C"+obsvCode.substring(1), svid, tSV);
+					double satHardPhaseBias = 0;//osb__bias.getOSB(SSI,"L"+obsvCode.substring(1), svid, tSV);
 					// GPS System transmission time
 					t = tSV - (satClkOff-satHardCodeBias);
 					double[][] satPV = orbit.getPV(t, svid, polyOrder, SSI);

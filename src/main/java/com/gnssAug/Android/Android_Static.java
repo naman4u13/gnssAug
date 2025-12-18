@@ -2,6 +2,7 @@ package com.gnssAug.Android;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -46,6 +47,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix_allEst;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP2;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
@@ -103,8 +105,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/T-A-SIS-01_open_sky_static/ION_GNSS_2025/RxX_Samsung_Galaxy_S20+_5G_final/"
-					+ mobName + "_test2";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Pixel7Pro_Nov/"
+					+ mobName + "_GPS_GAL_BEI_L1_L5_PPP_Repaired";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -147,18 +149,26 @@ public class Android_Static {
 			double[] refUserEcef = null;
 			double tRx0 = ((ArrayList<GNSSLog>) gnssLogMaps.firstEntry().getValue().values().toArray()[0]).get(0)
 					.gettRx();
+			System.err.println("Start");
 			for (long tRxMilli : gnssLogMaps.keySet()) {
 
 				HashMap<String, ArrayList<GNSSLog>> gnssLogMap = gnssLogMaps.get(tRxMilli);
 				GNSSLog entry = ((ArrayList<GNSSLog>) gnssLogMap.values().toArray()[0]).get(0);
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
-				if(gtIndex>330)
+				ZonedDateTime utcTime = Time.convertToZonedDateTime((int) weekNo, tRx);
+
+				// Print out the UTC time
+				
+				if(gtIndex<90)
 				{
-					break;
+					System.err.println("UTC Time: " + utcTime);
+					gtIndex++;
+					continue;
 				}
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
+				
 				ArrayList<Satellite> satList = SingleFreq.process(tRx, derivedMap, osb_bias, antenna, gnssLogMap, time,
 						obsvCodeList, weekNo, clock, orbit, useIGS, discardSet, trueEcef);
 				int m = ssiSet.size();
@@ -906,10 +916,13 @@ public class Android_Static {
 			}
 
 			if (estimatorType == 22) {
+				boolean predictPhaseClock = false;
+				boolean singlePhaseClock = false;
+				boolean singleClockDrift = false;
+				EKF_PPP2 ekf = new EKF_PPP2();
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				EKF_PPP ekf = new EKF_PPP();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
-						trueEcefList, true, repairCS, false);
+						trueEcefList, true, repairCS, false,predictPhaseClock,singlePhaseClock,singleClockDrift);
 				int n = timeList.size();
 				estPosMap.put("PPP", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {
@@ -1006,7 +1019,7 @@ public class Android_Static {
 					String[] ssiLabel = (String[]) ssiSet.stream().map(String::valueOf).toArray(String[]::new);
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
-					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0));
+					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0), singlePhaseClock,singleClockDrift);
 					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
 					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());  
 				}

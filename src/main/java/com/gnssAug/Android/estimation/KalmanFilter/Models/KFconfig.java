@@ -193,24 +193,64 @@ public class KFconfig extends KF {
 		}
 		super.configure(phi, Q);
 	}
-
+	
 	public void configTDCP(double deltaT, int m, double[] refPos) throws Exception {
 
-		int n = 3 + (2*m);
+		int n = 3 + (2 * m);
 		double[][] phi = new double[n][n];
 
+		// Identity transition for all states (Velocity and Drifts are Random Walks)
 		IntStream.range(0, n).forEach(i -> phi[i][i] = 1);
 
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
+
+		SimpleMatrix _Q = new SimpleMatrix(n, n);
+
+		// 1. Velocity Process Noise (Indices 0, 1, 2)
+		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i] * deltaT));
+
+		// 2. Clock Drift Process Noise (Doppler & TDCP)
+		// Structure: [Vel(3) | Doppler_Drifts(m) | TDCP_Drifts(m)]
 		
-		SimpleMatrix _Q = new SimpleMatrix(3 + (2*m), 3 + (2*m));
-		IntStream.range(0, 3).forEach(i -> _Q.set(i, i, qENU[i]*deltaT));
-		double _sg = 0.1;
-		IntStream.range(3, 3 + (2*m)).forEach(i -> _Q.set(i, i, _sg * deltaT));
+		// Base Drift Noise (Oscillator): High variance for Android TCXO
+		double baseDriftVar = 1.0; 
+		
+		// Bias Drift Noise (Inter-System Bias Rate): Low variance for thermal drift
+		double biasDriftVar = 1.0e-4; 
+
+		// Doppler Drifts (Indices 3 to 3+m-1)
+		for (int i = 0; i < m; i++) {
+			int stateIdx = 3 + i;
+			if (i == 0) {
+				// Base State (GPS/Ref): High Noise
+				_Q.set(stateIdx, stateIdx, baseDriftVar * deltaT);
+			} else {
+				// Bias State (GAL/BDS relative to GPS): Low Noise
+				_Q.set(stateIdx, stateIdx, biasDriftVar * deltaT);
+			}
+		}
+
+		// TDCP Drifts (Indices 3+m to 3+2m-1)
+		for (int i = 0; i < m; i++) {
+			int stateIdx = 3 + m + i;
+			if (i == 0) {
+				// Base State (GPS/Ref): High Noise
+				_Q.set(stateIdx, stateIdx, baseDriftVar * deltaT);
+			} else {
+				// Bias State (GAL/BDS relative to GPS): Low Noise
+				_Q.set(stateIdx, stateIdx, biasDriftVar * deltaT);
+			}
+		}
+
+		// Rotation Matrix to convert Velocity ENU -> ECEF
 		SimpleMatrix _R = LatLonUtil.getEnu2EcefRotMat(refPos);
 		SimpleMatrix R = new SimpleMatrix(n, n);
+		
+		// Insert Rotation for Velocity
 		R.insertIntoThis(0, 0, _R);
-		for (int i = 0; i < (2*m); i++) {
+		
+		// Identity Rotation for Clock States (Drifts are already scalar)
+		for (int i = 0; i < (2 * m); i++) {
 			R.set(3 + i, 3 + i, 1);
 		}
 
@@ -220,6 +260,7 @@ public class KFconfig extends KF {
 		}
 		super.configure(phi, Q);
 	}
+	
 	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
 			ArrayList<double[]> ionoParams, boolean isAndroid) throws Exception 
 	{
@@ -227,12 +268,12 @@ public class KFconfig extends KF {
 			 ionoParams, isAndroid, false,false);
 	}
 	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
-			ArrayList<double[]> ionoParams, boolean isAndroid,boolean predictPhaseClock,boolean isPPP2) throws Exception 
+			ArrayList<double[]> ionoParams, boolean isAndroid,boolean predictPhaseClock,boolean singlePhaseClock) throws Exception 
 	{
 		int phaseClKOffNum = 0;
 		if(isAndroid)
 		{
-			if(isPPP2)
+			if(singlePhaseClock)
 			{
 				phaseClKOffNum = 1;
 				
@@ -244,17 +285,19 @@ public class KFconfig extends KF {
 		configPPP( deltaT,  codeClkOffNum,  clkDriftNum,  totalStateNum,
 			 ionoParams, isAndroid, phaseClKOffNum, predictPhaseClock);
 	}
+	
 	public void configPPP(double deltaT, int codeClkOffNum, int clkDriftNum, int totalStateNum,
 			ArrayList<double[]> ionoParams,boolean isAndroid,int phaseClKOffNum,boolean predictPhaseClock) throws Exception {
 
 		double[] refPos = new double[] { getState().get(0), getState().get(1), getState().get(2) };
 		int ionoParamNum = ionoParams.size();
-		
+		int clkOffNum = codeClkOffNum + phaseClKOffNum;
+		int driftStartIndex = 6 + clkOffNum;
 		// Its 16 cm^2/s in TECU^2/s, assuming L1 freq
 		final double TECU_var = 0.0611;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
-		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + (codeClkOffNum+phaseClKOffNum)] = deltaT);
+		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + clkOffNum] = deltaT);
 		
 		double[] qENU = GnssDataConfig.qENU_velRandWalk;
 		SimpleMatrix _Q = new SimpleMatrix(totalStateNum, totalStateNum);
@@ -262,51 +305,80 @@ public class KFconfig extends KF {
 		// Position and Velocity
 		for (int i = 0; i < 3; i++) {
 			_Q.set(i, i, (qENU[i] * Math.pow(deltaT, 3) / 3) + (1e-16));
-			_Q.set(i, i + 3 + (codeClkOffNum+phaseClKOffNum), qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + (codeClkOffNum+phaseClKOffNum), i, qENU[i] * Math.pow(deltaT, 2) / 2);
-			_Q.set(i + 3 + (codeClkOffNum+phaseClKOffNum), i + 3 + (codeClkOffNum+phaseClKOffNum), qENU[i] * deltaT);
+			_Q.set(i, i + 3 + clkOffNum, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + clkOffNum, i, qENU[i] * Math.pow(deltaT, 2) / 2);
+			_Q.set(i + 3 + clkOffNum, i + 3 + clkOffNum, qENU[i] * deltaT);
 		}
 
 		double clkOffVar = 1;
 		double clkDriftVar = 0.1;
+		double diffCodeBiasVar = 1.0e-8; 
+		double diffPhaseBiasVar = 1.0e-8; 
 		if (isAndroid) {
 			clkOffVar = 1e5;
 			clkDriftVar = 1;
+			diffCodeBiasVar = 1.0e-4; 
+			diffPhaseBiasVar = 1.0e-4; 
 		}
+		double phaseClkOffVar = 1e4;
 		// Receiver Code Clock Offset
 		_Q.set(3, 3, clkOffVar*deltaT);
 		// Rx DCB
 		for (int i = 1; i < codeClkOffNum; i++) {
-			_Q.set(i + 3, i + 3, 1e-4 * deltaT);
+			_Q.set(i + 3, i + 3, diffCodeBiasVar * deltaT);
 
 		}
 		if (isAndroid) {
 			// Receiver Phase Clock Offset
-			_Q.set(3 + phaseClKOffNum, 3 + phaseClKOffNum, clkOffVar * deltaT);
+			int phaseStartIndex = 3 + codeClkOffNum;
+			_Q.set(phaseStartIndex, phaseStartIndex, phaseClkOffVar * deltaT);
 			// Rx Differential Phase Bias
 			for (int i = 1; i < phaseClKOffNum; i++) {
-				_Q.set(i + 3 + phaseClKOffNum, i + 3 + phaseClKOffNum, 1e-4 * deltaT);
+				_Q.set(phaseStartIndex + i, phaseStartIndex + i, diffPhaseBiasVar * deltaT);
 
 			}
 			if(predictPhaseClock)
 			{
-				phi[3+codeClkOffNum][6+(codeClkOffNum+phaseClKOffNum)] = deltaT;
-				_Q.set(3 + codeClkOffNum, 3 + codeClkOffNum, (clkDriftVar *  Math.pow(deltaT, 3) / 3)+1);
-				_Q.set(3 + codeClkOffNum, 6 + (codeClkOffNum+phaseClKOffNum),clkDriftVar * Math.pow(deltaT, 2) / 2);
-				_Q.set(6 + (codeClkOffNum+phaseClKOffNum),3 + codeClkOffNum, clkDriftVar * Math.pow(deltaT, 2) / 2);
+				// Only couple the Base Phase (Index 0) to the Base Drift (Index 0)
+				// We do NOT couple ISB phases to ISB drifts; 1e-2 noise handles them.
+				
+				
+				
+				// Apply only for i = 0 (Base System)
+				int phaseIdx = phaseStartIndex; // + 0
+				int driftIdx = driftStartIndex; // + 0
+				
+				// 1. Transition: Base Phase(t+1) = Base Phase(t) + Base Drift(t) * dt
+				phi[phaseIdx][driftIdx] = deltaT;
+				
+				// 2. Integrated Process Noise for Base State
+				// (+1 is the Android safety floor for phase jitter)
+				_Q.set(phaseIdx, phaseIdx, (clkDriftVar * Math.pow(deltaT, 3) / 3) + 1);
+				
+				// 3. Covariance coupling
+				_Q.set(phaseIdx, driftIdx, clkDriftVar * Math.pow(deltaT, 2) / 2);
+				_Q.set(driftIdx, phaseIdx, clkDriftVar * Math.pow(deltaT, 2) / 2);
 			}
 		}
 		// Clock Drift
+		double biasDriftVar = 1.0e-4; 
 		for (int i = 0; i < clkDriftNum; i++) {
-			_Q.set(i + 6 + (codeClkOffNum+phaseClKOffNum), i + 6 + (codeClkOffNum+phaseClKOffNum), clkDriftVar * deltaT);
-
+			double varToUse;
+			if (i == 0) {
+				// Base Oscillator Drift (High Dynamics)
+				varToUse = clkDriftVar;
+			} else {
+				// Inter-System Bias Drift (Slow Thermal Variation)
+				varToUse = biasDriftVar;
+			}
+			
+			_Q.set(driftStartIndex + i, driftStartIndex + i, varToUse * deltaT);
 		}
-
 		// Tropo: More than 1cm/sqrt(hr)
-		_Q.set(6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum, 6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum, (1e-8) * deltaT);
+		_Q.set(6 + clkOffNum + clkDriftNum, 6 + clkOffNum + clkDriftNum, (1e-8) * deltaT);
 
 		// Ambiguities
-		for (int i = 6 + (codeClkOffNum+phaseClKOffNum) + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
+		for (int i = 6 + clkOffNum + clkDriftNum + 1; i < totalStateNum - ionoParamNum; i++) {
 			_Q.set(i, i, 1e-16);
 		}
 
@@ -322,7 +394,7 @@ public class KFconfig extends KF {
 			R.set(i, i, 1);
 		}
 		R.insertIntoThis(0, 0, _R);
-		R.insertIntoThis(3 + (codeClkOffNum+phaseClKOffNum), 3 + (codeClkOffNum+phaseClKOffNum), _R);
+		R.insertIntoThis(3 + clkOffNum, 3 + clkOffNum, _R);
 
 		SimpleMatrix Q = R.mult(_Q).mult(R.transpose());
 		if (!MatrixFeatures_DDRM.isPositiveDefinite(Q.getMatrix())) {

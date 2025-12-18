@@ -126,6 +126,11 @@ public class Clock {
 			pts = new int[] { n - 2, n - 1 };
 
 		}
+		if(pts==null)
+		{
+			System.out.println();
+		}
+		
 
 	}
 	public double[] getBiasAndDrift(double x, int SVID, String obsvCode, boolean applyDCB) throws Exception {

@@ -999,7 +999,7 @@ public class Android {
 					String[] ssiLabel = (String[]) ssiSet.stream().map(String::valueOf).toArray(String[]::new);
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
-					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0));
+					//GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0));
 				}
 			}
 			TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = null;

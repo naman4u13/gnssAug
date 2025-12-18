@@ -2377,10 +2377,19 @@ public class GraphPlotter extends ApplicationFrame {
 		ambGraph.setVisible(true);
 	}
 
-	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP ekf, String[] obsvCodeList,
-			String[] ssiLabels, long t0) {
+	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP2 ekf, String[] obsvCodeList,
+			String[] ssiLabels, long t0, boolean singlePhaseClock,
+			boolean singleClockDrift) {
 		for (Measurement meas : ekf.getClkOffMap().keySet()) {
-			GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap().get(meas), obsvCodeList, t0, true,
+			String[] labelList = obsvCodeList;
+			if(meas.equals(Measurement.CarrierPhase))
+			{
+				if(singlePhaseClock)
+				{
+					labelList = new String[] {obsvCodeList[0]};
+				}
+			}
+			GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap().get(meas), labelList, t0, true,
 					meas.name() + " Clock Offset");
 			clkOffGraph.pack();
 			RefineryUtilities.positionFrameRandomly(clkOffGraph);
@@ -2389,7 +2398,14 @@ public class GraphPlotter extends ApplicationFrame {
 
 		// New: clkDriftMap
 		for (Measurement meas : ekf.getClkDriftMap().keySet()) {
-			GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap().get(meas), ssiLabels, t0, false,
+			String[] labelList = ssiLabels;
+			
+			if(singleClockDrift)
+			{
+				labelList = new String[] {ssiLabels[0]};
+			}
+			
+			GraphPlotter clkDriftGraph = new GraphPlotter(ekf.getClkDriftMap().get(meas), labelList, t0, false,
 					meas.name() + " Clock Drift");
 			clkDriftGraph.pack();
 			RefineryUtilities.positionFrameRandomly(clkDriftGraph);
