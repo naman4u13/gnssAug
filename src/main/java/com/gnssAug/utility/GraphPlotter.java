@@ -44,7 +44,7 @@ import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.opencsv.CSVWriter;
 
 public class GraphPlotter extends ApplicationFrame {
-
+	private final static double SpeedofLight = 299792458;
 	public GraphPlotter(HashMap<String, ArrayList<SatResidual>> satResMap, String name, boolean isSatRes, int flag,
 			boolean outlierAnalyze) {
 
@@ -152,7 +152,10 @@ public class GraphPlotter extends ApplicationFrame {
 		} else if (type.equals("Delta-Range")) {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time(in sec)", type + "(in m)",
 					createDatasetDeltaRange(satMap));
-		} else {
+		}  else if (type.equals("ADR-State")) {
+			chart = ChartFactory.createScatterPlot(title + " " + type, "GPS-time(in sec)", type,
+					createDatasetADRstate(satMap));
+		}else {
 			chart = ChartFactory.createXYLineChart(title + " " + type, "GPS-time", type,
 					createDatasetSatellitePlot(satMap));
 		}
@@ -1197,14 +1200,18 @@ public class GraphPlotter extends ApplicationFrame {
 				double[] satPos = sat.getSatEci();
 				double trueRange = MathUtil.getEuclidean(truePos, satPos);
 				sat.setTrueRange(trueRange);
-				String id = sat.getObsvCode().charAt(0) + "" + sat.getSvid();
+				String id = sat.getObsvCode() + "" + sat.getSvid();
 				satListMap.computeIfAbsent(id, k -> new TreeMap<Long, Satellite>()).put(t, sat);
 			}
 			i++;
 		}
 
 		for (String id : satListMap.keySet()) {
-			GraphPlotter chart = new GraphPlotter(id, "Delta-Range", satListMap.get(id));
+//			GraphPlotter chart = new GraphPlotter(id, "Delta-Range", satListMap.get(id));
+//			chart.pack();
+//			RefineryUtilities.positionFrameRandomly(chart);
+//			chart.setVisible(true);
+			GraphPlotter chart = new GraphPlotter(id, "ADR-State", satListMap.get(id));
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
@@ -1768,6 +1775,96 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(series);
 		dataset.addSeries(avgSeries);
 
+		return dataset;
+
+	}
+	
+	private XYDataset createDatasetADRstate(TreeMap<Long, Satellite> satMap) throws Exception {
+		XYSeriesCollection dataset = new XYSeriesCollection();
+		final XYSeries satExist = new XYSeries("Sat Exist");
+		final XYSeries valid = new XYSeries("Valid");
+		final XYSeries reset = new XYSeries("Reset");
+		final XYSeries cycle_slip_api = new XYSeries("Cycle Slip - Android API");
+		final XYSeries half_cycle_resolved = new XYSeries("Half Cycle Resolved");
+		final XYSeries half_cycle_reported = new XYSeries("Half Cycle Reported");
+		final XYSeries cycle_slip_detected = new XYSeries("Cycle Slip Detected");
+		final XYSeries exclude_phase = new XYSeries("Exclude Phase Flag");
+		final XYSeries adr_uncertainity = new XYSeries("ADR Uncertainity (in Cycles)");
+		for (Long t : satMap.keySet()) {
+			Satellite sat = satMap.get(t);
+			String satId = sat.getObsvCode()+sat.getSvid();
+			satExist.add(t, (Double)1.0);
+			Double adr_uncertanity_inCycles = 100*sat.getAccumulatedDeltaRangeUncertaintyMeters()/(SpeedofLight/sat.getCarrierFrequencyHz());
+			
+			
+			if(sat.isAdrValid())
+			{
+				valid.add(t, (Double)2.0);
+				adr_uncertainity.add(t,adr_uncertanity_inCycles);	
+			}
+			else
+			{
+				if(!sat.isCycleSlipDetected())
+				{
+					//System.err.println("No CS detected invalid ADR : "+satId+" time: "+t);
+				}
+				if(sat.isHalfCycleResolved())
+				{
+					throw new Exception("ADR invalid but 1/2 cycle Resolved : "+satId+" time: "+t);
+				}
+			}
+			if(sat.isAdrReset())
+			{
+				reset.add(t, (Double)3.0);
+			}
+			if(sat.isAdrCycleSlip())
+			{
+				cycle_slip_api.add(t, (Double)4.0);
+				if(!sat.isCycleSlipDetected())
+				{
+					//System.err.println("No CS detected for API CS : "+satId+" time: "+t);
+				}
+			}
+			if(sat.isHalfCycleResolved())
+			{
+				half_cycle_resolved.add(t, (Double)5.0);
+				if(sat.isCycleSlipDetected()&&!(sat.isAdrCycleSlip()))
+				{
+					System.err.println("API tells 1/2 cycle Resolved and no API CS detected, but my Algo CS detected : "+satId+" time: "+t);
+				}
+			}
+			if(sat.isHalfCycleReported())
+			{
+				half_cycle_reported.add(t, (Double)6.0);
+			}
+			else
+			{
+				throw new Exception("ERROR ADR HALF CYCLE REPORTED");
+			}
+			if(sat.isCycleSlipDetected())
+			{
+				cycle_slip_detected.add(t, (Double)7.0);
+				if(!sat.isAdrCycleSlip())
+				{
+					//System.err.println("CS detected but no API CS : "+satId+" time: "+t);
+				}
+				
+			}
+			if(sat.isExcludePhase())
+			{
+				exclude_phase.add(t, (Double)8.0);
+			}
+			
+		}
+		dataset.addSeries(satExist);
+		dataset.addSeries(valid);	
+		dataset.addSeries(reset);	
+		dataset.addSeries(cycle_slip_api);	
+		dataset.addSeries(half_cycle_resolved);	
+		dataset.addSeries(half_cycle_reported);	
+		dataset.addSeries(cycle_slip_detected);
+		dataset.addSeries(exclude_phase);
+		dataset.addSeries(adr_uncertainity);
 		return dataset;
 
 	}

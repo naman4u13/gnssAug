@@ -362,8 +362,8 @@ public class LAMBDA {
 		{
 			double approxSR = (double) stats[1];
 			double approxFR = (double) stats[2];
-			System.out.println("Approximate Success Rate : " + approxSR*100);
-			System.out.println("Approximate Failure Rate : " + approxFR*100);
+//			System.out.println("Approximate Success Rate : " + approxSR*100);
+//			System.out.println("Approximate Failure Rate : " + approxFR*100);
 		}
 
 		return new LambdaResult(aFix, QaFix, sqNorm, nFixed, sr, zMat, QzHat);

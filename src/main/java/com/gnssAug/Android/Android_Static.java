@@ -84,7 +84,7 @@ public class Android_Static {
 			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String dcb_bias_path, String clock_path,
 			String orbit_path, String ionex_path, String osb_bias_path, boolean useIGS, boolean doAnalyze,
 			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName,
-			boolean repairCS) {
+			boolean repairCS,boolean doTimeSlice) {
 		try {
 
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
@@ -105,8 +105,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Pixel7Pro_Nov/"
-					+ mobName + "_GPS_GAL_BEI_L1_L5_PPP_Repaired";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment/"
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -123,6 +123,7 @@ public class Android_Static {
 			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
 			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
 			System.out.println("Number of Samples for MC simulation = " + GnssDataConfig.nSamplesMC);
+			System.out.println("PAR_FFRT_MAX_FR = " + GnssDataConfig.PAR_FFRT_MAX_FR);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
 			GNSS_Log.process(gnss_log_path);
@@ -157,15 +158,17 @@ public class Android_Static {
 				double tRx = entry.gettRx();
 				int weekNo = entry.getWeekNo();
 				ZonedDateTime utcTime = Time.convertToZonedDateTime((int) weekNo, tRx);
-
+				
 				// Print out the UTC time
 				
-				if(gtIndex<90)
-				{
-					System.err.println("UTC Time: " + utcTime);
-					gtIndex++;
-					continue;
-				}
+//				if(gtIndex<60)
+//				{
+//					
+//					gtIndex++;
+//					continue;
+//					
+//				}
+				
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
 				
@@ -179,7 +182,8 @@ public class Android_Static {
 
 				}
 				try {
-					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
+					refUserEcef = trueEcef;//LinearLeastSquare.getEstPos(satList, false, useIGS);
+					
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception
 
@@ -922,7 +926,7 @@ public class Android_Static {
 				EKF_PPP2 ekf = new EKF_PPP2();
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
-						trueEcefList, true, repairCS, false,predictPhaseClock,singlePhaseClock,singleClockDrift);
+						trueEcefList, true, repairCS, false,predictPhaseClock,singlePhaseClock,singleClockDrift,doTimeSlice);
 				int n = timeList.size();
 				estPosMap.put("PPP", new ArrayList<double[]>());
 				for (int i = 0; i < n; i++) {
@@ -1186,6 +1190,7 @@ public class Android_Static {
 			}
 			if (mapDeltaRanges) {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
+				GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
 
 			} else if (estimatorType != 21) {
 
@@ -1198,11 +1203,11 @@ public class Android_Static {
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
 				}
 				if (doAnalyze && estimatorType != 11) {
-					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
-					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"), timeList);
-					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
-					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
+//					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
+//					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+//					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("LS"), timeList);
+//					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
+//					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
 
 				}
 			}

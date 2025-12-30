@@ -19,7 +19,15 @@ public class GNSSLog implements Cloneable {
 			Map.entry(1207139970, "7")
 			);
 	private static final Map<Integer, String> SSIMap = Map.of(1, "G", 2, "S", 3, "R", 4, "J", 5, "C", 6, "E", 7, "I");
-	private static final Map<Integer, Integer> qzssMap = Map.of(193, 1, 194, 2, 199, 3, 195, 4);
+	// Old QZSS map, pre March 2022
+//	private static final Map<Integer, Integer> qzssMap = Map.of(193, 1, 194, 2, 199, 3, 195, 4);
+	// Latest QZSS map
+	private static final Map<Integer, Integer> qzssMap = Map.of(
+		    196, 1,  // QZS-1R (Successor to QZS-1)
+		    194, 2,  // QZS-2
+		    199, 3,  // QZS-3 (GEO)
+		    195, 4   // QZS-4
+		);
 
 	// Raw,utcTimeMillis,TimeNanos,LeapSecond,TimeUncertaintyNanos,FullBiasNanos,BiasNanos,BiasUncertaintyNanos,DriftNanosPerSecond,DriftUncertaintyNanosPerSecond,HardwareClockDiscontinuityCount,Svid,TimeOffsetNanos,State,ReceivedSvTimeNanos,ReceivedSvTimeUncertaintyNanos,Cn0DbHz,PseudorangeRateMetersPerSecond,PseudorangeRateUncertaintyMetersPerSecond,AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,AccumulatedDeltaRangeUncertaintyMeters,CarrierFrequencyHz,CarrierCycles,CarrierPhase,CarrierPhaseUncertainty,MultipathIndicator,SnrInDb,ConstellationType,AgcDb,BasebandCn0DbHz,FullInterSignalBiasNanos,FullInterSignalBiasUncertaintyNanos,SatelliteInterSignalBiasNanos,SatelliteInterSignalBiasUncertaintyNanos,CodeType,ChipsetElapsedRealtimeNanos\n
 	// Raw,utcTimeMillis,TimeNanos,LeapSecond,TimeUncertaintyNanos,FullBiasNanos,BiasNanos,BiasUncertaintyNanos,DriftNanosPerSecond,DriftUncertaintyNanosPerSecond,HardwareClockDiscontinuityCount,Svid,TimeOffsetNanos,State,ReceivedSvTimeNanos,ReceivedSvTimeUncertaintyNanos,Cn0DbHz,PseudorangeRateMetersPerSecond,PseudorangeRateUncertaintyMetersPerSecond,AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,AccumulatedDeltaRangeUncertaintyMeters,CarrierFrequencyHz,CarrierCycles,CarrierPhase,CarrierPhaseUncertainty,MultipathIndicator,SnrInDb,ConstellationType,AgcDb\n
@@ -64,7 +72,15 @@ public class GNSSLog implements Cloneable {
 	private long bootGPStime;
 	// GPS week;
 	private int weekNo;
-
+	// =========================================================================
+    // Constants for Accumulate Delta Range State (ADR)
+    // =========================================================================
+	public static final int ADR_STATE_UNKNOWN = 0;
+	public static final int ADR_STATE_VALID = 1;
+    public static final int ADR_STATE_RESET = 2;
+    public static final int ADR_STATE_CYCLE_SLIP = 4;
+    public static final int ADR_STATE_HALF_CYCLE_RESOLVED = 8;
+    public static final int ADR_STATE_HALF_CYCLE_REPORTED = 16;
 	public GNSSLog() {
 		super();
 	}
@@ -351,6 +367,51 @@ public class GNSSLog implements Cloneable {
 	public double gettRx() {
 		return tRx;
 	}
+	/**
+     * Checks if the carrier phase measurement is valid.
+     * If false, accumulatedDeltaRangeMeters should be ignored.
+     */
+    public boolean isAdrUnknown() {
+        return (accumulatedDeltaRangeMeters==0);
+    }
+	/**
+     * Checks if the carrier phase measurement is valid.
+     * If false, accumulatedDeltaRangeMeters should be ignored.
+     */
+    public boolean isAdrValid() {
+        return (accumulatedDeltaRangeState & ADR_STATE_VALID) != 0;
+    }
+
+    /**
+     * Checks if the receiver has reset the carrier phase accumulation 
+     * (Loss of Lock) since the last report.
+     */
+    public boolean isAdrReset() {
+        return (accumulatedDeltaRangeState & ADR_STATE_RESET) != 0;
+    }
+
+    /**
+     * Checks if a Cycle Slip was detected.
+     */
+    public boolean isAdrCycleSlip() {
+        return (accumulatedDeltaRangeState & ADR_STATE_CYCLE_SLIP) != 0;
+    }
+
+    /**
+     * Checks if the Half-Cycle ambiguity is resolved.
+     * TRUE = Ambiguity is an Integer (Safe for LAMBDA).
+     * FALSE = Ambiguity might be Integer + 0.5 (Unsafe for LAMBDA).
+     */
+    public boolean isHalfCycleResolved() {
+        return (accumulatedDeltaRangeState & ADR_STATE_HALF_CYCLE_RESOLVED) != 0;
+    }
+
+    /**
+     * Checks if the Half-Cycle ambiguity was reported (added to the phase).
+     */
+    public boolean isHalfCycleReported() {
+        return (accumulatedDeltaRangeState & ADR_STATE_HALF_CYCLE_REPORTED) != 0;
+    }
 
 	@Override
 	public String toString() {

@@ -152,7 +152,7 @@ public class EstimatorPAR_FFRT {
 	private static Object[] findFirstAboveThreshold_RatioTest(SimpleMatrix aHat, SimpleMatrix LMat, double[] dVec,
 			double[] srCumul, double minSR, boolean estimateVar) throws Exception {
 
-		double maxFR = 1 / 100.0;
+		double maxFR = GnssDataConfig.PAR_FFRT_MAX_FR;
 		int n = aHat.numRows();
 		boolean flag = false;
 		double muRatio = 1;
@@ -168,10 +168,10 @@ public class EstimatorPAR_FFRT {
 				muRatio = ComputeFFRTCoefficient.computeFFRTcoeff(maxFR, 1 - srCumul[i], n - i); // Fixed-FR ratio
 				double[] sqNorms = ilsResult.getSqNorm();
 
-				System.out.println("Combination count: " + (n - i));
-				System.out.println("failure rate :" + (1 - srCumul[i]));
-				System.out.println("MU :" + muRatio);
-				System.out.println("ratio :" + (sqNorms[0] / sqNorms[1]));
+//				System.out.println("Combination count: " + (n - i));
+//				System.out.println("failure rate :" + (1 - srCumul[i]));
+//				System.out.println("MU :" + muRatio);
+//				System.out.println("ratio :" + (sqNorms[0] / sqNorms[1]));
 
 				// Step 4: Perform the Ratio Test based on the computed mu-value
 				if (sqNorms[0] / sqNorms[1] < muRatio) {

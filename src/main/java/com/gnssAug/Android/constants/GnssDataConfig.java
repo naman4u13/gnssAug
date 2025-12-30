@@ -8,6 +8,7 @@ public class GnssDataConfig {
 	final public static double phase_priorVarOfUnitW = 0.0001;//0.0006;
 	final public static double GIM_TECU_variance= Math.pow(3,2);//0.0006;
 	final public static double clkDriftVar = 1e5;
+	final public static double PAR_FFRT_MAX_FR = 0.1/100;
 	//final public static double[] qENU_posRandWalk = new double[] { 25e-2,25,1 };
 //	final public static double[] qENU_posRandWalk = new double[] { 25,25,1 };
 	

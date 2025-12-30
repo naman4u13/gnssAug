@@ -22,15 +22,15 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private double ionoErr;
 	// Tropo param required to be removed from Doppler Measurements
 	private double tropoErr;
-	// Phase lock indicator
-	private boolean isPhaseLocked = false;
+	
 	// Experimental param
 	private double clkRate;
 	// Adaptive Var
 	private double prVar;
 	// Tropo Wet Mapping Function
 	private double wetMF;
-	
+	private boolean cycleSlipDetected;
+	private boolean excludePhase;
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
 		this(log,t,pseudorange,satEcef,satVel,rangeRate);
 		this.phase = phase;
@@ -136,12 +136,7 @@ public class Satellite extends GNSSLog implements Cloneable {
 	public void setIonoErr(double ionoErr) {
 		this.ionoErr = ionoErr;
 	}
-	public boolean isPhaseLocked() {
-		return isPhaseLocked;
-	}
-	public void setPhaseLocked(boolean isPhaseLocked) {
-		this.isPhaseLocked = isPhaseLocked;
-	}
+	
 	public double getTropoErr() {
 		return tropoErr;
 	}
@@ -168,5 +163,18 @@ public class Satellite extends GNSSLog implements Cloneable {
 	public void setWetMF(double wetMF) {
 		this.wetMF = wetMF;
 	}
+	public boolean isCycleSlipDetected() {
+		return cycleSlipDetected;
+	}
+	public void setCycleSlipDetected(boolean cycleSlipDetected) {
+		this.cycleSlipDetected = cycleSlipDetected;
+	}
+	public boolean isExcludePhase() {
+		return excludePhase;
+	}
+	public void setExcludePhase(boolean excludePhase) {
+		this.excludePhase = excludePhase;
+	}
+	
 	
 }

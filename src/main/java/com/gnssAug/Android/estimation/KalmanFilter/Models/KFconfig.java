@@ -294,7 +294,7 @@ public class KFconfig extends KF {
 		int clkOffNum = codeClkOffNum + phaseClKOffNum;
 		int driftStartIndex = 6 + clkOffNum;
 		// Its 16 cm^2/s in TECU^2/s, assuming L1 freq
-		final double TECU_var = 0.0611;
+		final double TECU_var = 0.001;
 		double[][] phi = new double[totalStateNum][totalStateNum];
 		IntStream.range(0, totalStateNum).forEach(i -> phi[i][i] = 1);
 		IntStream.range(0, 3).forEach(i -> phi[i][i + 3 + clkOffNum] = deltaT);
@@ -315,7 +315,7 @@ public class KFconfig extends KF {
 		double diffCodeBiasVar = 1.0e-8; 
 		double diffPhaseBiasVar = 1.0e-8; 
 		if (isAndroid) {
-			clkOffVar = 1e5;
+			clkOffVar = 1e2;
 			clkDriftVar = 1;
 			diffCodeBiasVar = 1.0e-4; 
 			diffPhaseBiasVar = 1.0e-4; 
