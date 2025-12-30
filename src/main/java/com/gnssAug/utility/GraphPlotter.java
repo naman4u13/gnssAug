@@ -1850,7 +1850,7 @@ public class GraphPlotter extends ApplicationFrame {
 				}
 				
 			}
-			if(sat.isExcludePhase())
+			if(sat.isResetPhaseAmb())
 			{
 				exclude_phase.add(t, (Double)8.0);
 			}
@@ -1861,10 +1861,10 @@ public class GraphPlotter extends ApplicationFrame {
 		dataset.addSeries(reset);	
 		dataset.addSeries(cycle_slip_api);	
 		dataset.addSeries(half_cycle_resolved);	
-		dataset.addSeries(half_cycle_reported);	
+//		dataset.addSeries(half_cycle_reported);	
 		dataset.addSeries(cycle_slip_detected);
 		dataset.addSeries(exclude_phase);
-		dataset.addSeries(adr_uncertainity);
+//		dataset.addSeries(adr_uncertainity);
 		return dataset;
 
 	}
@@ -2474,7 +2474,7 @@ public class GraphPlotter extends ApplicationFrame {
 		ambGraph.setVisible(true);
 	}
 
-	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP2 ekf, String[] obsvCodeList,
+	public static void createPPPplots(com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP3 ekf, String[] obsvCodeList,
 			String[] ssiLabels, long t0, boolean singlePhaseClock,
 			boolean singleClockDrift) {
 		for (Measurement meas : ekf.getClkOffMap().keySet()) {

@@ -344,7 +344,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 					int count = consecutiveCSmap.get(satID) + 1;
 					currConsecutiveCSmap.put(satID, count);
 					if (count > 2) {
-						csdList.get(i).setExclude(true);
+						csdList.get(i).setReset(true);
 						excludeCount++;
 						continue;
 					}
@@ -378,7 +378,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 		int _i = 0;
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
-			if (!csdObj.isExclude()) {
+			if (!csdObj.isReset()) {
 				z.set(_i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
 				H.insertIntoThis(_i, 0, unitLOS.scale(-1).extractMatrix(i, i+1, 0, 3));
 				double wavelength = csdObj.getWavelength();
@@ -452,7 +452,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 				int count = 0;
 				for (int i = 0; i < n; i++) {
 					CycleSlipDetect csdObj = csdList.get(i);
-					if (!csdObj.isExclude() && csdObj.isCS()) {
+					if (!csdObj.isReset() && csdObj.isCS()) {
 						csdObj.setRepaired(true);
 						csdObj.setIntAmb(a_caron.get(count));
 						csdObj.setIntAmbCov(Caa_caron.get(count, count));
@@ -522,7 +522,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 			CycleSlipDetect csdObj = csdList.get(j - coreStateNum);
 			String satObsvCode = sat.getObsvCode() + "" + sat.getSVID();
 			boolean flag1 = csdObj.isCS() == false;
-			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isExclude() == false;
+			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isReset() == false;
 			boolean flag = flag1 || flag2;
 			if (ambMap.containsKey(satObsvCode) && flag) {
 				int k = ambMap.get(satObsvCode);
@@ -544,7 +544,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 					CycleSlipDetect _csdObj = csdList.get(l - coreStateNum);
 
 					boolean _flag1 = _csdObj.isCS() == false;
-					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true&& _csdObj.isExclude() == false;
+					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true&& _csdObj.isReset() == false;
 					boolean _flag = _flag1 || _flag2;
 					if (ambMap.containsKey(_satObsvCode) && _flag) {
 						int _k = ambMap.get(_satObsvCode);

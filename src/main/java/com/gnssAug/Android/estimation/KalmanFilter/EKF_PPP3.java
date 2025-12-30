@@ -33,7 +33,7 @@ import com.gnssAug.utility.Time;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
-public class EKF_PPP2 extends EKFParent {
+public class EKF_PPP3 extends EKFParent {
 
 	private TreeMap<Long, Map<Measurement, double[]>> innovationMap;
 	private TreeMap<Long, Map<Measurement, double[]>> residualMap;
@@ -48,15 +48,18 @@ public class EKF_PPP2 extends EKFParent {
 	private HashMap<String, Integer> consecutiveCSmap;
 	private long csDetectedCount = 0;
 	private long csRepairedCount = 0;
+	private long hardResetCount = 0;
+	private long invalidPhaseCount = 0;
+	private long androidAPI_CS_count = 0;
+	private long halfCycleAnomalyCount = 0;
 	private KFconfig vel_kfObj;
 	private KFconfig pos_kfObj;
-	private long ambFixedCount = 0;
-	final private int csThresh = 100;
+	final private int geofree_csThresh = 100;
 	final private int consecutiveSlips = 1;
-	final private int elevationAngleThresh = 15;
-	final private int cn0Thresh = 25;
+	final private int elevationAngleThresh = 0;
+	final private int cn0Thresh = 0;
 	final private Set<String> excludeSatSet = Set.of("");//Set.of("E5X30", "G5X1", "E5X19", "E1C29", "G1C19", "G1C17", "G1C15", "G1C13", "G5X30", "E5X29", "E1C30", "G1C2", "G1C1", "E1C19", "G1C6","G5X6");
-	public EKF_PPP2() {
+	public EKF_PPP3() {
 		vel_kfObj = new KFconfig();
 		pos_kfObj = new KFconfig();
 	}
@@ -65,7 +68,6 @@ public class EKF_PPP2 extends EKFParent {
 	private TreeMap<Long, Integer> csRepairedCountMap;
 	private TreeMap<Long, ArrayList<CycleSlipDetect>> csdListMap;
 	private HashMap<String, int[]> cycleSlipCount;
-	private TreeMap<Long, Integer> ambFixedCountMap;
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
 
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, ArrayList<Long> timeList,
@@ -73,7 +75,7 @@ public class EKF_PPP2 extends EKFParent {
 			boolean isStatic, boolean repairCS, boolean fixAmb, boolean predictPhaseClock, boolean singlePhaseClock,
 			boolean singleClockDrift, boolean doTimeSlice) throws Exception {
 
-		System.out.println("Doppler-Phase CS Threshold : "+csThresh);
+		System.out.println("Doppler-Phase CS Threshold : "+geofree_csThresh);
 		System.out.println("consecutive Cycle Slips : "+consecutiveSlips);
 		System.out.println("Elevation Angle Threshold (in deg) : "+elevationAngleThresh);
 		System.out.println("C/N0 Thresh : "+cn0Thresh);
@@ -118,7 +120,6 @@ public class EKF_PPP2 extends EKFParent {
 		cycleSlipCount = new HashMap<String, int[]>();
 		csDetectedCountMap = new TreeMap<Long, Integer>();
 		csRepairedCountMap = new TreeMap<Long, Integer>();
-		ambFixedCountMap = new TreeMap<Long, Integer>();
 		consecutiveCSmap = new HashMap<String, Integer>();
 		return iterate(SatMap, isStatic, timeList, doAnalyze, doTest, truePosEcefList, obsvCodeList, repairCS, fixAmb,
 				predictPhaseClock, ssiSet, singlePhaseClock, singleClockDrift, doTimeSlice);
@@ -163,11 +164,15 @@ public class EKF_PPP2 extends EKFParent {
 					cycleSlipCount.clear();
 					csDetectedCount = 0;
 					csRepairedCount = 0;
+					hardResetCount = 0;
+					invalidPhaseCount = 0;
+					androidAPI_CS_count = 0;
+					halfCycleAnomalyCount = 0;
 					}
 			}
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
 			double[] currentTruePos = truePosEcefList.get(i);
-			double[] refPos = LinearLeastSquare.getEstPos(currSatList, true, true);
+			double[] refPos = LatLonUtil.lla2ecef(new double[] { 18.56333783, 73.83323233,  517.9}, true);//LinearLeastSquare.getEstPos(currSatList, true, true);
 			int n_curr = currSatList.size();
 			int n_prev = prevSatList.size();
 			Calendar time = Time.getDate(currSatList.get(0).gettRx(), currSatList.get(0).getWeekNo(),
@@ -201,16 +206,21 @@ public class EKF_PPP2 extends EKFParent {
 						double approxCS = Math.abs(phaseDR - dopplerDR);
 						double trueDR = MathUtil.getEuclidean(currentTruePos, current_sat.getSatEci())
 								- MathUtil.getEuclidean(prevTruePos, prev_sat.getSatEci());
-						if (approxCS < csThresh * wavelength) {
-							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
-									wavelength, satVelCorr, unitLOS, currentTime - timeList.get(0), trueDR, prDR));
-						}
-						else
-						{
-							current_sat.setCycleSlipDetected(true);
-							current_sat.setResetPhaseAmb(true);
-						}
-
+						boolean isPhaseValid = current_sat.isAdrValid();
+						boolean isGF_CSD = approxCS > geofree_csThresh * wavelength;
+						boolean isCsRepairable = current_sat.isHalfCycleResolved()&&prev_sat.isHalfCycleResolved();
+						boolean doReset = (!isPhaseValid)||current_sat.isAdrReset()||isGF_CSD||(!isCsRepairable);
+						boolean isAPI_CS = current_sat.isAdrCycleSlip();
+						csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, isAPI_CS,doReset,isPhaseValid,
+								wavelength, satVelCorr, unitLOS, currentTime - timeList.get(0), trueDR, prDR));
+						current_sat.setCycleSlipDetected(isAPI_CS);
+						current_sat.setResetPhaseAmb(doReset);
+						current_sat.setValidPhase(isPhaseValid);
+						invalidPhaseCount += isPhaseValid? 0:1;
+						hardResetCount += doReset? 1:0;
+						androidAPI_CS_count += isAPI_CS&&(!doReset)? 1:0;
+						halfCycleAnomalyCount += isCsRepairable?0:1;
+						break;
 					}
 				}
 			}
@@ -262,13 +272,7 @@ public class EKF_PPP2 extends EKFParent {
 
 		SimpleMatrix H = new SimpleMatrix(n, 3 + (2 * m));
 		SimpleMatrix unitLOS = null;
-		try {
 		unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, refPos));
-		}
-		catch (Exception e) {
-			// TODO: handle exception
-			System.out.println();
-		}
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
@@ -319,7 +323,7 @@ public class EKF_PPP2 extends EKFParent {
 		ArrayList<CycleSlipDetect> testedCsdList = new ArrayList<CycleSlipDetect>();
 
 		for (int i = 0; i < n; i++) {
-			if (!csdList.get(i).isCS()) {
+			if ((!csdList.get(i).isCS())&&(!csdList.get(i).isReset())){
 				testedSatList.add(csdList.get(i).getSat());
 				testedCsdList.add(csdList.get(i));
 			}
@@ -357,7 +361,7 @@ public class EKF_PPP2 extends EKFParent {
 				.scale(GnssDataConfig.tdcp_priorVarOfUnitW);
 
 		R = new SimpleMatrix(tested_tdcp_Cyy);
-		int excludeCount = 0;
+		int resetCount = 0;
 		// Testing for CS
 		performTesting(R, H, tested_n, m, satList, testedSatList, z, ze, csdList, true, vel_kfObj);
 		HashMap<String, Integer> currConsecutiveCSmap = new HashMap<String, Integer>();
@@ -370,36 +374,46 @@ public class EKF_PPP2 extends EKFParent {
 		    double cn0 = sat.getCn0DbHz();
 			int[] record = cycleSlipCount.computeIfAbsent(satID, k -> new int[2]);
 			record[1] += 1;
+			if(csdList.get(i).isReset())
+			{
+				resetCount++;
+	            continue;
+			}
 			if (csdList.get(i).isCS()) {
-				sat.setCycleSlipDetected(true);
-				_ambCount++;
-				record[0] += 1;
-				cycleSlipCount.put(satID, record);
-				if (excludeSatSet.contains(satID)) {
-					sat.setResetPhaseAmb(true);
-		            csdList.get(i).setReset(true);
-		            excludeCount++;
-		            continue; // Skip the rest of the loop (Consecutive check, etc.)
-		        }
-				if (elevationDeg < elevationAngleThresh || cn0 < cn0Thresh) {
-		            // Log rejection if needed: System.out.println("Excluding weak sat: " + satID);
-					sat.setResetPhaseAmb(true);
-		            csdList.get(i).setReset(true);
-		            excludeCount++;
-		            continue; // Skip the rest of the loop (Consecutive check, etc.)
-		        }
+
+//				if (excludeSatSet.contains(satID)) {
+//					sat.setResetPhaseAmb(true);
+//		            csdList.get(i).setReset(true);
+//		            resetCount++;
+//		            continue; // Skip the rest of the loop (Consecutive check, etc.)
+//		        }
+//				if (elevationDeg < elevationAngleThresh || cn0 < cn0Thresh) {
+//		            // Log rejection if needed: System.out.println("Excluding weak sat: " + satID);
+//					sat.setResetPhaseAmb(true);
+//		            csdList.get(i).setReset(true);
+//		            resetCount++;
+//		            continue; // Skip the rest of the loop (Consecutive check, etc.)
+//		        }
 				if (consecutiveCSmap.containsKey(satID)) {
 					int count = consecutiveCSmap.get(satID) + 1;
 					currConsecutiveCSmap.put(satID, count);
 					if (count > consecutiveSlips) {
 						sat.setResetPhaseAmb(true);
 						csdList.get(i).setReset(true);
-						excludeCount++;
+						resetCount++;
+						hardResetCount++;
+			            if(sat.isAdrCycleSlip()) { 
+			                androidAPI_CS_count--; 
+			            }
 						continue;
 					}
 				} else {
 					currConsecutiveCSmap.put(satID, 1);
 				}
+				sat.setCycleSlipDetected(true);
+				record[0] += 1;
+				cycleSlipCount.put(satID, record);
+				_ambCount++;
 				ambCount++;
 			}
 
@@ -417,10 +431,10 @@ public class EKF_PPP2 extends EKFParent {
 		for (int i = 0; i < ambCount; i++) {
 			P_new.set(3 + (2 * m) + i, 3 + (2 * m) + i, 1e12);
 		}
-		H = new SimpleMatrix(n - excludeCount, 3 + (2 * m) + ambCount);
+		H = new SimpleMatrix(n - resetCount, 3 + (2 * m) + ambCount);
 
-		z = new SimpleMatrix(n - excludeCount, 1);
-		SimpleMatrix tdcp_Cyy = SimpleMatrix.identity(n - excludeCount).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
+		z = new SimpleMatrix(n - resetCount, 1);
+		SimpleMatrix tdcp_Cyy = SimpleMatrix.identity(n - resetCount).scale(GnssDataConfig.tdcp_priorVarOfUnitW);
 		R = new SimpleMatrix(tdcp_Cyy);
 		String[] sysout_svid = new String[ambCount];
 		int ctr = 3 + (2 * m);
@@ -577,8 +591,8 @@ public class EKF_PPP2 extends EKFParent {
 			CycleSlipDetect csdObj = csdList.get(j - coreStateNum);
 			String satObsvCode = sat.getObsvCode() + "" + sat.getSvid();
 			boolean flag1 = csdObj.isCS() == false;
-			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isReset() == false;
-			boolean flag = flag1 || flag2;
+			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true;
+			boolean flag = (flag1 || flag2)&&(csdObj.isReset()==false);
 			if (ambMap.containsKey(satObsvCode) && flag) {
 				int k = ambMap.get(satObsvCode);
 				double repairedCSval = 0;
@@ -599,9 +613,9 @@ public class EKF_PPP2 extends EKFParent {
 					CycleSlipDetect _csdObj = csdList.get(l - coreStateNum);
 
 					boolean _flag1 = _csdObj.isCS() == false;
-					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true
-							&& _csdObj.isReset() == false;
-					boolean _flag = _flag1 || _flag2;
+					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true;
+							
+					boolean _flag = (_flag1 || _flag2)&&(_csdObj.isReset() == false);
 					if (ambMap.containsKey(_satObsvCode) && _flag) {
 						int _k = ambMap.get(_satObsvCode);
 						_P.set(j, l, P.get(k, _k));
@@ -691,6 +705,13 @@ public class EKF_PPP2 extends EKFParent {
 		SimpleMatrix Cyy_pseudorange = SimpleMatrix.identity(n).scale(GnssDataConfig.pseudorange_priorVarOfUnitW);// Weight.getNormCyy(satList,
 		// GnssDataConfig.pseudorange_priorVarOfUnitW);
 		SimpleMatrix Cyy_phase = SimpleMatrix.identity(n).scale(GnssDataConfig.phase_priorVarOfUnitW);
+		for(int i=0;i<n;i++)
+		{
+			if(!csdList.get(i).isPhaseValid())
+			{
+				Cyy_phase.set(i, i,1e16);
+			}
+		}
 		SimpleMatrix Cyy_doppler = SimpleMatrix.identity(n).scale(GnssDataConfig.doppler_priorVarOfUnitW);// Weight.getNormCyy(satList,
 		// GnssDataConfig.doppler_priorVarOfUnitW);
 		SimpleMatrix Cyy_GIM_iono = SimpleMatrix.identity(ionoParamNum).scale(GnssDataConfig.GIM_TECU_variance);
@@ -934,8 +955,7 @@ public class EKF_PPP2 extends EKFParent {
 					System.out.println(Qa_caron.toString());
 					System.out.println(" N Fixed : " + nFixed);
 
-					ambFixedCountMap.put(currentTime, nFixed);
-					ambFixedCount += nFixed;
+					
 				}
 			}
 		}
@@ -1262,7 +1282,7 @@ public class EKF_PPP2 extends EKFParent {
 	private void initializePPPFilter(ArrayList<Satellite> satList, String[] obsvCodeList, ListOrderedSet ssiSet,
 			boolean isStatic, boolean singlePhaseClock, boolean singleClockDrift) throws Exception {
 		// Note: Use the same LLS logic you used in process() initialization
-		double[] intialPos =  LinearLeastSquare.getEstPos(satList, true, true);
+		double[] intialPos = LatLonUtil.lla2ecef(new double[] { 18.56333783, 73.83323233,  517.9}, true);// LinearLeastSquare.getEstPos(satList, true, true);
 
 		int codeClkOffNum = obsvCodeList.length;
 		int phaseClkOffNum = singlePhaseClock ? 1 : codeClkOffNum;
@@ -1341,7 +1361,12 @@ public class EKF_PPP2 extends EKFParent {
 		}
 		System.out.println("\n");
 		System.out.println("CS Detected Count : "+csDetectedCount);  
-		System.out.println("CS Repaired Count : "+csRepairedCount);  
+		System.out.println("CS Repaired Count : "+csRepairedCount); 
+		System.out.println("Hard Reset Count : "+hardResetCount);  
+		System.out.println("Invalid Phase Count : "+invalidPhaseCount); 
+		System.out.println("Android API CS Detected Count : "+androidAPI_CS_count);  
+		System.out.println("HalfCycle Anomaly : "+ halfCycleAnomalyCount); 
+		
 		System.out.println("\n");
 		ArrayList<Double>[] posErrList = new ArrayList[6];
 		ArrayList<Double>[] convergedErrList = new ArrayList[6];
@@ -1446,13 +1471,7 @@ public class EKF_PPP2 extends EKFParent {
 		return csdListMap;
 	}
 
-	public long getAmbFixedCount() {
-		return ambFixedCount;
-	}
-
-	public TreeMap<Long, Integer> getAmbFixedCountMap() {
-		return ambFixedCountMap;
-	}
+	
 
 	public HashMap<String, int[]> getCycleSlipCount() {
 		return cycleSlipCount;
@@ -1501,4 +1520,20 @@ public class EKF_PPP2 extends EKFParent {
 	public TreeMap<Long, double[]> getDopMap() {
 		return dopMap;
 	}
+
+	public long getHardResetCount() {
+		return hardResetCount;
+	}
+	public long getInvalidPhaseCount() {
+		return invalidPhaseCount;
+	}
+	public long getAndroidAPI_CS_count() {
+		return androidAPI_CS_count;
+	}
+	public long getHalfCycleAnomalyCount() {
+		return halfCycleAnomalyCount;
+	}
+
+	
+	
 }

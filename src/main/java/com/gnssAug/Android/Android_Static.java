@@ -48,6 +48,7 @@ import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP2;
+import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP3;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
 import com.gnssAug.Android.fileParser.GNSS_Log;
@@ -105,8 +106,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment/"
-					+ mobName + "_test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment_AndroidAPI/Pixel4_Jan/"
+					+ mobName + "OnePlus Nord 2T_GPS_GAL_BEI_L1_L5_PPP_unRepaired";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -161,13 +162,13 @@ public class Android_Static {
 				
 				// Print out the UTC time
 				
-//				if(gtIndex<60)
-//				{
-//					
+				if(gtIndex>808)
+				{
+					break;
 //					gtIndex++;
 //					continue;
 //					
-//				}
+				}
 				
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
@@ -923,7 +924,7 @@ public class Android_Static {
 				boolean predictPhaseClock = false;
 				boolean singlePhaseClock = false;
 				boolean singleClockDrift = false;
-				EKF_PPP2 ekf = new EKF_PPP2();
+				EKF_PPP3 ekf = new EKF_PPP3();
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
 						trueEcefList, true, repairCS, false,predictPhaseClock,singlePhaseClock,singleClockDrift,doTimeSlice);
@@ -1025,7 +1026,11 @@ public class Android_Static {
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
 					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0), singlePhaseClock,singleClockDrift);
 					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
-					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());  
+					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());
+					System.out.println("Hard Reset Count : "+ekf.getHardResetCount());  
+					System.out.println("Invalid Phase Count : "+ekf.getInvalidPhaseCount()); 
+					System.out.println("Android API CS Detected Count : "+ekf.getAndroidAPI_CS_count());  
+					System.out.println("HalfCycle Anomaly : "+ekf.getHalfCycleAnomalyCount()); 
 				}
 			}
 
@@ -1203,11 +1208,11 @@ public class Android_Static {
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
 				}
 				if (doAnalyze && estimatorType != 11) {
-//					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
-//					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
-//					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("LS"), timeList);
-//					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
-//					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
+					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
+					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
+					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"), timeList);
+					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
+					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
 
 				}
 			}

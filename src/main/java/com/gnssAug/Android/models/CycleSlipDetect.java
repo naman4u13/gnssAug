@@ -25,7 +25,8 @@ public class CycleSlipDetect {
 	private double successRate;
 	private double failureRate;
 	private boolean isWLcomb = false;
-	private boolean exclude = false;
+	private boolean reset = false;
+	private boolean isPhaseValid = true;
 	public CycleSlipDetect(CycleSlipDetect csdObj) {
 		this( csdObj.getSat(),  csdObj.getDopplerDR(), csdObj.getCarrierPhaseDR(),  csdObj.getIonoRate(),  csdObj.isCS(),
 				csdObj.getWavelength(),  csdObj.getSatVelCorr(),  csdObj.getUnitLOS(),  csdObj.getTime(),csdObj.getTrueDR());
@@ -57,6 +58,25 @@ public class CycleSlipDetect {
 		this.carrierPhaseDR = carrierPhaseDR;
 		this.ionoRate = ionoRate;
 		this.isCS = isCS;
+		this.wavelength = wavelength;
+		this.satVelCorr = satVelCorr;
+		this.unitLOS = unitLOS;
+		this.time = time;
+		this.trueDR = trueDR;
+		this.prDR = prDR;
+		
+		
+	}
+	public CycleSlipDetect(Satellite sat, double dopplerDR, double carrierPhaseDR, double ionoRate, boolean isCS,boolean reset,boolean isPhaseValid,
+			double wavelength, double satVelCorr, SimpleMatrix unitLOS, double time,double trueDR,double prDR) {
+		super();
+		this.sat = sat;
+		this.dopplerDR = dopplerDR;
+		this.carrierPhaseDR = carrierPhaseDR;
+		this.ionoRate = ionoRate;
+		this.isCS = isCS;
+		this.reset = reset;
+		this.isPhaseValid = isPhaseValid;
 		this.wavelength = wavelength;
 		this.satVelCorr = satVelCorr;
 		this.unitLOS = unitLOS;
@@ -210,12 +230,20 @@ public class CycleSlipDetect {
 		return igs_sat;
 	}
 
-	public boolean isExclude() {
-		return exclude;
+	public boolean isReset() {
+		return reset;
 	}
 
-	public void setExclude(boolean exclude) {
-		this.exclude = exclude;
+	public void setReset(boolean reset) {
+		this.reset = reset;
+	}
+
+	public boolean isPhaseValid() {
+		return isPhaseValid;
+	}
+
+	public void setPhaseValid(boolean isPhaseValid) {
+		this.isPhaseValid = isPhaseValid;
 	}
 	
 	

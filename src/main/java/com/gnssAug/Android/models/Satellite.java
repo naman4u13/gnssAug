@@ -29,8 +29,13 @@ public class Satellite extends GNSSLog implements Cloneable {
 	private double prVar;
 	// Tropo Wet Mapping Function
 	private double wetMF;
+	// Cycle Slip detected either by Android API or proposed CSD
 	private boolean cycleSlipDetected;
-	private boolean excludePhase;
+	// Reset Phase Ambiguity
+	private boolean resetPhaseAmb;
+	// Invalid Phase measurement
+	private boolean isValidPhase;
+	
 	public Satellite(GNSSLog log, double t, double pseudorange, double[] satEcef, double[] satVel, double rangeRate, double phase) {
 		this(log,t,pseudorange,satEcef,satVel,rangeRate);
 		this.phase = phase;
@@ -169,12 +174,17 @@ public class Satellite extends GNSSLog implements Cloneable {
 	public void setCycleSlipDetected(boolean cycleSlipDetected) {
 		this.cycleSlipDetected = cycleSlipDetected;
 	}
-	public boolean isExcludePhase() {
-		return excludePhase;
+	public boolean isResetPhaseAmb() {
+		return resetPhaseAmb;
 	}
-	public void setExcludePhase(boolean excludePhase) {
-		this.excludePhase = excludePhase;
+	public void setResetPhaseAmb(boolean resetPhaseAmb) {
+		this.resetPhaseAmb = resetPhaseAmb;
 	}
-	
+	public boolean isValidPhase() {
+		return isValidPhase;
+	}
+	public void setValidPhase(boolean isValidPhase) {
+		this.isValidPhase = isValidPhase;
+	}
 	
 }
