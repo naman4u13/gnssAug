@@ -311,9 +311,12 @@ public class KFconfig extends KF {
 		}
 
 		double clkOffVar = 1;
-		double clkDriftVar = 0.1;
+		
 		double diffCodeBiasVar = 1.0e-8; 
 		double diffPhaseBiasVar = 1.0e-8; 
+		// Clock Drift
+		double clkDriftVar = 0.1;
+		double diffClkDriftVar = 1.0e-4; 
 		if (isAndroid) {
 			clkOffVar = 1e2;
 			clkDriftVar = 1;
@@ -360,8 +363,7 @@ public class KFconfig extends KF {
 				_Q.set(driftIdx, phaseIdx, clkDriftVar * Math.pow(deltaT, 2) / 2);
 			}
 		}
-		// Clock Drift
-		double biasDriftVar = 1.0e-4; 
+		
 		for (int i = 0; i < clkDriftNum; i++) {
 			double varToUse;
 			if (i == 0) {
@@ -369,7 +371,7 @@ public class KFconfig extends KF {
 				varToUse = clkDriftVar;
 			} else {
 				// Inter-System Bias Drift (Slow Thermal Variation)
-				varToUse = biasDriftVar;
+				varToUse = diffClkDriftVar;
 			}
 			
 			_Q.set(driftStartIndex + i, driftStartIndex + i, varToUse * deltaT);

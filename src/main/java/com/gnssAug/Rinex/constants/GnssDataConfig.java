@@ -5,8 +5,8 @@ public class GnssDataConfig {
 	final public static double pseudorange_priorVarOfUnitW =1e-2;
 	final public static double doppler_priorVarOfUnitW =3e-4;//Math.pow(0.0979, 2);
 	final public static double tdcp_priorVarOfUnitW =3e-4;//Math.pow(0.05, 2);
-	final public static double phase_priorVarOfUnitW =1e-4;//Math.pow(0.05, 2);
-	final public static double GIM_TECU_variance= Math.pow(3,2);//0.0006;
+	final public static double phase_priorVarOfUnitW =1e-6;//Math.pow(0.05, 2);
+	final public static double GIM_TECU_variance= Math.pow(1,2);//0.0006;
 	final public static double clkDriftVar = 1e5;
 	//final public static double[] qENU_posRandWalk = new double[] { 25e-2,25,1 };
 	final public static double[] qENU_posRandWalk = new double[] { 1e-10,1e-10,1e-10};

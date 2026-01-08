@@ -74,6 +74,7 @@ import com.gnssAug.helper.lambdaNew.EstimatorType;
 import com.gnssAug.utility.Analyzer;
 import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
+import com.gnssAug.utility.MakeCSV;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.SatUtil;
 import com.gnssAug.utility.Time;
@@ -106,8 +107,8 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment_AndroidAPI/Pixel4_Jan/"
-					+ mobName + "OnePlus Nord 2T_GPS_GAL_BEI_L1_L5_PPP_unRepaired";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment_AndroidAPI/Pixel7Pro_Jan/"
+					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -162,13 +163,13 @@ public class Android_Static {
 				
 				// Print out the UTC time
 				
-				if(gtIndex>808)
-				{
-					break;
-//					gtIndex++;
-//					continue;
-//					
-				}
+//				if(gtIndex>600)
+//				{
+//					break;
+////					gtIndex++;
+////					continue;
+////					
+//				}
 				
 				gtIndex++;
 				Calendar time = Time.getDate(tRx, weekNo, 0);
@@ -919,13 +920,13 @@ public class Android_Static {
 				}
 
 			}
-
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+			EKF_PPP3 ekf = null;
 			if (estimatorType == 22) {
 				boolean predictPhaseClock = false;
 				boolean singlePhaseClock = false;
 				boolean singleClockDrift = false;
-				EKF_PPP3 ekf = new EKF_PPP3();
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+				ekf = new EKF_PPP3();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
 						trueEcefList, true, repairCS, false,predictPhaseClock,singlePhaseClock,singleClockDrift,doTimeSlice);
 				int n = timeList.size();
@@ -1213,6 +1214,12 @@ public class Android_Static {
 					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"), timeList);
 					GraphPlotter.graphSatCount(satCountMap, timeList, 1);
 					GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
+					boolean makeCSV = false;
+					if(makeCSV)
+					{
+						
+						MakeCSV.exportAndroidPPPToCSV(satMap, ekf, GraphPosMap, satInnMap, timeList, obsvCodeList, trueEcef);
+					}
 
 				}
 			}

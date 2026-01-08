@@ -1215,6 +1215,8 @@ public class GraphPlotter extends ApplicationFrame {
 			chart.pack();
 			RefineryUtilities.positionFrameRandomly(chart);
 			chart.setVisible(true);
+			
+			
 //			chart = new GraphPlotter(id, "Observables", satListMap.get(id));
 //			chart.pack();
 //			RefineryUtilities.positionFrameRandomly(chart);
@@ -1225,8 +1227,13 @@ public class GraphPlotter extends ApplicationFrame {
 //			chart.setVisible(true);
 
 		}
-
 		boolean makeCSV = false;
+		if(makeCSV)
+		{
+			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Phd Proposal/Plots_CSV/Pixel7_pro_Nov_E1C29_ADR_STATE_.csv";
+			exportADRStateToCSV(filePath, satListMap.get("E1C29"));
+		}
+		
 		if (makeCSV) {
 			String filePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/GPS/Conferences_Journals/ION-GNSS-2025/CSVs/NoCorrections/RxX_Samsung_Galaxy_S20+_5G_L5.csv";
 			File file = new File(filePath);
@@ -2387,6 +2394,7 @@ public class GraphPlotter extends ApplicationFrame {
 	}
 
 	public static void createPPPplots(EKF_PPP ekf, String[] obsvCodeList, String[] ssiLabels, long t0) {
+		
 		// Existing: clkOffMap
 		GraphPlotter clkOffGraph = new GraphPlotter(ekf.getClkOffMap(), obsvCodeList, t0, true, "Clock Offset");
 		clkOffGraph.pack();
@@ -2579,4 +2587,44 @@ public class GraphPlotter extends ApplicationFrame {
 		RefineryUtilities.positionFrameRandomly(ambGraph);
 		ambGraph.setVisible(true);
 	}
+	
+
+	public static void exportADRStateToCSV(String filePath, TreeMap<Long, Satellite> satMap) {
+	    try (CSVWriter writer = new CSVWriter(new FileWriter(filePath))) {
+	        // 1. Write Header
+	        String[] header = { 
+	            "Time", "Exist", "Valid", "Reset", "CS_API", 
+	            "HC_Resolved", "HC_Reported", "CS_Detected", "Exclude_Phase" 
+	        };
+	        writer.writeNext(header);
+
+	        // 2. Iterate and Write Data
+	        for (Long t : satMap.keySet()) {
+	            Satellite sat = satMap.get(t);
+	            String[] entry = new String[9];
+	            
+	            // Time (converted to seconds if needed, matching your graph logic)
+	            entry[0] = String.valueOf(t); 
+
+	            // Logic matches createDatasetADRstate
+	            // We write the Y-value (1.0 to 8.0) if true, or empty string "" if false.
+	            // MATLAB reads empty CSV cells as NaN, which it conveniently skips when plotting.
+	            
+	            entry[1] = "1.0"; // Exist (Always 1.0)
+	            entry[2] = sat.isAdrValid() ? "2.0" : "";
+	            entry[3] = sat.isAdrReset() ? "3.0" : "";
+	            entry[4] = sat.isAdrCycleSlip() ? "4.0" : "";
+	            entry[5] = sat.isHalfCycleResolved() ? "5.0" : "";
+	            entry[6] = sat.isHalfCycleReported() ? "6.0" : "";
+	            entry[7] = sat.isCycleSlipDetected() ? "7.0" : "";
+	            entry[8] = sat.isResetPhaseAmb() ? "8.0" : "";
+
+	            writer.writeNext(entry);
+	        }
+	        System.out.println("ADR State CSV exported to: " + filePath);
+	    } catch (IOException e) {
+	        e.printStackTrace();
+	    }
+	}
+	
 }

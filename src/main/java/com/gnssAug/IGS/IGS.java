@@ -58,6 +58,7 @@ import com.gnssAug.utility.GraphPlotter;
 import com.gnssAug.utility.LatLonUtil;
 import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
+import com.gnssAug.utility.MakeCSV;
 
 public class IGS {
 
@@ -76,7 +77,7 @@ public class IGS {
 			HashMap<String, HashMap<String, ArrayList<Double>>> satMeasNoiseMap = new HashMap<String, HashMap<String, ArrayList<Double>>>();
 
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satResMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-
+			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 			HashMap<Measurement, HashMap<String, ArrayList<Double>>> postVarOfUnitWeightMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
 			HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>> Cxx_hat_map = new HashMap<State, HashMap<String, ArrayList<SimpleMatrix>>>();
 			HashMap<String, ArrayList<double[]>> dopMap = new HashMap<String, ArrayList<double[]>>();
@@ -93,12 +94,12 @@ public class IGS {
 
 			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 
-			String obs_path = "/Users/naman.agarwal/Downloads/rover.rnx";
+			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/Swarm/test";
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/PhD thesis/test";
 			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
 			File output = new File(path + ".txt");
 			PrintStream stream;
@@ -257,7 +258,7 @@ public class IGS {
 				timeList.add(tRxMilli);
 			}
 			if (estimatorType == 3 || estimatorType == 4) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
+				satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
 						outlierAnalyze, obsvCodeList);
@@ -327,9 +328,10 @@ public class IGS {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 				}
 			}
+			EKF_PPP ekf = null;
 			if (estimatorType == 5) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
+				
+				ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze,doTest, obsvCodeList,
 						rxARP, true, repairCS,false);
 
@@ -419,6 +421,8 @@ public class IGS {
 				}
 				if(doAnalyze)
 				{
+					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
+					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());
 					ListOrderedSet ssiSet = new ListOrderedSet();
 					for (int i = 0; i < obsvCodeList.length;i++) {
 						ssiSet.add(obsvCodeList[i].charAt(0)+"");
@@ -429,118 +433,8 @@ public class IGS {
 					GraphPlotter.createPPPplots(ekf, obsvCodeList,ssiLabel, timeList.get(0));
 				}
 			}
+		
 			
-			if (estimatorType == 6) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				EKF_PPP_DF ekf = new com.gnssAug.Rinex.estimation.EKF_PPP_DF();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
-						rxARP, true, false);
-
-				int n = timeList.size();
-				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
-				System.out.println("These satellite have more than 40% phase data with Cycle Slips");
-				for (String satID : csCountMap.keySet()) {
-					int[] csCount = csCountMap.get(satID);
-					double percentage = (csCount[0] * 1.0) / csCount[1];
-					if (percentage > 0.4) {
-						System.out.print(satID + ", ");
-					}
-				}
-				System.out.println();
-				HashMap<Measurement, HashMap<String, ArrayList<Double>>> RedundancyNoMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
-				if (doAnalyze) {
-					for (Measurement meas : List.of(Measurement.Pseudorange, Measurement.CarrierPhase,
-							Measurement.Doppler)) {
-						satResMap.put(meas, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-						satResMap.get(meas).put("PPP", new HashMap<String, ArrayList<SatResidual>>());
-						satInnMap.put(meas, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
-						satInnMap.get(meas).put("PPP", new HashMap<String, ArrayList<SatResidual>>());
-						satCountMap.put(meas, new TreeMap<String, ArrayList<Long>>());
-						postVarOfUnitWeightMap.put(meas, new HashMap<String, ArrayList<Double>>());
-						RedundancyNoMap.put(meas, new HashMap<String, ArrayList<Double>>());
-						
-					}
-					dopMap.put("PPP", new ArrayList<double[]>());
-					
-				}
-				for (int i = 1; i < n; i++) {
-					long time = timeList.get(i);
-					double[] estPos = estStateMap_pos.get(time);
-					estPosMap.computeIfAbsent("PPP", k -> new ArrayList<double[]>()).add(estPos);
-					if (doAnalyze) {
-						ArrayList<Satellite> satList = (ArrayList<Satellite>) ekf.getSatListMap().get(time);
-						Map<Measurement, double[]> residualMap = (Map<Measurement, double[]>) ekf.getResidualMap()
-								.get(time);
-						Map<Measurement, double[]> innovationMap = (Map<Measurement, double[]>) ekf.getInnovationMap()
-								.get(time);
-						Map<Measurement, Double> postVarOfUnitWMap = (Map<Measurement, Double>) ekf
-								.getPostVarOfUnitWMap().get(time);
-						 Map<Measurement, Double> redunMap = ekf.getRedundancyNoMap().get(time);
-						int m = satList.size();
-						long tRx = time / 1000;
-						for (Measurement meas : List.of(Measurement.Pseudorange, Measurement.CarrierPhase,
-								Measurement.Doppler)) {
-						int size = residualMap.get(meas).length;
-						for (int j = 0; j < size; j++) {
-							Satellite sat = satList.get(j);
-							
-								satResMap.get(meas).get("PPP")
-								.computeIfAbsent(sat.getObsvCode() + "" + sat.getSVID(),
-										k -> new ArrayList<SatResidual>())
-								.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], residualMap.get(meas)[j], sat.isOutlier(),
-										sat.getCNo()));
-								satInnMap.get(meas).get("PPP")
-								.computeIfAbsent(sat.getObsvCode() + "" + sat.getSVID(),
-										k -> new ArrayList<SatResidual>())
-								.add(new SatResidual(tRx - tRx0, sat.getElevAzm()[0], innovationMap.get(meas)[j], sat.isOutlier(),
-										sat.getCNo()));
-								
-							}
-						}
-						for (Measurement meas : List.of(Measurement.Pseudorange, Measurement.CarrierPhase,
-								Measurement.Doppler)) {
-							
-							postVarOfUnitWeightMap.get(meas)
-							.computeIfAbsent("PPP", k -> new ArrayList<Double>()).add(postVarOfUnitWMap.get(meas));
-							
-							
-							RedundancyNoMap.get(meas)
-							.computeIfAbsent("PPP", k -> new ArrayList<Double>()).add(redunMap.get(meas));
-							
-						}
-						satCountMap.get(Measurement.Pseudorange).computeIfAbsent("PPP", k -> new ArrayList<Long>())
-								.add(ekf.getSatCountMap().get(time));
-						dopMap.get("PPP").add(ekf.getDopMap().get(time));					
-						
-					}
-				}
-				if(doAnalyze)
-				{
-					ListOrderedSet ssiSet = new ListOrderedSet();
-					for (int i = 0; i < obsvCodeList.length;i++) {
-						ssiSet.add(obsvCodeList[i].charAt(0)+"");
-					}
-					String[] ssiLabel = (String[]) ssiSet.toArray(new String[0]);
-					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
-					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
-					GraphPlotter.createPPPplots(ekf, obsvCodeList,ssiLabel, timeList.get(0));
-				}
-			}
-			if (estimatorType == 7) {
-				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				EKF_PPP ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze,doTest, obsvCodeList,
-						rxARP, true,repairCS, true);
-
-				int n = timeList.size();
-				for (int i = 1; i < n; i++) {
-					long time = timeList.get(i);
-					double[] estPos = estStateMap_pos.get(time);
-					estPosMap.computeIfAbsent("EKF_PPP_AR", k -> new ArrayList<double[]>()).add(estPos);
-
-				}
-
-			}
 //			if (estimatorType == 1) {
 //				Analyzer.processIGS(satMap, rxARP, rxPCO, estPosMap, estVelMap, satResMap, outlierAnalyze);
 //			}
@@ -730,8 +624,17 @@ public class IGS {
 				GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 				GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 				GraphPlotter.graphSatCount(satCountMap, timeList, 1);
-				GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("LS"),timeList);
+				GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"),timeList);
 				
+				boolean makeCSV = false;
+				if(makeCSV)
+				{
+					
+					MakeCSV.exportPPPresultsToCSV(satMap, ekf,GraphPosMap,
+							 satInnMap,
+							timeList,  obsvCodeList,
+							rxARP);
+				}
 			}
 		} catch (
 

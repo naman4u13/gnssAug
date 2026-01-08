@@ -50,6 +50,7 @@ public class EKF_PPP extends EKFParent {
 	private HashMap<String, Integer> consecutiveCSmap;
 	final private int csThresh = 100;
 	final private int consecutiveSlips = 1;
+	private int nonZeroArtificalCScount = 0;
 
 
 	
@@ -159,41 +160,73 @@ public class EKF_PPP extends EKFParent {
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
+			int csIncrement = 0;
 			if(i%4==0)
 			{
-				slip[0] += ((int)(i/4))%10;
+				csIncrement =((int)(i/4))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[0] += csIncrement;
 				System.out.println(currSatList.get(0).getSVID()+" : CS value added = "+slip[0]);
 			}
 			if(i%3==0)
 			{
-				slip[1] += ((int)(i/3))%10;
-				System.out.println(currSatList.get(0).getSVID()+" : CS value added = "+slip[1]);
+				csIncrement =((int)(i/3))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[1] += csIncrement;
+				System.out.println(currSatList.get(1).getSVID()+" : CS value added = "+slip[1]);
 			}
 			if(i%6==0)
 			{
-				slip[2] += ((int)(i/6))%10;
-				System.out.println(currSatList.get(1).getSVID()+" : CS value added = "+slip[2]);
+				csIncrement =((int)(i/6))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[2] += csIncrement;
+				System.out.println(currSatList.get(2).getSVID()+" : CS value added = "+slip[2]);
 			}
 			if(i%8==0)
 			{
-				slip[3] += ((int)(i/8))%10;
+				csIncrement =((int)(i/8))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[3] += csIncrement;
 				System.out.println(currSatList.get(3).getSVID()+" : CS value added = "+slip[3]);
 			}
 			if(i%4==0)
 			{
-				slip[4] += ((int)(i/4))%10;
+				csIncrement =((int)(i/4))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[4] += csIncrement;
 				System.out.println(currSatList.get(4).getSVID()+" : CS value added = "+slip[4]);
 			}
 			if(i%6==0)
 			{
-				slip[5] += ((int)(i/6))%10;
+				csIncrement =((int)(i/6))%10;
+				if(csIncrement!=0)
+				{
+					nonZeroArtificalCScount++;
+				}
+				slip[5] += csIncrement;
 				System.out.println(currSatList.get(5).getSVID()+" : CS value added = "+slip[5]);
 			}
-//			if(i%3==0)
-//			{
-//				slip[6] += ((int)(i/3))%10;
-//				System.out.println(currSatList.get(6).getSVID()+" : CS value added = "+slip[6]);
-//			}
+////			if(i%3==0)
+////			{
+////				slip[6] += ((int)(i/3))%10;
+////				System.out.println(currSatList.get(6).getSVID()+" : CS value added = "+slip[6]);
+////			}
+			
 			Satellite sat_temp = currSatList.get(0);
 			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[0]));
 			sat_temp = currSatList.get(1);
@@ -270,6 +303,7 @@ public class EKF_PPP extends EKFParent {
 			prevTime = currentTime;
 
 		}
+		System.out.println("Artificial CS count : "+nonZeroArtificalCScount);
 		return estStateMap;
 
 	}
