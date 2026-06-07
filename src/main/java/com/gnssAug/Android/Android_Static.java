@@ -184,7 +184,7 @@ public class Android_Static {
 
 				}
 				try {
-					refUserEcef = trueEcef;//LinearLeastSquare.getEstPos(satList, false, useIGS);
+					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
 					
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception

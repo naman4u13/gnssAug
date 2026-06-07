@@ -276,7 +276,7 @@ public class EKF_PPP3 extends EKFParent {
 		SimpleMatrix H = new SimpleMatrix(n, 3 + (2 * m));
 		SimpleMatrix unitLOS = null;
 		unitLOS = new SimpleMatrix(SatUtil.getUnitLOS(satList, refPos));
-		H.insertIntoThis(0, 0, unitLOS.scale(-1));
+		H.insertIntoThis(0, 0, unitLOS.scale(-deltaT));
 		for (int i = 0; i < n; i++) {
 			CycleSlipDetect csdObj = csdList.get(i);
 			z.set(i, csdObj.getDopplerDR() - csdObj.getSatVelCorr());
@@ -336,7 +336,7 @@ public class EKF_PPP3 extends EKFParent {
 			z = new SimpleMatrix(tested_n, 1);
 			H = new SimpleMatrix(tested_n, 3 + (2 * m));
 			SimpleMatrix testedUnitLOS = new SimpleMatrix(SatUtil.getUnitLOS(testedSatList, refPos));
-			H.insertIntoThis(0, 0, testedUnitLOS.scale(-1));
+			H.insertIntoThis(0, 0, testedUnitLOS.scale(-deltaT));
 			for (int i = 0; i < tested_n; i++) {
 				CycleSlipDetect csdObj = testedCsdList.get(i);
 				z.set(i, csdObj.getCarrierPhaseDR() - csdObj.getSatVelCorr());
