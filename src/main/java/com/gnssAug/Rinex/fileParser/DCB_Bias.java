@@ -29,7 +29,6 @@ public class DCB_Bias {
         );
         C1Wmap = new HashMap<Integer, double[]>();
         bsx_process();
-        System.out.println("DCB Bias Parsing Completed.");
     }
 
     private void bsx_process() throws Exception {

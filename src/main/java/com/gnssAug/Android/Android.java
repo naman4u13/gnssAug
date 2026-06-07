@@ -30,6 +30,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.EstimatorMode;
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
@@ -40,7 +41,6 @@ import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
 
-import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
@@ -77,7 +77,7 @@ import com.gnssAug.utility.Time;
 public class Android {
 	private static Geoid geoid = null;
 
-	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
+	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, EstimatorMode estimatorMode,
 			String[] obsvCodeList, String derived_csv_path, String gnss_log_path, String GTcsv, String bias_path,
 			String clock_path, String orbit_path, String ionex_path, boolean useIGS, boolean doAnalyze, boolean doTest,
 			boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, boolean isGSA,boolean repairCS) {
@@ -222,7 +222,7 @@ public class Android {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(truePosEcef, sat.getSatEci()));
 
 				}
-				filterSat(satList, cutOffAng, snrMask, truePosEcef, useIGS, ionex, time, estimatorType);
+				filterSat(satList, cutOffAng, snrMask, truePosEcef, useIGS, ionex, time, estimatorMode);
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
 
@@ -231,18 +231,16 @@ public class Android {
 				}
 				double[] estEcefClk = null;
 
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3 || estimatorType == 11) {
-					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3 || estimatorType == 11) {
-						arr = new int[] { 1, 2 };
+				if (estimatorMode.isLLSMode() || estimatorMode.isAnalysisMode()) {
+					List<EstimatorMode> llsModes;
+					if (estimatorMode == EstimatorMode.LLS_WLS_BOTH || estimatorMode.isAnalysisMode()) {
+						llsModes = Arrays.asList(EstimatorMode.LLS_CODE, EstimatorMode.WLS_CODE);
+					} else {
+						llsModes = Collections.singletonList(estimatorMode);
 					}
-					for (int i : arr) {
-						boolean isWLS = false;
-						String estType = "LS";
-						if (i == 2) {
-							isWLS = true;
-							estType = "WLS";
-						}
+					for (EstimatorMode llsMode : llsModes) {
+						boolean isWLS = (llsMode == EstimatorMode.WLS_CODE);
+						String estType = isWLS ? "WLS" : "LS";
 						// Implement WLS method
 						estEcefClk = null;
 						double[] estVel = null;
@@ -258,7 +256,7 @@ public class Android {
 //								satList.forEach(j->j.setClkRate(data));
 								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 							}
-							if (doAnalyze && estimatorType != 11) {
+							if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 
 								double[] residual = LinearLeastSquare.getResidual(type);
 								SimpleMatrix Cyy = LinearLeastSquare.getCyy(type);
@@ -307,7 +305,7 @@ public class Android {
 			}
 			// Get True Velocity
 			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(trueEcefList, timeList);
-			if (estimatorType == 4) {
+			if (estimatorMode == EstimatorMode.GNSS_INS) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
 				for (Map.Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry : imuMap.entrySet()) {
@@ -331,8 +329,7 @@ public class Android {
 
 			}
 			boolean useDoppler = true;
-			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8
-					|| estimatorType == 9 || estimatorType == 11 || estimatorType == 12 || estimatorType == 13) {
+			if (estimatorMode.isBasicEKFMode() || estimatorMode.isAnalysisMode()) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
 
@@ -343,14 +340,16 @@ public class Android {
 				TreeMap<Long, double[]> estStateMap_vel_estVel = null;
 				TreeMap<Long, double[]> estStateMap_vel_estVel_complementary = null;
 				int n = timeList.size();
-				int[] estTypes = new int[] { estimatorType };
-				String estName = "";
-				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11))) {
-					estTypes = new int[] { 5, 6, 12 };
+				List<EstimatorMode> ekfSubModes;
+				if ((estimatorMode == EstimatorMode.EKF_BASIC_MULTI && !doAnalyze) || estimatorMode.isAnalysisMode()) {
+					ekfSubModes = Arrays.asList(EstimatorMode.EKF_POS_RW, EstimatorMode.EKF_VEL_RW, EstimatorMode.EKF_VEL_RW_ESTVEL);
+				} else {
+					ekfSubModes = Collections.singletonList(estimatorMode);
 				}
-				for (int type : estTypes) {
-					switch (type) {
-					case 5:
+				String estName = "";
+				for (EstimatorMode ekfMode : ekfSubModes) {
+					switch (ekfMode) {
+					case EKF_POS_RW:
 						// Implement EKF based on receiver’s position and clock offset errors as a
 						// random walk process
 						useDoppler = false;
@@ -364,7 +363,7 @@ public class Android {
 						}
 
 						break;
-					case 6:
+					case EKF_VEL_RW:
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process
 						useDoppler = false;
@@ -392,7 +391,7 @@ public class Android {
 
 						break;
 
-					case 7:
+					case EKF_VEL_RW_DOPPLER:
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with doppler updates
 						estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
@@ -448,7 +447,7 @@ public class Android {
 					// }
 					//
 					// break;
-					case 12:
+					case EKF_VEL_RW_ESTVEL:
 						useDoppler = false;
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with estimated velocity updates
@@ -475,7 +474,7 @@ public class Android {
 						}
 
 						break;
-					case 13:
+					case EKF_VEL_RW_ESTVEL_COMP:
 						useDoppler = false;
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with estimated velocity updates
@@ -504,7 +503,7 @@ public class Android {
 					}
 				}
 
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					Measurement[] measArr = useDoppler
 							? new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }
 							: new Measurement[] { Measurement.Pseudorange };
@@ -577,16 +576,18 @@ public class Android {
 
 			}
 
-			if (estimatorType == 10 || estimatorType == 14 || estimatorType == 11) {
-				int[] estArray = new int[] { estimatorType };
-				if (estimatorType == 11) {
-					estArray = new int[] { 10, 14 };
+			if (estimatorMode.isDBPMode() || estimatorMode.isAnalysisMode()) {
+				List<EstimatorMode> dbpModes;
+				if (estimatorMode.isAnalysisMode()) {
+					dbpModes = Arrays.asList(EstimatorMode.EKF_DBP, EstimatorMode.AKF_DBP);
+				} else {
+					dbpModes = Collections.singletonList(estimatorMode);
 				}
-				for (int estType : estArray) {
+				for (EstimatorMode dbpMode : dbpModes) {
 					String estName;
 					TreeMap<Long, double[]> estStateMap;
 					EKFParent ekf;
-					if (estType == 10) {
+					if (dbpMode == EstimatorMode.EKF_DBP) {
 						estName = "DBP Filter";
 						ekf = new EKFDoppler();
 						estStateMap = ((EKFDoppler) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
@@ -605,7 +606,7 @@ public class Android {
 					int n = timeList.size();
 					estPosMap.put(estName, new ArrayList<double[]>());
 					HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						satResMap.put(Measurement.Pseudorange,
 								new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 						satResMap.get(Measurement.Pseudorange).put(estName,
@@ -627,7 +628,7 @@ public class Android {
 						if (estPos == null) {
 							continue;
 						}
-						if (doAnalyze && estimatorType != 11) {
+						if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 							ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 							double[] residual = ekf.getResidualMap().get(time);
 							int m = satList.size();
@@ -670,7 +671,7 @@ public class Android {
 
 						}
 					}
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					}
 				}
@@ -685,7 +686,7 @@ public class Android {
 //						outlierAnalyze);
 //			}
 
-			if (estimatorType == 16) {
+			if (estimatorMode == EstimatorMode.LLS_TDCP_VEL) {
 				String estType = "LS TDCP";
 				// TreeMap<String, ArrayList<double[]>> estTdcpVelMap = new TreeMap<String,
 				// ArrayList<double[]>>();
@@ -699,7 +700,7 @@ public class Android {
 							outlierAnalyze, refPos, useIGS, true);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						double tRx = currentTime / 1000.0;
 						double[] residual = LLS_TDCP.getResidual();
 						SimpleMatrix Cyy = LLS_TDCP.getCyy();
@@ -737,7 +738,7 @@ public class Android {
 
 			}
 
-			if (estimatorType == 17) {
+			if (estimatorMode == EstimatorMode.TDCP_CSDR) {
 				String estType = "TDCP-CSDR";
 				// TreeMap<String, ArrayList<double[]>> estTdcpVelMap = new TreeMap<String,
 				// ArrayList<double[]>>();
@@ -752,7 +753,7 @@ public class Android {
 							useIGS, currentTime);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						double tRx = currentTime / 1000.0;
 						double[] residual = LLS_TDCP_ambFix.getResidual();
 						SimpleMatrix Cyy = LLS_TDCP_ambFix.getCyy();
@@ -792,15 +793,15 @@ public class Android {
 				System.out.println("Ambiguity Repair Percentage: "
 						+ ((LLS_TDCP_ambFix.getAmbRepairedCount() * 100.0) / LLS_TDCP_ambFix.getAmbDetectedCount()));
 			}
-			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
+			if (estimatorMode == EstimatorMode.EKF_TDCP || estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE || estimatorMode == EstimatorMode.EKF_TDCP_DOPPLER_ONLY) {
 				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
 				boolean onlyDoppler = false;
-				if (estimatorType == 19) {
+				if (estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE) {
 					estName += " Innov Phase-Rate";
 					innPhaseRate = true;
-				} else if (estimatorType == 20) {
+				} else if (estimatorMode == EstimatorMode.EKF_TDCP_DOPPLER_ONLY) {
 					estName = " Doppler EKF";
 					onlyDoppler = true;
 				}
@@ -812,7 +813,7 @@ public class Android {
 				int n = timeList.size();
 				estVelMap.put(estName, new ArrayList<double[]>());
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					satResMap.put(Measurement.TDCP, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 					satResMap.get(Measurement.TDCP).put(estName, new HashMap<String, ArrayList<SatResidual>>());
 					satInnMap.put(Measurement.TDCP, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
@@ -831,7 +832,7 @@ public class Android {
 					} else {
 						continue;
 					}
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						double[] innovation = ekf.getInnovationMap().get(time);
@@ -878,9 +879,9 @@ public class Android {
 
 					}
 				}
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
-					if (estimatorType == 18 || estimatorType == 19) {
+					if (estimatorMode == EstimatorMode.EKF_TDCP || estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE) {
 						GraphPlotter.graphCycleSlip(satCSmap);
 					}
 				}
@@ -893,7 +894,7 @@ public class Android {
 							+ ((ekf.getAmbRepairedCount() * 100.0) / ekf.getAmbDetectedCount()));
 				}
 			}
-			if (estimatorType == 22) {
+			if (estimatorMode == EstimatorMode.PPP_FLOAT) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP ekf = new EKF_PPP();
 				TreeMap<Long, double[]> estStateMap = ekf.process(satMap, timeList, obsvCodeList, doAnalyze, doTest,
@@ -1097,8 +1098,7 @@ public class Android {
 				// System.out.println(" Haversine distance - " + posErrList[5].get(q95));
 
 			}
-			Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(16, 17, 18, 19, 20,22));
-			if (tdcpEstSet.contains(estimatorType)) {
+			if (estimatorMode.isTDCPorPPPMode()) {
 				TreeMap<Long, double[]> trueOrgVelEcef = Analyzer.getOriginalVel(trueEcefList, timeList);
 				for (String key : estVelMap.keySet()) {
 					trajectoryVelMap.put(key, new ArrayList<double[]>());
@@ -1304,7 +1304,7 @@ public class Android {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
 				}
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 					// GraphPlotter.graphDOP(dopMap,satCountMap.get(Measurement.Pseudorange).get("WLS"),
@@ -1313,7 +1313,7 @@ public class Android {
 
 				}
 			}
-			if (doAnalyze && !tdcpEstSet.contains(estimatorType)) {
+			if (doAnalyze && !estimatorMode.isTDCPorPPPMode()) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}
@@ -1328,7 +1328,7 @@ public class Android {
 	}
 
 	public static void filterSat(ArrayList<Satellite> satList, double cutOffAng, double snrMask, double[] refEcef,
-			boolean useIGS, IONEX ionex, Calendar time, int estimatorType) {
+			boolean useIGS, IONEX ionex, Calendar time, EstimatorMode estimatorMode) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -1354,8 +1354,7 @@ public class Android {
 				tropoErr = tropoParam[0];
 				double wetMF = tropoParam[1];
 
-				Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(15, 16, 17, 18, 19, 20,22));
-				if (tdcpEstSet.contains(estimatorType)) {
+				if (estimatorMode.isTDCPorPPPMode()) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}

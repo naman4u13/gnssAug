@@ -31,6 +31,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Rinex.constants.GnssDataConfig;
+import com.gnssAug.Android.constants.EstimatorMode;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
@@ -67,7 +68,7 @@ public class Android_Static_Rinex {
 	public static void posEstimate(String obs_path,String osb_bias_path, String dcb_bias_path, String clock_path, String orbit_path,
 			String ionex_path, boolean useBias, boolean useGIM, boolean useIGS,double[] trueEcef,
 			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Set<String> discardSet,boolean isRepair) {
+			EstimatorMode estimatorMode, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Set<String> discardSet,boolean isRepair) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
@@ -184,25 +185,23 @@ public class Android_Static_Rinex {
 
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(trueEcef, i.getSatEci())));
 				filterSat(satList, trueEcef, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time,
-						estimatorType);
+						estimatorMode);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
 				long tRxMilli = (long) (tRx * 1000);
 
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3) {
-					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3) {
-						arr = new int[] { 1, 2 };
+				if (estimatorMode.isLLSMode()) {
+					List<EstimatorMode> llsModes;
+					if (estimatorMode == EstimatorMode.LLS_WLS_BOTH) {
+						llsModes = Arrays.asList(EstimatorMode.LLS_CODE, EstimatorMode.WLS_CODE);
+					} else {
+						llsModes = Collections.singletonList(estimatorMode);
 					}
-					for (int i : arr) {
-						boolean isWLS = false;
-						String estType = "LS";
-						if (i == 2) {
-							isWLS = true;
-							estType = "WLS";
-						}
+					for (EstimatorMode llsMode : llsModes) {
+						boolean isWLS = (llsMode == EstimatorMode.WLS_CODE);
+						String estType = isWLS ? "WLS" : "LS";
 						// Implement WLS method
 						double[] estEcefClk = null;
 						double[] estVel = null;
@@ -260,7 +259,7 @@ public class Android_Static_Rinex {
 
 				timeList.add(tRxMilli);
 			}
-			if (estimatorType == 3 || estimatorType == 4) {
+			if (estimatorMode == EstimatorMode.LLS_WLS_BOTH || estimatorMode == EstimatorMode.RINEX_EKF_CODE) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
@@ -335,7 +334,7 @@ public class Android_Static_Rinex {
 				trueEcefList.add(trueEcef);
 
 			}
-			if (estimatorType == 5) {
+			if (estimatorMode == EstimatorMode.RINEX_PPP_LOWCOST) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP_LowCostRx ekf = new com.gnssAug.Rinex.estimation.EKF_PPP_LowCostRx();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList,  obsvCodeList,doAnalyze,trueEcefList,
@@ -432,7 +431,7 @@ public class Android_Static_Rinex {
 				}
 			}
 			
-			if (estimatorType == 6) {
+			if (estimatorMode == EstimatorMode.RINEX_PPP_DF) {
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				EKF_PPP_DF ekf = new com.gnssAug.Rinex.estimation.EKF_PPP_DF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, obsvCodeList,
@@ -718,7 +717,7 @@ public class Android_Static_Rinex {
 	}
 
 	public static void filterSat(ArrayList<Satellite> satList, double[] refEcef, double cutOffAng, double snrMask,
-			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time, int estimatorType) {
+			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time, EstimatorMode estimatorMode) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -756,7 +755,7 @@ public class Android_Static_Rinex {
 					tropoErr = tropoParam[0];
 					wetMF = tropoParam[1];
 				}
-				if (estimatorType == 5 || estimatorType == 6) {
+				if (estimatorMode == EstimatorMode.RINEX_PPP_LOWCOST || estimatorMode == EstimatorMode.RINEX_PPP_DF) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}

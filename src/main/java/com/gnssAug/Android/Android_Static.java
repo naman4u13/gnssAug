@@ -1,8 +1,12 @@
 package com.gnssAug.Android;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -31,6 +35,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Android.constants.AndroidSensor;
+import com.gnssAug.Android.constants.EstimatorMode;
 import com.gnssAug.Android.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
@@ -41,13 +46,11 @@ import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler;
 import com.gnssAug.Android.estimation.KalmanFilter.AKFDoppler_Static;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFDoppler;
-import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix2;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_TDCP_ambFix_allEst;
 import com.gnssAug.Android.estimation.KalmanFilter.INSfusion;
 import com.gnssAug.Android.estimation.KalmanFilter.EKFParent;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP;
-import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP2;
 import com.gnssAug.Android.estimation.KalmanFilter.EKF_PPP3;
 import com.gnssAug.Android.estimation.KalmanFilter.Models.Flag;
 import com.gnssAug.Android.fileParser.DerivedCSV;
@@ -82,7 +85,7 @@ import com.gnssAug.utility.Time;
 public class Android_Static {
 	private static Geoid geoid = null;
 
-	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, int estimatorType,
+	public static void posEstimate(boolean doPosErrPlot, double cutOffAng, double snrMask, EstimatorMode estimatorMode,
 			String[] obsvCodeList, String gnss_log_path, double[] trueEcef, String dcb_bias_path, String clock_path,
 			String orbit_path, String ionex_path, String osb_bias_path, boolean useIGS, boolean doAnalyze,
 			boolean doTest, boolean outlierAnalyze, boolean mapDeltaRanges, Set<String> discardSet, String mobName,
@@ -107,25 +110,16 @@ public class Android_Static {
 			IONEX ionex = null;
 			Antenna antenna = null;
 			OSB_Bias osb_bias = null;
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PhD_Thesis/Experiment_AndroidAPI/Pixel7Pro_Jan/"
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/PersonalData/PPP_AR/"
 					+ mobName + "_test";
 			// "C:\\Users\\Naman\\Desktop\\rinex_parse_files\\google2\\2021-04-28-US-MTV-1\\test2";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 			stream = new PrintStream(output);
 			System.setOut(stream);
-			System.out.println("Discarded Satellites: " + discardSet.toString());
-			System.out.println("Elevation Mask in degrees = " + cutOffAng);
-			System.out
-					.println("pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
-			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
-			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
-			System.out.println("Phase_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
-			System.out.println("GIM_TECU_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
-			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
-			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
-			System.out.println("Number of Samples for MC simulation = " + GnssDataConfig.nSamplesMC);
-			System.out.println("PAR_FFRT_MAX_FR = " + GnssDataConfig.PAR_FFRT_MAX_FR);
+			printRunHeader(gnss_log_path, mobName, obsvCodeList, discardSet, trueEcef,
+					estimatorMode, repairCS, doTest, doAnalyze, cutOffAng, snrMask,
+					dcb_bias_path, clock_path, orbit_path, ionex_path, osb_bias_path);
 			HashMap<Long, HashMap<String, HashMap<Integer, Derived>>> derivedMap = null;
 
 			GNSS_Log.process(gnss_log_path);
@@ -184,7 +178,7 @@ public class Android_Static {
 
 				}
 				try {
-					refUserEcef = LinearLeastSquare.getEstPos(satList, false, useIGS);
+					refUserEcef = trueEcef;
 					
 				} catch (org.ejml.data.SingularMatrixException e) {
 					// TODO: handle exception
@@ -197,7 +191,7 @@ public class Android_Static {
 					sat.setElevAzm(ComputeEleAzm.computeEleAzm(trueEcef, sat.getSatEci()));
 
 				}
-				filterSat(satList, cutOffAng, snrMask, trueEcef, useIGS, ionex, time, estimatorType);
+				filterSat(satList, cutOffAng, snrMask, trueEcef, useIGS, ionex, time, estimatorMode);
 				if (satList.size() < 3 + m) {
 					System.err.println("Less than " + (3 + m) + " satellites");
 
@@ -206,18 +200,16 @@ public class Android_Static {
 				}
 				double[] estEcefClk = null;
 				
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3 || estimatorType == 11) {
-					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3 || estimatorType == 11) {
-						arr = new int[] { 1, 2 };
+				if (estimatorMode.isLLSMode() || estimatorMode.isAnalysisMode()) {
+					List<EstimatorMode> llsModes;
+					if (estimatorMode == EstimatorMode.LLS_WLS_BOTH || estimatorMode.isAnalysisMode()) {
+						llsModes = Arrays.asList(EstimatorMode.LLS_CODE, EstimatorMode.WLS_CODE);
+					} else {
+						llsModes = Collections.singletonList(estimatorMode);
 					}
-					for (int i : arr) {
-						boolean isWLS = false;
-						String estType = "LS";
-						if (i == 2) {
-							isWLS = true;
-							estType = "WLS";
-						}
+					for (EstimatorMode llsMode : llsModes) {
+						boolean isWLS = (llsMode == EstimatorMode.WLS_CODE);
+						String estType = isWLS ? "WLS" : "LS";
 						// Implement WLS method
 						estEcefClk = null;
 						double[] estVel = null;
@@ -233,7 +225,7 @@ public class Android_Static {
 //								satList.forEach(j->j.setClkRate(data));
 								estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 							}
-							if (doAnalyze && estimatorType != 11) {
+							if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 
 								double[] residual = LinearLeastSquare.getResidual(type);
 								SimpleMatrix Cyy = LinearLeastSquare.getCyy(type);
@@ -278,7 +270,7 @@ public class Android_Static {
 				timeList.add(tRxMilli);
 			}
 
-			if (estimatorType == 4) {
+			if (estimatorMode == EstimatorMode.GNSS_INS) {
 				TreeMap<Long, HashMap<AndroidSensor, IMUsensor>> imuMap = IMUconfigure.configure(timeList.get(0), 100,
 						imuList);
 				for (Map.Entry<Long, HashMap<AndroidSensor, IMUsensor>> entry : imuMap.entrySet()) {
@@ -302,8 +294,7 @@ public class Android_Static {
 
 			}
 			boolean useDoppler = false;
-			if (estimatorType == 5 || estimatorType == 6 || estimatorType == 7 || estimatorType == 8
-					|| estimatorType == 9 || estimatorType == 11 || estimatorType == 12 || estimatorType == 13) {
+			if (estimatorMode.isBasicEKFMode() || estimatorMode.isAnalysisMode()) {
 				int m = obsvCodeList.length;
 				EKF ekf = new EKF();
 
@@ -314,14 +305,16 @@ public class Android_Static {
 				TreeMap<Long, double[]> estStateMap_vel_estVel = null;
 				TreeMap<Long, double[]> estStateMap_vel_estVel_complementary = null;
 				int n = timeList.size();
-				int[] estTypes = new int[] { estimatorType };
-				String estName = "";
-				if (((estimatorType == 9 && (!doAnalyze)) || (estimatorType == 11))) {
-					estTypes = new int[] { 5, 6, 7, 12 };
+				List<EstimatorMode> ekfSubModes;
+				if ((estimatorMode == EstimatorMode.EKF_BASIC_MULTI && !doAnalyze) || estimatorMode.isAnalysisMode()) {
+					ekfSubModes = Arrays.asList(EstimatorMode.EKF_POS_RW, EstimatorMode.EKF_VEL_RW, EstimatorMode.EKF_VEL_RW_DOPPLER, EstimatorMode.EKF_VEL_RW_ESTVEL);
+				} else {
+					ekfSubModes = Collections.singletonList(estimatorMode);
 				}
-				for (int type : estTypes) {
-					switch (type) {
-					case 5:
+				String estName = "";
+				for (EstimatorMode ekfMode : ekfSubModes) {
+					switch (ekfMode) {
+					case EKF_POS_RW:
 						// Implement EKF based on receiver’s position and clock offset errors as a
 						// random walk process
 						useDoppler = false;
@@ -335,7 +328,7 @@ public class Android_Static {
 						}
 
 						break;
-					case 6:
+					case EKF_VEL_RW:
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process
 						useDoppler = false;
@@ -363,7 +356,7 @@ public class Android_Static {
 
 						break;
 
-					case 7:
+					case EKF_VEL_RW_DOPPLER:
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with doppler updates
 						estStateMap_vel_doppler = ekf.process(satMap, timeList, Flag.VELOCITY, true, useIGS,
@@ -419,7 +412,7 @@ public class Android_Static {
 					// }
 					//
 					// break;
-					case 12:
+					case EKF_VEL_RW_ESTVEL:
 						useDoppler = false;
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with estimated velocity updates
@@ -446,7 +439,7 @@ public class Android_Static {
 						}
 
 						break;
-					case 13:
+					case EKF_VEL_RW_ESTVEL_COMP:
 						useDoppler = false;
 						// Implement EKF based on receiver’s velocity and clock drift errors as a random
 						// walk process along with estimated velocity updates
@@ -475,7 +468,7 @@ public class Android_Static {
 					}
 				}
 
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					Measurement[] measArr = useDoppler
 							? new Measurement[] { Measurement.Pseudorange, Measurement.Doppler }
 							: new Measurement[] { Measurement.Pseudorange };
@@ -548,16 +541,18 @@ public class Android_Static {
 
 			}
 
-			if (estimatorType == 10 || estimatorType == 14 || estimatorType == 11) {
-				int[] estArray = new int[] { estimatorType };
-				if (estimatorType == 11) {
-					estArray = new int[] { 14 };
+			if (estimatorMode.isDBPMode() || estimatorMode.isAnalysisMode()) {
+				List<EstimatorMode> dbpModes;
+				if (estimatorMode.isAnalysisMode()) {
+					dbpModes = Collections.singletonList(EstimatorMode.AKF_DBP);
+				} else {
+					dbpModes = Collections.singletonList(estimatorMode);
 				}
-				for (int estType : estArray) {
+				for (EstimatorMode dbpMode : dbpModes) {
 					String estName;
 					TreeMap<Long, double[]> estStateMap;
 					EKFParent ekf;
-					if (estType == 10) {
+					if (dbpMode == EstimatorMode.EKF_DBP) {
 						estName = "DBP Filter";
 						ekf = new EKFDoppler();
 						estStateMap = ((EKFDoppler) ekf).process(satMap, timeList, useIGS, obsvCodeList, doAnalyze,
@@ -576,7 +571,7 @@ public class Android_Static {
 					int n = timeList.size();
 					estPosMap.put(estName, new ArrayList<double[]>());
 					HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						satResMap.put(Measurement.Pseudorange,
 								new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 						satResMap.get(Measurement.Pseudorange).put(estName,
@@ -598,7 +593,7 @@ public class Android_Static {
 						if (estPos == null) {
 							continue;
 						}
-						if (doAnalyze && estimatorType != 11) {
+						if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 							ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 							double[] residual = ekf.getResidualMap().get(time);
 							int m = satList.size();
@@ -641,14 +636,14 @@ public class Android_Static {
 
 						}
 					}
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					}
 				}
 
 			}
 
-			if (estimatorType == 16) {
+			if (estimatorMode == EstimatorMode.LLS_TDCP_VEL) {
 				String estType = "LS TDCP";
 				// TreeMap<String, ArrayList<double[]>> estTdcpVelMap = new TreeMap<String,
 				// ArrayList<double[]>>();
@@ -662,7 +657,7 @@ public class Android_Static {
 							outlierAnalyze, refPos, useIGS, true);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						double tRx = currentTime / 1000.0;
 						double[] residual = LLS_TDCP.getResidual();
 						SimpleMatrix Cyy = LLS_TDCP.getCyy();
@@ -700,7 +695,7 @@ public class Android_Static {
 
 			}
 
-			if (estimatorType == 17) {
+			if (estimatorMode == EstimatorMode.TDCP_CSDR) {
 				String estType = "TDCP-CSDR";
 				// TreeMap<String, ArrayList<double[]>> estTdcpVelMap = new TreeMap<String,
 				// ArrayList<double[]>>();
@@ -715,7 +710,7 @@ public class Android_Static {
 							useIGS, currentTime);
 					estVelMap.computeIfAbsent(estType, k -> new ArrayList<double[]>()).add(estVel);
 					prevTime = currentTime;
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						double tRx = currentTime / 1000.0;
 						double[] residual = LLS_TDCP_ambFix.getResidual();
 						SimpleMatrix Cyy = LLS_TDCP_ambFix.getCyy();
@@ -762,15 +757,15 @@ public class Android_Static {
 			}
 			// Get True Velocity
 			TreeMap<Long, double[]> trueVelEcef = Analyzer.getVel(trueEcefList, timeList);
-			if (estimatorType == 18 || estimatorType == 19 || estimatorType == 20) {
+			if (estimatorMode == EstimatorMode.EKF_TDCP || estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE || estimatorMode == EstimatorMode.EKF_TDCP_DOPPLER_ONLY) {
 				HashMap<String, ArrayList<CycleSlipDetect>> satCSmap = new HashMap<String, ArrayList<CycleSlipDetect>>();
 				String estName = "EKF TDCP";
 				boolean innPhaseRate = false;
 				boolean onlyDoppler = false;
-				if (estimatorType == 19) {
+				if (estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE) {
 					estName += " Innov Phase-Rate";
 					innPhaseRate = true;
-				} else if (estimatorType == 20) {
+				} else if (estimatorMode == EstimatorMode.EKF_TDCP_DOPPLER_ONLY) {
 					estName = " Doppler EKF";
 					onlyDoppler = true;
 				}
@@ -782,7 +777,7 @@ public class Android_Static {
 				int n = timeList.size();
 				estVelMap.put(estName, new ArrayList<double[]>());
 				HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					satResMap.put(Measurement.TDCP, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
 					satResMap.get(Measurement.TDCP).put(estName, new HashMap<String, ArrayList<SatResidual>>());
 					satInnMap.put(Measurement.TDCP, new HashMap<String, HashMap<String, ArrayList<SatResidual>>>());
@@ -801,7 +796,7 @@ public class Android_Static {
 					} else {
 						continue;
 					}
-					if (doAnalyze && estimatorType != 11) {
+					if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 						ArrayList<Satellite> satList = ekf.getSatListMap().get(time);
 						double[] residual = ekf.getResidualMap().get(time);
 						double[] innovation = ekf.getInnovationMap().get(time);
@@ -849,9 +844,9 @@ public class Android_Static {
 
 					}
 				}
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
-					if (estimatorType == 18 || estimatorType == 19) {
+					if (estimatorMode == EstimatorMode.EKF_TDCP || estimatorMode == EstimatorMode.EKF_TDCP_PHASE_RATE) {
 						GraphPlotter.graphCycleSlip(satCSmap);
 					}
 				}
@@ -865,7 +860,7 @@ public class Android_Static {
 				}
 			}
 
-			if (estimatorType == 21) {
+			if (estimatorMode == EstimatorMode.EKF_TDCP_ALL_ESTIMATORS) {
 				HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>> satCSmap = new HashMap<EstimatorType, HashMap<String, ArrayList<CycleSlipDetect>>>();
 				HashMap<EstimatorType, ArrayList<Object[]>> srfrMap = new HashMap<EstimatorType, ArrayList<Object[]>>();
 				String estName = "EKF TDCP All estimators";
@@ -922,7 +917,7 @@ public class Android_Static {
 			}
 			HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>> satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 			EKF_PPP3 ekf = null;
-			if (estimatorType == 22) {
+			if (estimatorMode == EstimatorMode.PPP_FLOAT) {
 				boolean predictPhaseClock = false;
 				boolean singlePhaseClock = false;
 				boolean singleClockDrift = false;
@@ -940,19 +935,22 @@ public class Android_Static {
 					}
 				}
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
-				System.out.println("These satellite have more than 20% phase data with Cycle Slips");
+				System.out.println("SATELLITES WITH >20% CYCLE SLIPS");
+				int _col = 0;
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
-					double percentage = (csCount[0] * 1.0) / csCount[1];
-					if (percentage > 0.2) {
-						System.out.print(satID + ", ");
+					if ((csCount[0] * 1.0) / csCount[1] > 0.2) {
+						System.out.print("  " + satID);
+						if (++_col % 8 == 0) System.out.println();
 					}
 				}
 				System.out.println();
+				System.out.println("CS DETECTED PER SATELLITE  (detected / total)");
+				_col = 0;
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
-					System.out.print(satID + " : " + csCount[0] + "/" + csCount[1] + " , ");
-
+					System.out.printf("  %-6s: %3d/%-4d", satID, csCount[0], csCount[1]);
+					if (++_col % 4 == 0) System.out.println();
 				}
 				System.out.println();
 				HashMap<Measurement, HashMap<String, ArrayList<Double>>> RedundancyNoMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
@@ -1026,12 +1024,13 @@ public class Android_Static {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
 					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0), singlePhaseClock,singleClockDrift);
-					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
-					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());
-					System.out.println("Hard Reset Count : "+ekf.getHardResetCount());  
-					System.out.println("Invalid Phase Count : "+ekf.getInvalidPhaseCount()); 
-					System.out.println("Android API CS Detected Count : "+ekf.getAndroidAPI_CS_count());  
-					System.out.println("HalfCycle Anomaly : "+ekf.getHalfCycleAnomalyCount()); 
+					System.out.println("CYCLE SLIP STATISTICS");
+					System.out.println("  CS Detected          : " + ekf.getCsDetectedCount());
+					System.out.println("  CS Repaired          : " + ekf.getCsRepairedCount());
+					System.out.println("  Hard Resets          : " + ekf.getHardResetCount());
+					System.out.println("  Invalid Phase        : " + ekf.getInvalidPhaseCount());
+					System.out.println("  Android API CS       : " + ekf.getAndroidAPI_CS_count());
+					System.out.println("  Half-Cycle Anomalies : " + ekf.getHalfCycleAnomalyCount());
 				}
 			}
 
@@ -1078,32 +1077,25 @@ public class Android_Static {
 
 					if (i == n - 1) {
 
-						System.out.println("Converged Position RMS:");
-						// error in East direction
-						System.out.println("E  - " + Math.sqrt(enu[0] * enu[0]));
-						// error in North direction
-						System.out.println("N  - " + Math.sqrt(enu[1] * enu[1]));
-						// error in Up direction
-						System.out.println("U  - " + Math.sqrt(enu[2] * enu[2]));
-						// 3d error
-						System.out.println("3d Error - " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
-						// 2d error
-						System.out.println("2d Error - " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+						System.out.println("LAST EPOCH ERROR [m]");
+						System.out.println("  E      : " + Math.sqrt(enu[0] * enu[0]));
+						System.out.println("  N      : " + Math.sqrt(enu[1] * enu[1]));
+						System.out.println("  U      : " + Math.sqrt(enu[2] * enu[2]));
+						System.out.println("  3D     : " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+						System.out.println("  2D     : " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 					}
 
 				}
 
 				GraphPosMap.put(key, enuPosList);
 
-				// RMSE
-				System.out.println("\n" + key);
-				System.out.println("Position RMS - ");
-				System.out.println(" E - " + MathUtil.RMS(posErrList[0]));
-				System.out.println(" N - " + MathUtil.RMS(posErrList[1]));
-				System.out.println(" U - " + MathUtil.RMS(posErrList[2]));
-				System.out.println(" 3d Error - " + MathUtil.RMS(posErrList[3]));
-				System.out.println(" 2d Error - " + MathUtil.RMS(posErrList[4]));
-				System.out.println(" Haversine Distance - " + MathUtil.RMS(posErrList[5]));
+				System.out.println("\n" + key + " POSITION RMS [m]");
+				System.out.println("  E          : " + MathUtil.RMS(posErrList[0]));
+				System.out.println("  N          : " + MathUtil.RMS(posErrList[1]));
+				System.out.println("  U          : " + MathUtil.RMS(posErrList[2]));
+				System.out.println("  3D         : " + MathUtil.RMS(posErrList[3]));
+				System.out.println("  2D         : " + MathUtil.RMS(posErrList[4]));
+				System.out.println("  Horizontal : " + MathUtil.RMS(posErrList[5]));
 
 			}
 
@@ -1152,33 +1144,26 @@ public class Android_Static {
 				System.out.println(" 2d Error - " + MathUtil.RMS(velErrList[4]));
 
 			}
-			System.out.println("\n\nPost Variance of Unit Weight Calculations");
+			System.out.println("\nPOST VARIANCE OF UNIT WEIGHT");
 			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
-				System.out.println(meas.toString());
 				for (String est_type : postVarOfUnitWeightMap.get(meas).keySet()) {
-					System.out.println(est_type);
+					System.out.println("  " + meas.toString() + " [" + est_type + "]");
 					ArrayList<Double> data = new ArrayList<Double>(postVarOfUnitWeightMap.get(meas).get(est_type));
 					double sum = 0;
 					int count = 0;
 					for (int i = 0; i < data.size(); i++) {
 						double val = data.get(i);
-						if (val == 0 || val == -1) {
-							continue;
-						}
+						if (val == 0 || val == -1) continue;
 						sum += val;
 						count++;
-
 					}
 					Collections.sort(data);
 					double avg = sum / count;
-					int q50 = (int) (count * 0.50);
-					double median = data.get(q50);
-					int _q75 = (int) (count * 0.75);
-					double q75 = data.get(_q75);
-					System.out.println("MEAN : " + avg);
-					System.out.println("MEDIAN : " + median);
-					System.out.println("Q75 : " + q75);
-
+					double median = data.get((int) (count * 0.50));
+					double q75 = data.get((int) (count * 0.75));
+					System.out.println("    MEAN   : " + avg);
+					System.out.println("    MEDIAN : " + median);
+					System.out.println("    Q75    : " + q75);
 				}
 			}
 
@@ -1198,7 +1183,7 @@ public class Android_Static {
 				GraphPlotter.graphDeltaRange(satMap, trueEcefList);
 				GraphPlotter.graphAndroidRawGNSStimeParams(satMap);
 
-			} else if (estimatorType != 21) {
+			} else if (estimatorMode != EstimatorMode.EKF_TDCP_ALL_ESTIMATORS) {
 
 				// Plot Error Graphs
 				if (Cxx_hat_map.isEmpty()) {
@@ -1208,7 +1193,7 @@ public class Android_Static {
 					GraphPlotter.graphENU(GraphPosMap, timeList, true, Cxx_hat_map.get(State.Position));
 					GraphPlotter.graphENU(GraphVelMap, timeList, false, Cxx_hat_map.get(State.Velocity));
 				}
-				if (doAnalyze && estimatorType != 11) {
+				if (doAnalyze && !estimatorMode.isAnalysisMode()) {
 					GraphPlotter.graphSatRes(satResMap, outlierAnalyze);
 					GraphPlotter.graphPostUnitW(postVarOfUnitWeightMap, timeList);
 					GraphPlotter.graphDOP(dopMap, satCountMap.get(Measurement.Pseudorange).get("PPP"), timeList);
@@ -1223,7 +1208,7 @@ public class Android_Static {
 
 				}
 			}
-			if (doAnalyze && estimatorType != 21 && estimatorType != 22) {
+			if (doAnalyze && estimatorMode != EstimatorMode.EKF_TDCP_ALL_ESTIMATORS && !estimatorMode.isPPPMode()) {
 				Analyzer.processAndroid(satMap, imuMap, trueEcefList, trueVelEcef, estPosMap, estVelMap, satResMap,
 						outlierAnalyze, useDoppler);
 			}
@@ -1238,7 +1223,7 @@ public class Android_Static {
 	}
 
 	public static void filterSat(ArrayList<Satellite> satList, double cutOffAng, double snrMask, double[] refEcef,
-			boolean useIGS, IONEX ionex, Calendar time, int estimatorType) {
+			boolean useIGS, IONEX ionex, Calendar time, EstimatorMode estimatorMode) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -1264,8 +1249,7 @@ public class Android_Static {
 				tropoErr = tropoParam[0];
 				double wetMF = tropoParam[1];
 
-				Set<Integer> tdcpEstSet = new HashSet<Integer>(Arrays.asList(15, 16, 17, 18, 19, 20, 21, 22));
-				if (tdcpEstSet.contains(estimatorType)) {
+				if (estimatorMode.isTDCPorPPPMode()) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}
@@ -1297,6 +1281,70 @@ public class Android_Static {
 		Geoid geoid = new Geoid(nhsp, ReferenceEllipsoid.getWgs84(frame));
 		return geoid;
 
+	}
+
+	private static void printRunHeader(String gnss_log_path, String mobName, String[] obsvCodeList,
+			Set<String> discardSet, double[] trueEcef, EstimatorMode estimatorMode,
+			boolean repairCS, boolean doTest, boolean doAnalyze, double cutOffAng, double snrMask,
+			String dcb_bias_path, String clock_path, String orbit_path,
+			String ionex_path, String osb_bias_path) {
+		String sep = "================================================";
+		System.out.println(sep);
+		System.out.println("Timestamp  : " + ZonedDateTime.now(ZoneOffset.UTC)
+				.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+		System.out.println("Git Commit : " + getGitHash());
+		System.out.println(sep);
+		System.out.println("DATASET");
+		System.out.println("  File     : " + fileNameOf(gnss_log_path));
+		System.out.println("  Device   : " + mobName);
+		System.out.println("  Signals  : " + String.join("  ", obsvCodeList));
+		System.out.println("  Discard  : " + discardSet);
+		double[] llh = LatLonUtil.ecef2lla(trueEcef);
+		System.out.println("GROUND TRUTH");
+		System.out.printf("  Lat / Lon / H : %.8f deg  %.8f deg  %.4f m%n", llh[0], llh[1], llh[2]);
+		System.out.printf("  ECEF (m)      : %.4f  %.4f  %.4f%n", trueEcef[0], trueEcef[1], trueEcef[2]);
+		System.out.println("ESTIMATOR");
+		System.out.println("  Mode      : " + estimatorMode.name());
+		System.out.println("  repairCS  : " + repairCS);
+		System.out.println("  doTest    : " + doTest);
+		System.out.println("  doAnalyze : " + doAnalyze);
+		System.out.println("  elMask    : " + cutOffAng + " deg   snrMask : " + snrMask + " dB-Hz");
+		System.out.println("PRODUCTS");
+		System.out.println("  DCB   : " + fileNameOf(dcb_bias_path));
+		System.out.println("  CLK   : " + fileNameOf(clock_path));
+		System.out.println("  ORB   : " + fileNameOf(orbit_path));
+		System.out.println("  IONEX : " + fileNameOf(ionex_path));
+		System.out.println("  OSB   : " + fileNameOf(osb_bias_path));
+		System.out.println("FILTER PARAMETERS");
+		System.out.println("  pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
+		System.out.println("  doppler_priorStdOfUnitW     = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
+		System.out.println("  TDCP_priorStdOfUnitW        = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
+		System.out.println("  phase_priorStdOfUnitW       = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
+		System.out.println("  GIM_TECU_priorStdOfUnitW    = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
+		System.out.println("  Q_pos_randWalk              = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
+		System.out.println("  Q_vel_randWalk              = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
+		System.out.println("  nSamplesMC                  = " + (long) GnssDataConfig.nSamplesMC);
+		System.out.println("  PAR_FFRT_MAX_FR             = " + GnssDataConfig.PAR_FFRT_MAX_FR);
+		System.out.println(sep);
+	}
+
+	private static String fileNameOf(String path) {
+		if (path == null) return "N/A";
+		return path.substring(path.lastIndexOf('/') + 1);
+	}
+
+	private static String getGitHash() {
+		try {
+			Process p = new ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+					.redirectErrorStream(true).start();
+			String hash = new BufferedReader(new InputStreamReader(p.getInputStream())).readLine();
+			Process p2 = new ProcessBuilder("git", "status", "--porcelain")
+					.redirectErrorStream(true).start();
+			boolean dirty = p2.getInputStream().read() != -1;
+			return (hash != null ? hash : "unknown") + (dirty ? " (dirty)" : "");
+		} catch (Exception e) {
+			return "unknown";
+		}
 	}
 
 }
