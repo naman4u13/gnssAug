@@ -1024,13 +1024,22 @@ public class Android_Static {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
 					GraphPlotter.createPPPplots(ekf, obsvCodeList, ssiLabel, timeList.get(0), singlePhaseClock,singleClockDrift);
+					long _dur = (timeList.get(n - 1) - timeList.get(0));
+					System.out.println("DATA SUMMARY");
+					System.out.printf("  Epochs processed : %d%n", n - 1);
+					System.out.printf("  Duration         : %.1f s  (%d min %02d s)%n",
+							_dur / 1000.0, _dur / 60000, (_dur % 60000) / 1000);
 					System.out.println("CYCLE SLIP STATISTICS");
-					System.out.println("  CS Detected          : " + ekf.getCsDetectedCount());
+					System.out.println("  Soft CS Detected     : " + ekf.getCsDetectedCount());
+					System.out.println("    API-flagged        : " + ekf.getCsDetected_api());
+					System.out.println("    GB test            : " + ekf.getCsDetected_gbTest());
 					System.out.println("  CS Repaired          : " + ekf.getCsRepairedCount());
 					System.out.println("  Hard Resets          : " + ekf.getHardResetCount());
-					System.out.println("  Invalid Phase        : " + ekf.getInvalidPhaseCount());
-					System.out.println("  Android API CS       : " + ekf.getAndroidAPI_CS_count());
-					System.out.println("  Half-Cycle Anomalies : " + ekf.getHalfCycleAnomalyCount());
+					System.out.println("    Invalid ADR        : " + ekf.getResetCount_invalidADR());
+					System.out.println("    ADR Reset          : " + ekf.getResetCount_adrReset());
+					System.out.println("    GF discrepancy     : " + ekf.getResetCount_gfTest());
+					System.out.println("    Half-cycle         : " + ekf.getResetCount_halfCycle());
+					System.out.println("    Consecutive CS     : " + ekf.getResetCount_consecutive());
 				}
 			}
 

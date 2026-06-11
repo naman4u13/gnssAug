@@ -84,7 +84,7 @@ public class ComputeSolidEarthTide implements StationDisplacement {
 		double p2 = 0.5 * ((3 * Math.pow(sinLat, 2)) - 1);
 
 		double dUp = (-0.1206 + (0.0001 * p2)) * p2;
-		double dNorth = (-0.0252 - (0.0001 * p2)) * 0.5 * Math.sin(2 * llh[0]);
+		double dNorth = (-0.0252 - (0.0001 * p2)) * Math.sin(2 * llh[0]);
 
 		double[] dEnu = new double[] { 0, dNorth, dUp }; // East, North, Up
 

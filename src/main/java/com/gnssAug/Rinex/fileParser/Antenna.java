@@ -28,28 +28,59 @@ import com.gnssAug.utility.Vector;
 import com.opencsv.CSVReader;
 import com.opencsv.CSVWriter;
 
+/**
+ * Loads IGS satellite antenna PCO (Phase Center Offset) data from a pre-processed CSV
+ * (produced by {@link #buildCSV}) and provides two services per epoch per satellite:
+ * <ol>
+ *   <li>PCO-corrected satellite phase center position in ECEF.</li>
+ *   <li>Phase wind-up correction (Wu et al. 1993) using the nominal yaw-steering body frame.</li>
+ * </ol>
+ *
+ * <p>Satellites entering Earth's umbra or undergoing a noon/midnight yaw maneuver are
+ * excluded ({@link #getSatPC_windup} returns {@code null}) for the eclipse duration
+ * plus a 30-minute recovery window (Kouba 2009).</p>
+ */
 public class Antenna {
 
 	private HashMap<Character, HashMap<Integer, HashMap<Integer, ArrayList<IGSAntenna>>>> satAntMap;
 	private static final double SPEED_OF_LIGHT = 299792458;
 	private CelestialBody sun;
+	private static final double ECLIPSE_RECOVERY_SECONDS = 1800.0;
+	private final HashMap<String, Double> eclipseExitMap = new HashMap<>();
+	private final HashMap<String, Boolean> prevInEclipseMap = new HashMap<>();
 
+	/**
+	 * @param path  Path to the pre-processed satellite antenna CSV (produced by {@link #buildCSV}).
+	 *              Orekit's {@code DataProvidersManager} must be initialised before constructing
+	 *              this object — call {@code MainApp.buildGeoid()} first.
+	 */
 	public Antenna(String path) throws Exception {
 		satAntMap = new HashMap<Character, HashMap<Integer, HashMap<Integer, ArrayList<IGSAntenna>>>>();
 		readCSV(path);
-		// Remember it is necessary that buildGeoid in Main fun runs first so that
-		// Orekit's DataManagerProvider is intialized before fetching Sun
 		sun = CelestialBodyFactory.getSun();
-
 	}
 
+	/**
+	 * Populates {@code satAntMap} from the pre-processed antenna CSV.
+	 *
+	 * <p>The CSV is produced by {@link #buildCSV} from an IGS ANTEX file. Each row covers
+	 * one (satellite, frequency) pair with columns: TYPE, SVID, DAZI, ZEN, VALID_FROM,
+	 * VALID_UNTIL, FREQUENCY, NEU/XYZ offsets, PCV_NOAZI, PCV_AZI.</p>
+	 *
+	 * <p>Only rows with TYPE = {@code 'S'} (satellite) are loaded. The CSV is ordered so
+	 * that receiver antenna rows ({@code 'R'}) follow all satellite rows; hitting the first
+	 * non-{@code 'S'} row is therefore used as an early-exit sentinel.</p>
+	 *
+	 * <p>Entries are indexed as: SSI (constellation char) → PRN → frequency band → list of
+	 * {@link IGSAntenna}, where the list holds multiple validity-period entries for the same
+	 * (satellite, frequency) pair. {@link #getSatPC_windup} walks the list in reverse to
+	 * find the most recent valid entry for a given epoch.</p>
+	 */
 	private void readCSV(String path) throws Exception {
 		try {
-			// parsing a CSV file into CSVReader class constructor
 			CSVReader reader = new CSVReader(new FileReader(path));
 			String[] line;
-			reader.readNext();
-			// reads one line at a time
+			reader.readNext(); // skip header row
 			while ((line = reader.readNext()) != null) {
 
 				char antType = line[0].charAt(0);
@@ -71,126 +102,59 @@ public class Antenna {
 			reader.close();
 
 		} catch (Exception e) {
-			// TODO: handle exception
 			e.printStackTrace();
 			throw new Exception("Error occured during reading and parsing of Antenna(.csv) file \n" + e);
 		}
-
 	}
 
-//	public double[] getSatPC_windup_new(int SVID, String obsvCode, double GPSTime, long weekNo, double[] satMC,
-//			double[] userECEF, double previousWindUpCycles) {
-//
-//		return getSatPC_windup_new(SVID, new String[] { obsvCode }, GPSTime, weekNo, satMC, userECEF,
-//				previousWindUpCycles)[0];
-//
-//	}
-
-	public double[][] getSatPC_windup(int SVID, String[] obsvCode, double GPSTime, long weekNo, double[] satMC) {
-		int fN = obsvCode.length;
-		double[][] eccXYZ = new double[fN][];
-		double[][] satPC_windUp = new double[fN][4];
-		double[] wavelength = new double[fN];
-		for (int i = 0; i < fN; i++) {
-
-			char SSI = obsvCode[i].charAt(0);
-			int freq = Integer.parseInt(obsvCode[i].charAt(1) + "");
-			wavelength[i] = SPEED_OF_LIGHT / Constellation.frequency.get(SSI).get(freq);
-			HashMap<Integer, ArrayList<IGSAntenna>> svidAntMap = satAntMap.get(SSI).get(SVID);
-			ArrayList<IGSAntenna> satAntList = svidAntMap != null ? svidAntMap.get(freq) : null;
-			if (satAntList == null) {
-				for (int j = 0; j < fN; j++) {
-					int _j = j;
-					IntStream.range(0, 3).forEach(k -> satPC_windUp[_j][k] = satMC[k]);
-
-				}
-				System.err.println("Sat " + SVID + " PCO info unavailable for frequency - " + freq + " !");
-				return satPC_windUp;
-			}
-			int n = satAntList.size();
-
-			for (int j = n - 1; j >= 0; j--) {
-				IGSAntenna satAnt = satAntList.get(j);
-
-				if (satAnt.checkValidity(new double[] { GPSTime, weekNo })) {
-					eccXYZ[i] = satAnt.getEccXYZ();
-					break;
-				}
-
-			}
-		}
-
-		double R_sat = Math
-				.sqrt(IntStream.range(0, 3).mapToDouble(i -> satMC[i] * satMC[i]).reduce(0, (i, j) -> i + j));
-		double[] k = IntStream.range(0, 3).mapToDouble(i -> -satMC[i] / R_sat).toArray();
-		double[] sunXYZ = getSunCoord(GPSTime, weekNo);
-		double[] e = IntStream.range(0, 3).mapToDouble(i -> sunXYZ[i] - satMC[i]).toArray();
-		double R_sun_sat = Math.sqrt(IntStream.range(0, 3).mapToDouble(i -> e[i] * e[i]).reduce(0, (i, j) -> i + j));
-		IntStream.range(0, 3).forEach(i -> e[i] = e[i] / R_sun_sat);
-		double[] j = Vector.crossProd(k, e);
-		double[] i = Vector.crossProd(j, k);
-
-		for (int x = 0; x < fN; x++) {
-
-			for (int y = 0; y < 3; y++) {
-				satPC_windUp[x][y] = satMC[y] + (eccXYZ[x][0] * i[y]) + (eccXYZ[x][1] * j[y]) + (eccXYZ[x][2] * k[y]);
-
-			}
-
-		}
-
-//		double[] userLL = LatLonUtil.ecef2lla(userECEF);
-//		double[] unitLOS = SatUtil.getUnitLOS(Arrays.copyOfRange(satPC_windUp[0], 0, 3), userECEF);
-//		double[] ar = new double[] { -Math.sin(userLL[1]), Math.cos(userLL[1]), 0 };
-//		double[] br = new double[] { -Math.sin(userLL[0]) * Math.cos(userLL[1]),
-//				-Math.sin(userLL[0]) * Math.sin(userLL[1]), Math.cos(userLL[0]) };
-//		double[] as = i;
-//		double[] bs = j;
-//
-//		double[] k_cross_br = Vector.crossProd(unitLOS, br);
-//		double[] k_cross_bs = Vector.crossProd(unitLOS, bs);
-//		double k_dot_ar = Vector.dotProd(unitLOS, ar);
-//		double k_dot_as = Vector.dotProd(unitLOS, as);
-//		double[] Dr = Vector.add(Vector.subtract(ar, Vector.scale(unitLOS, k_dot_ar)), k_cross_br);
-//		double[] Ds = Vector.subtract(Vector.subtract(as, Vector.scale(unitLOS, k_dot_as)), k_cross_bs);
-//		double sign = Math.signum(Vector.dotProd(unitLOS, Vector.crossProd(Ds, Dr)));
-//		double windUpCycle = (sign * (Math.acos(Vector.dotProd(Ds, Dr) / (Vector.mod(Ds) * Vector.mod(Dr)))))
-//				/ (2 * Math.PI);
-//
-//		IntStream.range(0, fN).forEach(index -> satPC_windUp[index][3] = windUpCycle);
-
-		return satPC_windUp;
-	}
-
-	public double[] getSatPC_windup_new(int SVID, String obsvCode, double GPSTime, long weekNo, double[] satMC,
+	/**
+	 * Computes the PCO-corrected satellite phase center position and phase wind-up
+	 * correction for a single frequency observation (Wu et al. 1993).
+	 *
+	 * <p>The satellite body frame is constructed under the nominal yaw-steering model:
+	 * Z-axis toward Earth (nadir), Y-axis along the solar panel axis (nadir × toSun),
+	 * X-axis completing the right-hand frame. The PCO vector from the ANTEX CSV is
+	 * rotated into ECEF using this frame and added to the antenna mechanical center.</p>
+	 *
+	 * <p>Satellites in Earth's umbra or at a noon/midnight yaw singularity (magJ &lt; 1e-6)
+	 * are excluded: returns {@code null} for the eclipse duration plus a
+	 * {@value #ECLIPSE_RECOVERY_SECONDS}-second recovery window (Kouba 2009).
+	 * Callers must remove the satellite's wind-up history entry on {@code null} return
+	 * to avoid stale continuity tracking.</p>
+	 *
+	 * @param SVID           Satellite PRN number.
+	 * @param obsvCode       Observation code, e.g. {@code "G1C"}.
+	 * @param GPSTime        GPS seconds-of-week at signal transmission.
+	 * @param weekNo         GPS week number.
+	 * @param satMC          Satellite ECEF position (metres), mechanical phase center.
+	 * @param userECEF       Receiver ECEF position (metres). Pass {@code null} to skip
+	 *                       wind-up (result[3] = 0).
+	 * @param previousWindUp Wind-up value [metres] stored from the previous tracked epoch,
+	 *                       used for phase-continuity unwrapping. Pass 0 on first use.
+	 * @return {@code double[4]}: [0..2] PCO-corrected satellite APC in ECEF (metres),
+	 *         [3] phase wind-up in metres; or {@code null} if eclipsed/excluded.
+	 */
+	public double[] getSatPC_windup(int SVID, String obsvCode, double GPSTime, long weekNo, double[] satMC,
 			double[] userECEF, double previousWindUp) {
-		// Assuming this is part of a method, e.g.:
-		// double[][] computeSatPCWindUp(String[] obsvCode, int SVID, double GPSTime,
-		// int weekNo, double[] satMC, double[] userECEF, double previousWindUpCycles)
-		// Dependencies: Constellation, IGSAntenna, Vector, SatUtil, LatLonUtil,
-		// getSunCoord
 
-		double[] eccXYZ = new double[3]; // Initialize to avoid null
+		double[] eccXYZ = new double[3];
 		double[] satPC_windUp = new double[4];
-		double wavelength;
 
 		char SSI = obsvCode.charAt(0);
 		int freq = Integer.parseInt(obsvCode.charAt(1) + "");
-		wavelength = SPEED_OF_LIGHT / Constellation.frequency.get(SSI).get(freq);
+		double wavelength = SPEED_OF_LIGHT / Constellation.frequency.get(SSI).get(freq);
 
-		// Retrieve satellite antenna map
 		HashMap<Integer, ArrayList<IGSAntenna>> svidAntMap = satAntMap.get(SSI).get(SVID);
 		ArrayList<IGSAntenna> satAntList = svidAntMap != null ? svidAntMap.get(freq) : null;
 
 		if (satAntList == null) {
-			// Fallback: Use satMC without PCO, print error
+			// No PCO data: return uncorrected position so the satellite is still usable
 			System.arraycopy(satMC, 0, satPC_windUp, 0, 3);
-
 			System.err.println("Sat " + SVID + " PCO info unavailable for frequency - " + freq + " !");
 			return satPC_windUp;
 		}
 
-		// Find latest valid antenna
+		// Walk backwards to find the most recent valid antenna entry for this epoch
 		boolean foundValid = false;
 		int _n = satAntList.size();
 		for (int j = _n - 1; j >= 0; j--) {
@@ -202,149 +166,163 @@ public class Antenna {
 			}
 		}
 		if (!foundValid) {
-			// No valid antenna: Set eccXYZ to zero to avoid crash
-			eccXYZ = new double[] { 0.0, 0.0, 0.0 };
+			// eccXYZ = zero: PCO correction silently dropped rather than crashing
 			System.err.println("No valid antenna for Sat " + SVID + " at time " + GPSTime);
 		}
 
-		// Compute satellite distance from Earth center
+		// Build nominal yaw-steering body frame
 		double R_sat = 0.0;
-		for (int i = 0; i < 3; i++) {
-			R_sat += satMC[i] * satMC[i];
-		}
+		for (int i = 0; i < 3; i++) R_sat += satMC[i] * satMC[i];
 		R_sat = Math.sqrt(R_sat);
 
-		// Unit nadir vector (body Z-axis, towards Earth)
+		// Body Z-axis: nadir (toward Earth center)
 		double[] unitNadir = new double[3];
-		for (int i = 0; i < 3; i++) {
-			unitNadir[i] = -satMC[i] / R_sat;
-		}
+		for (int i = 0; i < 3; i++) unitNadir[i] = -satMC[i] / R_sat;
 
-		// Sun position and unit vector from satellite to Sun
+		// Sun position in EME2000 — same frame approximation used throughout this class
 		double[] sunXYZ = getSunCoord(GPSTime, weekNo);
 		double[] toSun = new double[3];
 		double R_sun_sat = 0.0;
-		for (int i = 0; i < 3; i++) {
-			toSun[i] = sunXYZ[i] - satMC[i];
-			R_sun_sat += toSun[i] * toSun[i];
-		}
+		for (int i = 0; i < 3; i++) { toSun[i] = sunXYZ[i] - satMC[i]; R_sun_sat += toSun[i] * toSun[i]; }
 		R_sun_sat = Math.sqrt(R_sun_sat);
 		double[] unitToSun = new double[3];
-		for (int i = 0; i < 3; i++) {
-			unitToSun[i] = toSun[i] / R_sun_sat;
-		}
+		for (int i = 0; i < 3; i++) unitToSun[i] = toSun[i] / R_sun_sat;
 
-		// Compute satellite body frame basis (nominal yaw-steering)
-		// j: Body Y-axis (solar panel axis, cross(nadir, toSun))
+		// Body Y-axis: solar panel axis = nadir × toSun
 		double[] j = Vector.crossProd(unitNadir, unitToSun);
 		double magJ = Vector.mod(j);
-		if (magJ < 1e-6) {
-			// Near collinear (potential eclipse): Use arbitrary perpendicular basis
-			// TODO: Implement full eclipse yaw model (e.g., Kouba 2009)
-			System.err.println("Near eclipse detected for Sat "+obsvCode + SVID + "; using fallback basis.");
-			// Arbitrary j perpendicular to nadir (e.g., cross with [0,0,1] or fixed)
-			double[] arbitrary = { 0.0, 0.0, 1.0 };
-			j = Vector.crossProd(unitNadir, arbitrary);
-			magJ = Vector.mod(j);
-			if (magJ < 1e-6) { // If still zero, use another
-				arbitrary = new double[] { 1.0, 0.0, 0.0 };
-				j = Vector.crossProd(unitNadir, arbitrary);
-				magJ = Vector.mod(j);
+
+		// Eclipse / yaw-singularity exclusion (Kouba 2009)
+		String satKey = obsvCode.charAt(0) + "" + SVID;
+		boolean inUmbra = isInUmbra(satMC, sunXYZ);
+		if (inUmbra || magJ < 1e-6) {
+			if (!Boolean.TRUE.equals(prevInEclipseMap.get(satKey))) {
+				System.err.println("Eclipse entry: " + satKey + " at GPS time " + GPSTime);
 			}
+			prevInEclipseMap.put(satKey, true);
+			return null;
 		}
-		for (int i = 0; i < 3; i++) {
-			j[i] /= magJ; // Normalize
+		if (Boolean.TRUE.equals(prevInEclipseMap.get(satKey))) {
+			eclipseExitMap.put(satKey, GPSTime);
+			prevInEclipseMap.put(satKey, false);
+			System.err.println("Eclipse exit: " + satKey + ", recovery started at GPS time " + GPSTime);
+		}
+		Double exitTime = eclipseExitMap.get(satKey);
+		if (exitTime != null && (GPSTime - exitTime) < ECLIPSE_RECOVERY_SECONDS) {
+			return null;
 		}
 
-		// i: Body X-axis (cross(j, nadir))
-		double[] i = Vector.crossProd(j, unitNadir); // Already unit since j and unitNadir are unit and perpendicular
+		for (int i = 0; i < 3; i++) j[i] /= magJ;
 
-		// Apply PCO correction 
+		// Body X-axis: cross(j, nadir) — already unit since j ⊥ unitNadir
+		double[] i = Vector.crossProd(j, unitNadir);
+
+		// Apply PCO: rotate ANTEX offset (X, Y, Z_body) into ECEF and add to satMC
 		for (int y = 0; y < 3; y++) {
 			satPC_windUp[y] = satMC[y] + eccXYZ[0] * i[y] + eccXYZ[1] * j[y] + eccXYZ[2] * unitNadir[y];
 		}
 
 		if (userECEF != null) {
-			// Compute unit LOS (approx using first frequency's position)
 			double[] userLL = LatLonUtil.ecef2lla(userECEF);
 			double[] unitLOS = SatUtil.getUnitLOS(Arrays.copyOfRange(satPC_windUp, 0, 3), userECEF);
 
-			// Receiver antenna basis (assuming fixed, leveled: ar = east, br = north)
-			double[] ar = new double[] { -Math.sin(userLL[1]), Math.cos(userLL[1]), 0.0 }; // East
+			// Receiver effective dipole vector Dr (fixed leveled antenna: East/North basis)
+			double[] ar = new double[] { -Math.sin(userLL[1]), Math.cos(userLL[1]), 0.0 };           // East
 			double[] br = new double[] { -Math.sin(userLL[0]) * Math.cos(userLL[1]),
-					-Math.sin(userLL[0]) * Math.sin(userLL[1]), Math.cos(userLL[0]) }; // North
+					-Math.sin(userLL[0]) * Math.sin(userLL[1]), Math.cos(userLL[0]) };                // North
+			double[] Dr = Vector.add(Vector.subtract(ar, Vector.scale(unitLOS, Vector.dotProd(unitLOS, ar))),
+					Vector.crossProd(unitLOS, br));
 
-			// Satellite basis
-			double[] as = i; // X_s
-			double[] bs = j; // Y_s
+			// Satellite effective dipole vector Ds (body X-axis; minus sign per Wu et al. 1993)
+			double[] as = i;
+			double[] bs = j;
+			double[] Ds = Vector.add(Vector.subtract(as, Vector.scale(unitLOS, Vector.dotProd(unitLOS, as))),
+					Vector.scale(Vector.crossProd(unitLOS, bs), -1.0));
 
-			// Effective dipole vectors for wind-up
-			double[] k_cross_br = Vector.crossProd(unitLOS, br);
-			double k_dot_ar = Vector.dotProd(unitLOS, ar);
-			double[] Dr = Vector.add(Vector.subtract(ar, Vector.scale(unitLOS, k_dot_ar)), k_cross_br);
-
-			double[] k_cross_bs = Vector.crossProd(unitLOS, bs);
-			double k_dot_as = Vector.dotProd(unitLOS, as);
-			double[] Ds = Vector.add(Vector.subtract(as, Vector.scale(unitLOS, k_dot_as)),
-					Vector.scale(k_cross_bs, -1.0)); // Note minus for satellite
-
-			// Compute wind-up
 			double modDr = Vector.mod(Dr);
 			double modDs = Vector.mod(Ds);
 			if (modDr == 0 || modDs == 0) {
-				// Rare: Invalid dipoles, set wind-up to 0
+				// Degenerate geometry (satellite at zenith): wind-up undefined, set to 0
 				System.err.println("Invalid dipole magnitude for wind-up computation.");
 				satPC_windUp[3] = 0.0;
 				return satPC_windUp;
 			}
 
-			double dotDsDr = Vector.dotProd(Ds, Dr);
-			double cosTheta = dotDsDr / (modDs * modDr);
-			cosTheta = Math.max(-1.0, Math.min(1.0, cosTheta)); // Clamp
+			double cosTheta = Math.max(-1.0, Math.min(1.0, Vector.dotProd(Ds, Dr) / (modDs * modDr)));
+			double sign = Math.signum(Vector.dotProd(unitLOS, Vector.crossProd(Ds, Dr)));
+			double deltaPhi = sign * Math.acos(cosTheta); // raw angle in [-π, π]
 
-			double zeta = Vector.dotProd(unitLOS, Vector.crossProd(Ds, Dr));
-			double sign = Math.signum(zeta);
-
-			double deltaPhi = sign * Math.acos(cosTheta); // Radians
-
-			// Ensure continuity with previous epoch
+			// Unwrap to nearest 2π multiple of the previous epoch's value to ensure continuity
 			double twoPi = 2 * Math.PI;
 			double previousRadians = (previousWindUp / wavelength) * twoPi;
 			double diff = deltaPhi - previousRadians;
-			int n = (int) Math.round(diff / twoPi);
-			deltaPhi -= n * twoPi; // Adjust to closest
+			deltaPhi -= Math.round(diff / twoPi) * twoPi;
 
-			double windUpCycle = deltaPhi / twoPi;
-
-			satPC_windUp[3] = windUpCycle * wavelength;
-
+			satPC_windUp[3] = (deltaPhi / twoPi) * wavelength;
 		}
 		return satPC_windUp;
-
 	}
 
-	private double[] getSunCoord(double GPSTime, long weekNo) {
+	/**
+	 * Returns true if the satellite is inside Earth's umbra (full shadow).
+	 *
+	 * <p>Uses a cylindrical shadow model (point-source Sun assumption): the satellite is in
+	 * umbra when it is on the anti-Sun side of Earth <em>and</em> its perpendicular distance
+	 * from the Earth-Sun axis is less than Earth's radius (6378136 m). This slightly
+	 * over-estimates the true umbra cone edge by a few seconds of arc, which is conservative
+	 * and acceptable for exclusion purposes. Penumbra is not detected.</p>
+	 *
+	 * <p>Note: {@code satECEF} and {@code sunECEF} are in different frames (ECEF vs EME2000),
+	 * but because Earth is at the origin of both and the Sun is ~1 AU away, the directional
+	 * error from this frame mismatch is negligible (~0.003°).</p>
+	 *
+	 * @param satECEF  Satellite position in ECEF (metres).
+	 * @param sunECEF  Sun position in EME2000 from {@link #getSunCoord} (metres).
+	 * @return {@code true} if the satellite is within Earth's shadow cylinder.
+	 */
+	private boolean isInUmbra(double[] satECEF, double[] sunECEF) {
+		double sunDist = Math.sqrt(sunECEF[0]*sunECEF[0] + sunECEF[1]*sunECEF[1] + sunECEF[2]*sunECEF[2]);
+		double[] uSun = new double[]{ sunECEF[0]/sunDist, sunECEF[1]/sunDist, sunECEF[2]/sunDist };
+		double proj = satECEF[0]*uSun[0] + satECEF[1]*uSun[1] + satECEF[2]*uSun[2];
+		if (proj >= 0) return false; // satellite on Sun-side of Earth, cannot be in shadow
+		double satR2 = satECEF[0]*satECEF[0] + satECEF[1]*satECEF[1] + satECEF[2]*satECEF[2];
+		double perpDist2 = satR2 - proj * proj;
+		return perpDist2 < 6378136.0 * 6378136.0;
+	}
 
+	/**
+	 * Returns the Sun's position in the EME2000 inertial frame (metres) at the given epoch,
+	 * queried via Orekit's {@link CelestialBody} interface.
+	 *
+	 * <p>GPS time is converted to TAI by adding 19 seconds (the fixed GPS–TAI offset)
+	 * before constructing the {@link AbsoluteDate}.</p>
+	 *
+	 * @param GPSTime  GPS seconds-of-week at the epoch of interest.
+	 * @param weekNo   GPS week number.
+	 * @return Sun position vector [x, y, z] in EME2000 (metres).
+	 */
+	private double[] getSunCoord(double GPSTime, long weekNo) {
 		Date date = Time.getDate(GPSTime + 19, weekNo, 0).getTime();
 		AbsoluteDate absDate = new AbsoluteDate(date, TimeScalesFactory.getTAI());
 		Vector3D coords = sun.getPVCoordinates(absDate, FramesFactory.getEME2000()).getPosition();
 		return new double[] { coords.getX(), coords.getY(), coords.getZ() };
-
 	}
 
+	/**
+	 * One-time offline utility: converts an IGS ANTEX (.atx) file into the flat CSV format
+	 * consumed by {@link #Antenna(String)}. Re-run whenever a new ANTEX file is available.
+	 *
+	 * @param in_path   Path to the IGS ANTEX (.atx) file.
+	 * @param out_path  Destination path for the output CSV.
+	 */
 	public static void buildCSV(String in_path, String out_path) throws Exception {
 		try {
-
 			Set<Character> SSIset = Set.of('G', 'R', 'E', 'C', 'I', 'S', 'J');
 
 			String[] header = { "TYPE", "SVID/SrNo", "DAZI", "ZEN", "VALID_FROM", "VALID_UNTIL", "FREQUENCY", "NEU/XYZ",
 					"PCV_NOAZI", "PCV_AZI" };
-			CSVWriter writer = null;
-
-			// create FileWriter object with file as parameter
 			FileWriter outputfile = new FileWriter(new File(out_path));
-			// create CSVWriter object filewriter object as parameter
-			writer = new CSVWriter(outputfile);
+			CSVWriter writer = new CSVWriter(outputfile);
 			writer.writeNext(header);
 
 			File file = new File(in_path);

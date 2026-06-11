@@ -138,8 +138,12 @@ public class SingleFreq {
 					t = tSV - (satClkOff-satHardCodeBias);
 					String satKey = obsvCode + svid;
 					double prev_previousWindUpCycles = phase_windup_map.containsKey(satKey)?phase_windup_map.get(satKey):0;
-					double[] satPC_windup = antenna.getSatPC_windup_new(svid, obsvCode, tRX, weekNo, satECEF, refEcef,
+					double[] satPC_windup = antenna.getSatPC_windup(svid, obsvCode, tRX, weekNo, satECEF, refEcef,
 							prev_previousWindUpCycles);
+					if (satPC_windup == null) {
+						phase_windup_map.remove(satKey); // reset continuity on eclipse exclusion
+						continue;
+					}
 					double phase_windup = satPC_windup[3];
 					phase_windup_map.put(satKey, phase_windup);
 					for(int j=0;j<3;j++)

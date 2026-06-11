@@ -1,5 +1,7 @@
 package com.gnssAug.Rinex.constants;
 
+// Geodetic receiver noise levels — tighter than Android.constants.GnssDataConfig
+// (phase σ = 1 mm vs smartphone 1 cm; pseudorange σ = 0.1 m vs 3.16 m)
 public class GnssDataConfig {
 	
 	final public static double pseudorange_priorVarOfUnitW =1e-2;

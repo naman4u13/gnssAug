@@ -48,10 +48,13 @@ public class EKF_PPP3 extends EKFParent {
 	private HashMap<String, Integer> consecutiveCSmap;
 	private long csDetectedCount = 0;
 	private long csRepairedCount = 0;
-	private long hardResetCount = 0;
-	private long invalidPhaseCount = 0;
-	private long androidAPI_CS_count = 0;
-	private long halfCycleAnomalyCount = 0;
+	private long csDetected_api = 0;
+	private long csDetected_gbTest = 0;
+	private long resetCount_invalidADR = 0;
+	private long resetCount_adrReset = 0;
+	private long resetCount_gfTest = 0;
+	private long resetCount_halfCycle = 0;
+	private long resetCount_consecutive = 0;
 	private KFconfig vel_kfObj;
 	private KFconfig pos_kfObj;
 	final private int geofree_csThresh = 100;
@@ -168,10 +171,13 @@ public class EKF_PPP3 extends EKFParent {
 					cycleSlipCount.clear();
 					csDetectedCount = 0;
 					csRepairedCount = 0;
-					hardResetCount = 0;
-					invalidPhaseCount = 0;
-					androidAPI_CS_count = 0;
-					halfCycleAnomalyCount = 0;
+					csDetected_api = 0;
+					csDetected_gbTest = 0;
+					resetCount_invalidADR = 0;
+					resetCount_adrReset = 0;
+					resetCount_gfTest = 0;
+					resetCount_halfCycle = 0;
+					resetCount_consecutive = 0;
 				}
 			}
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
@@ -183,8 +189,7 @@ public class EKF_PPP3 extends EKFParent {
 					LatLonUtil.ecef2lla(refPos, true)[1]);
 			ZonedDateTime zdTime = Time.convertUsingToInstant(time);
 			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
-			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
-			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
+			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, timeVaryingTides);
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSvid();
@@ -221,10 +226,10 @@ public class EKF_PPP3 extends EKFParent {
 						current_sat.setCycleSlipDetected(isAPI_CS);
 						current_sat.setResetPhaseAmb(doReset);
 						current_sat.setValidPhase(isPhaseValid);
-						invalidPhaseCount += isPhaseValid ? 0 : 1;
-						hardResetCount += doReset ? 1 : 0;
-						androidAPI_CS_count += isAPI_CS && (!doReset) ? 1 : 0;
-						halfCycleAnomalyCount += isCsRepairable ? 0 : 1;
+						if (!isPhaseValid)              resetCount_invalidADR++;
+						if (current_sat.isAdrReset())  resetCount_adrReset++;
+						if (isGF_CSD)                  resetCount_gfTest++;
+						if (!isCsRepairable)           resetCount_halfCycle++;
 						break;
 					}
 				}
@@ -406,10 +411,7 @@ public class EKF_PPP3 extends EKFParent {
 						sat.setResetPhaseAmb(true);
 						csdList.get(i).setReset(true);
 						resetCount++;
-						hardResetCount++;
-						if (sat.isAdrCycleSlip()) {
-							androidAPI_CS_count--;
-						}
+						resetCount_consecutive++;
 						continue;
 					}
 				} else {
@@ -420,6 +422,8 @@ public class EKF_PPP3 extends EKFParent {
 				cycleSlipCount.put(satID, record);
 				_ambCount++;
 				ambCount++;
+				if (sat.isAdrCycleSlip()) csDetected_api++;
+				else                      csDetected_gbTest++;
 			}
 
 		}
@@ -1364,12 +1368,16 @@ public class EKF_PPP3 extends EKFParent {
 
 		}
 		System.out.println("\n");
-		System.out.println("CS Detected Count : " + csDetectedCount);
-		System.out.println("CS Repaired Count : " + csRepairedCount);
-		System.out.println("Hard Reset Count : " + hardResetCount);
-		System.out.println("Invalid Phase Count : " + invalidPhaseCount);
-		System.out.println("Android API CS Detected Count : " + androidAPI_CS_count);
-		System.out.println("HalfCycle Anomaly : " + halfCycleAnomalyCount);
+		System.out.println("Soft CS Detected   : " + csDetectedCount);
+		System.out.println("  API-flagged      : " + csDetected_api);
+		System.out.println("  GB test          : " + csDetected_gbTest);
+		System.out.println("CS Repaired        : " + csRepairedCount);
+		System.out.println("Hard Resets        : " + getHardResetCount());
+		System.out.println("  Invalid ADR      : " + resetCount_invalidADR);
+		System.out.println("  ADR Reset        : " + resetCount_adrReset);
+		System.out.println("  GF discrepancy   : " + resetCount_gfTest);
+		System.out.println("  Half-cycle       : " + resetCount_halfCycle);
+		System.out.println("  Consecutive CS   : " + resetCount_consecutive);
 
 		System.out.println("\n");
 		ArrayList<Double>[] posErrList = new ArrayList[6];
@@ -1524,19 +1532,16 @@ public class EKF_PPP3 extends EKFParent {
 	}
 
 	public long getHardResetCount() {
-		return hardResetCount;
+		return resetCount_invalidADR + resetCount_adrReset + resetCount_gfTest
+				+ resetCount_halfCycle + resetCount_consecutive;
 	}
 
-	public long getInvalidPhaseCount() {
-		return invalidPhaseCount;
-	}
-
-	public long getAndroidAPI_CS_count() {
-		return androidAPI_CS_count;
-	}
-
-	public long getHalfCycleAnomalyCount() {
-		return halfCycleAnomalyCount;
-	}
+	public long getResetCount_invalidADR()  { return resetCount_invalidADR; }
+	public long getResetCount_adrReset()    { return resetCount_adrReset; }
+	public long getResetCount_gfTest()      { return resetCount_gfTest; }
+	public long getResetCount_halfCycle()   { return resetCount_halfCycle; }
+	public long getResetCount_consecutive() { return resetCount_consecutive; }
+	public long getCsDetected_api()         { return csDetected_api; }
+	public long getCsDetected_gbTest()      { return csDetected_gbTest; }
 
 }

@@ -18,12 +18,14 @@ public class OSB_Bias {
         double end;
         double value;
         double std;
+        String unit;
 
-        BiasEntry(double start, double end, double value, double std) {
+        BiasEntry(double start, double end, double value, double std, String unit) {
             this.start = start;
             this.end = end;
             this.value = value;
             this.std = std;
+            this.unit = unit;
         }
     }
 
@@ -76,14 +78,15 @@ public class OSB_Bias {
                 	    double biasValue = 0.0;
                 	    if(!valueStr.equals("nan"))
                 	    {
-                	    	biasValue = Double.parseDouble(valueStr) * 1e-9;
+                	    	double raw = Double.parseDouble(valueStr);
+                	    	biasValue = unit.equals("cyc") ? raw : raw * 1e-9; // cyc: keep as cycles; ns: convert to seconds
                 	    }
                 	    double std = Double.parseDouble(stdStr);
 
                 	    osbMap.computeIfAbsent(ssi, k -> new HashMap<>())
                 	          .computeIfAbsent(prn, k -> new HashMap<>())
                 	          .computeIfAbsent(obs, k -> new ArrayList<>())
-                	          .add(new BiasEntry(start_GPStime, end_GPStime, biasValue, std));
+                	          .add(new BiasEntry(start_GPStime, end_GPStime, biasValue, std, unit));
                 	}}
             }
         } catch (Exception e) {
@@ -92,22 +95,24 @@ public class OSB_Bias {
         }
     }
 
-    public double getOSB(char ssi, String signalType, int PRN, double GPStime) throws Exception {
-       HashMap<Integer, HashMap<String, ArrayList<BiasEntry>>> sysMap = osbMap.get(ssi);
-        if (sysMap != null) {
-            HashMap<String, ArrayList<BiasEntry>> prnMap = sysMap.get(PRN);
-            if (prnMap != null) {
-            	ArrayList<BiasEntry> entries = prnMap.get(signalType);
-                if (entries != null) {
-                    for (BiasEntry entry : entries) {
-                        if (isEpochInRange(GPStime, entry.start, entry.end)) {
-                            return entry.value;
-                        }
-                    }
-                }
-            }
+    private BiasEntry findEntry(char ssi, String signalType, int PRN, double GPStime) {
+        HashMap<Integer, HashMap<String, ArrayList<BiasEntry>>> sysMap = osbMap.get(ssi);
+        if (sysMap == null) return null;
+        HashMap<String, ArrayList<BiasEntry>> prnMap = sysMap.get(PRN);
+        if (prnMap == null) return null;
+        ArrayList<BiasEntry> entries = prnMap.get(signalType);
+        if (entries == null) return null;
+        for (BiasEntry entry : entries) {
+            if (isEpochInRange(GPStime, entry.start, entry.end)) return entry;
         }
-        return 0.0;  // Default if no match
+        return null;
+    }
+
+    /** Returns the OSB in meters. ns (stored as seconds) → ×c; cyc (stored as cycles) → ×wavelength. */
+    public double getOSBMeters(char ssi, String signalType, int PRN, double GPStime, double wavelength) throws Exception {
+        BiasEntry entry = findEntry(ssi, signalType, PRN, GPStime);
+        if (entry == null) return 0.0;
+        return entry.unit.equals("cyc") ? entry.value * wavelength : entry.value * SpeedofLight;
     }
 
     // Helper method to check if epochTime is between start and end (format YYYY:DDD:SSSSS)

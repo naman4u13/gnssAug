@@ -9,7 +9,6 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 import org.apache.commons.collections.set.ListOrderedSet;
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
-import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.simple.SimpleMatrix;
 import com.gnssAug.Rinex.constants.GnssDataConfig;
 import com.gnssAug.Android.constants.Measurement;
@@ -29,48 +28,175 @@ import com.gnssAug.utility.Time;
 import com.gnssAug.utility.Vector;
 import com.gnssAug.utility.Weight;
 
+/**
+ * Extended Kalman Filter for Undifferenced Uncombined Precise Point Positioning (UU-PPP)
+ * using IGS precise orbit and clock products.
+ *
+ * <p><b>Dual-filter architecture:</b>
+ * <ul>
+ *   <li>{@code vel_kfObj} — Velocity filter driven by Time-Differenced Carrier Phase (TDCP)
+ *       and Doppler observables. Also hosts cycle-slip detection and integer repair via LAMBDA.</li>
+ *   <li>{@code pos_kfObj} — Position filter carrying the full PPP state vector:
+ *       ECEF position, per-signal receiver clock offsets, velocity, per-system clock drifts,
+ *       wet troposphere residual, per-satellite float carrier-phase ambiguities, and
+ *       per-satellite ionospheric VTEC.</li>
+ * </ul>
+ *
+ * <p><b>Position-filter state vector layout (see {@link RinexPPPStateLayout}):</b>
+ * <pre>
+ *   [ pos(3) | clkOff(nSig) | vel(3) | clkDrift(nSys) | tropo(1) | amb(n) | iono(nSat) ]
+ * </pre>
+ *
+ * <p><b>Observables per epoch:</b> pseudorange, carrier-phase (metres), Doppler DR,
+ * plus GIM VTEC pseudo-observations as per-satellite ionospheric constraints.
+ *
+ * <p><b>Cycle-slip handling:</b> the velocity filter detects slips via a global
+ * chi-squared model test followed by a per-satellite w-test on TDCP residuals.
+ * Detected slips are repaired with LAMBDA (PAR-FFRT) before the position filter update.
+ *
+ * <p><b>Ambiguity resolution:</b> between-satellite-differenced (BSD) float ambiguities
+ * from the position filter are fixed using LAMBDA (PAR, 99.999 % success-rate threshold).
+ * The conditional mean/covariance update propagates the fix back into the full state,
+ * including cross-covariances with position and ionosphere blocks.
+ *
+ * <p><b>Solid Earth tides:</b> applied every epoch as a line-of-sight range correction
+ * using Orekit's {@code TidalDisplacement} (IERS 2010, {@code removePermanentDeformation=false}).
+ * The Orekit output already embeds the permanent deformation; no separate permanent-tide
+ * correction is added.
+ */
 public class EKF_PPP extends EKFParent {
 
+	// ── Analysis output maps (populated only when doAnalyze = true) ──────────────────────────
+
+	/** Pre-fit innovations per epoch, keyed by GPS millisecond timestamp. */
 	private TreeMap<Long, Map<Measurement, double[]>> innovationMap;
+	/** Post-fit residuals per epoch, keyed by GPS millisecond timestamp. */
 	private TreeMap<Long, Map<Measurement, double[]>> residualMap;
+	/** Post-variance of unit weight per observable group per epoch (ideally ≈ 1.0). */
 	private TreeMap<Long, Map<Measurement, Double>> postVarOfUnitWMap;
+	/** Redundancy numbers (effective degrees of freedom) per observable group per epoch. */
 	private TreeMap<Long, Map<Measurement, Double>> redundancyNoMap;
+	/** Estimated float carrier-phase ambiguities per satellite per epoch (cycles). */
 	private TreeMap<Long, HashMap<String, Double>> ambMap;
+	/** Estimated ionospheric VTEC per satellite per epoch (TECU). */
 	private TreeMap<Long, HashMap<String, Double>> ionoMap;
+	/** Dilution-of-precision components [EDOP, NDOP, VDOP, ClkDOP] per epoch. */
 	private TreeMap<Long, double[]> dopMap;
+	/** Estimated wet troposphere residual per epoch (metres). */
 	private TreeMap<Long, Double> tropoMap;
+	/** Estimated receiver clock offsets per observation code per epoch (metres / c). */
 	private TreeMap<Long, double[]> clkOffMap;
+	/** Estimated receiver clock drifts per GNSS system per epoch (m/s). */
 	private TreeMap<Long, double[]> clkDriftMap;
+
+	// ── Cycle-slip and ambiguity counters ─────────────────────────────────────────────────────
+
+	/** Cumulative count of cycle slips detected across the session. */
 	private long csDetectedCount = 0;
+	/** Cumulative count of cycle slips successfully repaired with LAMBDA. */
 	private long csRepairedCount = 0;
+	/** Cumulative count of ambiguities fixed to integer via BSD AR. */
 	private long ambFixedCount = 0;
+
+	// ── EKF objects ───────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Velocity-filter KF state. State vector:
+	 * {@code [ vel(3) | clkDrift(nSys) | driftRate(nSys) ]}.
+	 * Updated from Doppler DR and TDCP; also used for cycle-slip detection.
+	 */
 	private KFconfig vel_kfObj;
+
+	/**
+	 * Position-filter KF state. Full UU-PPP state vector — see {@link RinexPPPStateLayout}
+	 * for the exact index layout.
+	 */
 	private KFconfig pos_kfObj;
+
+	/** Satellite list per epoch, populated when {@code doAnalyze} is true. */
 	protected TreeMap<Long, ArrayList<Satellite>> satListMap;
+
+	// ── Cycle-slip detection parameters ──────────────────────────────────────────────────────
+
+	/**
+	 * Maps satellite ID → consecutive cycle-slip count across epochs.
+	 * A satellite with more than {@code consecutiveSlips} back-to-back detections
+	 * is hard-reset (excluded) rather than repaired.
+	 */
 	private HashMap<String, Integer> consecutiveCSmap;
+
+	/** Maximum TDCP–Doppler discrepancy (in wavelengths) before a slip is flagged. */
 	final private int csThresh = 100;
+
+	/** Number of consecutive slip detections that triggers a satellite reset/exclusion. */
 	final private int consecutiveSlips = 1;
+
+	// ── Artificial cycle-slip injection (for algorithm validation only) ───────────────────────
+
+	/** Total count of non-zero artificial slip values injected during the session. */
 	private int nonZeroArtificalCScount = 0;
+	/** Set to true to enable deterministic cycle-slip injection for testing. */
+	private boolean injectArtificialCS = false;
+	/** Accumulated artificial slip magnitudes per satellite slot (cycles). */
+	private double[] artificialSlip = new double[] {1, 2, 3, 4, 5, 6, 7};
 
+	// ── Reset counters ────────────────────────────────────────────────────────────────────────
 
-	
+	/** Number of satellites hard-reset due to failing the global TDCP model test. */
+	private long resetCount_gfTest = 0;
+	/** Number of satellites hard-reset due to exceeding {@code consecutiveSlips}. */
+	private long resetCount_consecutive = 0;
+
+	// ── Per-epoch diagnostic maps ─────────────────────────────────────────────────────────────
+
+	/** Count of cycle slips detected at each epoch. */
+	private TreeMap<Long, Integer> csDetectedCountMap;
+	/** Count of cycle slips repaired at each epoch. */
+	private TreeMap<Long, Integer> csRepairedCountMap;
+	/** Count of ambiguities fixed at each epoch. */
+	private TreeMap<Long, Integer> ambFixedCountMap;
+	/** Per-satellite slip history: {@code int[]{slipCount, totalEpochs}}. */
+	private HashMap<String, int[]> cycleSlipCount;
+	/** Full CycleSlipDetect list per epoch, populated when {@code doAnalyze} is true. */
+	private TreeMap<Long, ArrayList<CycleSlipDetect>> csdListMap;
+
+	/** Initialises both EKF state containers. */
 	public EKF_PPP() {
 		vel_kfObj = new KFconfig();
 		pos_kfObj = new KFconfig();
 	}
 
-	private TreeMap<Long, Integer> csDetectedCountMap;
-	private TreeMap<Long, Integer> csRepairedCountMap;
-	private TreeMap<Long, Integer> ambFixedCountMap;
-	private HashMap<String, int[]> cycleSlipCount;
-	private TreeMap<Long, ArrayList<CycleSlipDetect>> csdListMap;
-
 	
 
+	/**
+	 * Entry point: initialises both filter state vectors and covariance matrices,
+	 * then runs the epoch-by-epoch estimation loop via {@link #iterate}.
+	 *
+	 * <p><b>State initialisation:</b>
+	 * <ul>
+	 *   <li>Position: bootstrapped from a single-epoch least-squares solution; P = 1e4 m².</li>
+	 *   <li>Velocity: zero for static mode (P = 1e-16 m²/s²); bootstrapped from
+	 *       least-squares for kinematic mode (P = 100 m²/s²).</li>
+	 *   <li>Clock offsets, tropo, iono, ambiguities: initialised to zero; P = 1e4 or 1e16.</li>
+	 * </ul>
+	 *
+	 * @param SatMap           epoch-keyed map of pre-processed satellite observations
+	 *                         from {@link com.gnssAug.IGS.IGS#filterSat}
+	 * @param rxPCO            receiver phase centre offsets per observation code (ECEF, metres)
+	 * @param timeList         ordered GPS millisecond timestamps to process
+	 * @param doAnalyze        if true, residuals, innovations, DOP, and state maps are populated
+	 * @param doTest           if true, global model test + w-test outlier rejection is applied
+	 * @param obsvCodeList     observation codes to process (e.g. "G1C", "E1C")
+	 * @param rxARP            receiver antenna reference point in ECEF (metres)
+	 * @param isStatic         true = static receiver; velocity random walk is suppressed
+	 * @param repairCS         if true, detected cycle slips are repaired with LAMBDA
+	 * @param fixAmb           if true, BSD integer ambiguity resolution is attempted each epoch
+	 * @param predictPhaseClock if true, phase-clock prediction is enabled in the process model
+	 * @return epoch-keyed map of estimated ECEF position (3-element array, metres)
+	 */
 	public TreeMap<Long, double[]> process(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
 			ArrayList<Long> timeList, boolean doAnalyze, boolean doTest, String[] obsvCodeList, double[] rxARP,
-			boolean isStatic, boolean repairCS, boolean fixAmb) throws Exception {
-		boolean predictPhaseClock = false;
+			boolean isStatic, boolean repairCS, boolean fixAmb, boolean predictPhaseClock) throws Exception {
 		int clkOffNum = obsvCodeList.length;
 		ListOrderedSet ssiSet = new ListOrderedSet();
 		for (int i = 0; i < clkOffNum; i++) {
@@ -144,103 +270,37 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	/**
+	 * Main epoch loop. For each consecutive epoch pair, this method:
+	 * <ol>
+	 *   <li>Applies solid Earth tide correction: the IERS 2010 displacement vector
+	 *       (Orekit, permanent deformation included) is projected onto each satellite's
+	 *       line of sight and added to pseudorange and phase.</li>
+	 *   <li>Builds the {@link CycleSlipDetect} list by forming TDCP, Doppler-DR, and
+	 *       pseudorange-DR observables for every satellite tracked across both epochs.
+	 *       Satellites with a TDCP–Doppler discrepancy exceeding {@code csThresh} wavelengths
+	 *       are pre-excluded before cycle-slip testing.</li>
+	 *   <li>Calls {@link #runFilter_vel} to update the velocity filter and detect/repair slips.</li>
+	 *   <li>Calls {@link #runFilter_pos} to update the PPP position filter.</li>
+	 * </ol>
+	 * Processing starts at epoch index 1 (the second epoch) because TDCP requires two
+	 * consecutive carrier-phase observations.
+	 */
 	private TreeMap<Long, double[]> iterate(TreeMap<Long, ArrayList<Satellite>> SatMap, HashMap<String, double[]> rxPCO,
 			ArrayList<Long> timeList, ListOrderedSet ssiSet, boolean doAnalyze, boolean doTest, double[] rxARP,
 			String[] obsvCodeList, boolean repairCS, boolean fixAmb,boolean predictPhaseClock) throws Exception {
 
 		TreeMap<Long, double[]> estStateMap = new TreeMap<Long, double[]>();
-		HashMap<String, Integer> ambMap = new HashMap<String, Integer>();
-		HashMap<String, Integer> ionoMap = new HashMap<String, Integer>();
+		HashMap<String, Integer> ambIndexMap = new HashMap<String, Integer>();
+		HashMap<String, Integer> ionoIndexMap = new HashMap<String, Integer>();
 		long prevTime = timeList.get(0);
-		double[] slip = new double[] {1,2,3,4,5,6,7};
 		// Start from 2nd epoch
 		for (int i = 1; i < timeList.size(); i++) {
-			System.out.println("\n\n Epoch : " + i);
 			long currentTime = timeList.get(i);
 			double deltaT = (currentTime - prevTime) / 1e3;
 			ArrayList<Satellite> currSatList = SatMap.get(currentTime);
 			ArrayList<Satellite> prevSatList = SatMap.get(prevTime);
-			int csIncrement = 0;
-			if(i%4==0)
-			{
-				csIncrement =((int)(i/4))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[0] += csIncrement;
-				System.out.println(currSatList.get(0).getSVID()+" : CS value added = "+slip[0]);
-			}
-			if(i%3==0)
-			{
-				csIncrement =((int)(i/3))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[1] += csIncrement;
-				System.out.println(currSatList.get(1).getSVID()+" : CS value added = "+slip[1]);
-			}
-			if(i%6==0)
-			{
-				csIncrement =((int)(i/6))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[2] += csIncrement;
-				System.out.println(currSatList.get(2).getSVID()+" : CS value added = "+slip[2]);
-			}
-			if(i%8==0)
-			{
-				csIncrement =((int)(i/8))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[3] += csIncrement;
-				System.out.println(currSatList.get(3).getSVID()+" : CS value added = "+slip[3]);
-			}
-			if(i%4==0)
-			{
-				csIncrement =((int)(i/4))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[4] += csIncrement;
-				System.out.println(currSatList.get(4).getSVID()+" : CS value added = "+slip[4]);
-			}
-			if(i%6==0)
-			{
-				csIncrement =((int)(i/6))%10;
-				if(csIncrement!=0)
-				{
-					nonZeroArtificalCScount++;
-				}
-				slip[5] += csIncrement;
-				System.out.println(currSatList.get(5).getSVID()+" : CS value added = "+slip[5]);
-			}
-////			if(i%3==0)
-////			{
-////				slip[6] += ((int)(i/3))%10;
-////				System.out.println(currSatList.get(6).getSVID()+" : CS value added = "+slip[6]);
-////			}
-			
-			Satellite sat_temp = currSatList.get(0);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[0]));
-			sat_temp = currSatList.get(1);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[1]));
-			sat_temp = currSatList.get(2);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[2]));
-			sat_temp = currSatList.get(3);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[3]));
-			sat_temp = currSatList.get(4);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[4]));
-			sat_temp = currSatList.get(5);
-			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[5]));
-//			sat_temp = currSatList.get(6);
-//			sat_temp.setPhase(sat_temp.getPhase()+(sat_temp.getCarrier_wavelength()*slip[6]));
+			if (injectArtificialCS) applyArtificialCS(currSatList, i);
 
 			ArrayList<CycleSlipDetect> csdList = new ArrayList<CycleSlipDetect>();
 			double[] refPos = LinearLeastSquare.getEstPos(currSatList, rxPCO, true);
@@ -248,8 +308,7 @@ public class EKF_PPP extends EKFParent {
 			int n_prev = prevSatList.size();
 			ZonedDateTime zdTime = Time.convertUsingToInstant(currSatList.get(0).getTime());
 			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
-			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
-			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
+			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, timeVaryingTides);
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSVID();
@@ -267,9 +326,13 @@ public class EKF_PPP extends EKFParent {
 						current_sat.setPhase(current_sat.getPhase() + earthTide_range);
 						double ionoRate = current_sat.getIonoErr() - prev_sat.getIonoErr();
 						double tropoRate = current_sat.getTropoErr() - prev_sat.getTropoErr();
+						// Doppler DR: average of epoch-pair raw rates corrected for tropo change;
+						// iono sign is +  because iono slows pseudorange but advances Doppler.
 						double dopplerDR = ((current_sat.getPseudoRangeRate() + prev_sat.getPseudoRangeRate()) / 2)
 								- tropoRate + ionoRate;
+						// TDCP (phase difference): iono sign is + because phase and code have opposite iono signs.
 						double phaseDR = current_sat.getPhase() - prev_sat.getPhase() + ionoRate;
+						// Pseudorange DR: iono sign is − because iono appears positively in pseudorange.
 						double prDR = current_sat.getPseudorange() - prev_sat.getPseudorange() - ionoRate;
 						double satVelCorr = unitLOS.mult(satEci.minus(prev_satEci)).get(0);
 						double wavelength = SpeedofLight / current_sat.getCarrier_frequency();
@@ -281,14 +344,16 @@ public class EKF_PPP extends EKFParent {
 						if (approxCS < csThresh * wavelength) {
 							csdList.add(new CycleSlipDetect(current_sat, dopplerDR, phaseDR, ionoRate, false,
 									wavelength, satVelCorr, unitLOS, currentTime - timeList.get(0), trueDR, prDR));
+						} else {
+							resetCount_gfTest++;
 						}
 
 					}
 				}
 			}
-			runFilter_vel(currentTime, deltaT, csdList, ssiSet, true, i, refPos, repairCS, doTest);
+			runFilter_vel(currentTime, deltaT, csdList, ssiSet, refPos, repairCS, doTest);
 
-			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambMap, ionoMap, obsvCodeList, rxPCO, fixAmb, doAnalyze,
+			runFilter_pos(currentTime, deltaT, csdList, ssiSet, ambIndexMap, ionoIndexMap, obsvCodeList, rxPCO, fixAmb, doAnalyze,
 					doTest,predictPhaseClock);
 			SimpleMatrix x = pos_kfObj.getState();
 			SimpleMatrix P = pos_kfObj.getCovariance();
@@ -303,13 +368,73 @@ public class EKF_PPP extends EKFParent {
 			prevTime = currentTime;
 
 		}
-		System.out.println("Artificial CS count : "+nonZeroArtificalCScount);
+		if (injectArtificialCS) System.out.println("Artificial CS count : " + nonZeroArtificalCScount);
 		return estStateMap;
 
 	}
 
+	/**
+	 * Injects deterministic synthetic cycle slips into carrier-phase observations for
+	 * algorithm validation. Each of the six slots uses a fixed epoch modulus; when the
+	 * modulus divides evenly into {@code epochIdx}, the slip for that slot is incremented
+	 * by {@code epochIdx / modulus} cycles (so the magnitude grows over the session).
+	 * Active only when {@code injectArtificialCS} is {@code true}.
+	 *
+	 * @param currSatList list of satellite observations for the current epoch (modified in place)
+	 * @param epochIdx    zero-based index of the current epoch within the session
+	 */
+	private void applyArtificialCS(ArrayList<Satellite> currSatList, int epochIdx) {
+		int[] moduli   = {4, 3, 6, 8, 4, 6};
+		int[] satIndex = {0, 1, 2, 3, 4, 5};
+		for (int k = 0; k < moduli.length; k++) {
+			if (epochIdx % moduli[k] == 0) {
+				int inc = ((int)(epochIdx / moduli[k])) % 10;
+				if (inc != 0) nonZeroArtificalCScount++;
+				artificialSlip[k] += inc;
+				System.out.println(currSatList.get(satIndex[k]).getSVID()
+						+ " : CS value added = " + artificialSlip[k]);
+			}
+		}
+		for (int k = 0; k < satIndex.length; k++) {
+			Satellite sat = currSatList.get(satIndex[k]);
+			sat.setPhase(sat.getPhase() + sat.getCarrier_wavelength() * artificialSlip[k]);
+		}
+	}
+
+	/**
+	 * Runs one update step of the velocity (TDCP) Extended Kalman Filter.
+	 *
+	 * <p><b>Velocity state vector:</b> {@code [ vel(3) | clkDrift(nSys) | driftRate(nSys) ]}.
+	 *
+	 * <p><b>Three-pass update strategy:</b>
+	 * <ol>
+	 *   <li><b>Doppler pass</b> — updates velocity and clock drift using raw Doppler DR
+	 *       (corrected for satellite velocity). An optional global model test + w-test
+	 *       prunes outlier satellites before the EKF update.</li>
+	 *   <li><b>TDCP detection pass</b> — tests TDCP residuals for cycle slips using the
+	 *       same global/w-test procedure. Satellites identified as outliers have their
+	 *       {@link CycleSlipDetect#setCS} flag set to {@code true}.</li>
+	 *   <li><b>TDCP update + slip repair</b> — slipped satellites augment the state with
+	 *       a temporary float integer-slip parameter (P = 1e12). If {@code repairCS} is
+	 *       true, LAMBDA (PAR-FFRT) attempts to fix those integers; the conditional
+	 *       mean/covariance update corrects velocity and drift. The slip parameters are
+	 *       stripped from the state vector after the update regardless of fix success.</li>
+	 * </ol>
+	 * Satellites with more than {@code consecutiveSlips} back-to-back detections are
+	 * hard-reset ({@link CycleSlipDetect#setReset} = true) and excluded from the
+	 * TDCP update to prevent filter divergence.
+	 *
+	 * @param currentTime GPS millisecond timestamp of the current epoch
+	 * @param deltaT      elapsed time since the previous epoch (seconds)
+	 * @param csdList     cycle-slip detection objects; {@code isCS()} and {@code isReset()}
+	 *                    flags are set here and consumed later by {@link #runFilter_pos}
+	 * @param ssiSet      ordered set of GNSS system character identifiers (e.g. 'G', 'E')
+	 * @param refPos      approximate ECEF receiver position for unit-LOS computation
+	 * @param repairCS    if true, detected slips are repaired with LAMBDA before the update
+	 * @param doTest      if true, global model test + w-test is applied to the Doppler pass
+	 */
 	private void runFilter_vel(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,
-			ListOrderedSet ssiSet, boolean useIGS, int ct, double[] refPos, boolean repairCS, boolean doTest)
+			ListOrderedSet ssiSet, double[] refPos, boolean repairCS, boolean doTest)
 			throws Exception {
 
 		// Satellite count
@@ -421,6 +546,7 @@ public class EKF_PPP extends EKFParent {
 					if (count > consecutiveSlips) {
 						csdList.get(i).setReset(true);
 						excludeCount++;
+						resetCount_consecutive++;
 						continue;
 					}
 				} else {
@@ -558,8 +684,52 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	/**
+	 * Runs one update step of the PPP position Extended Kalman Filter.
+	 *
+	 * <p><b>State management (pre-update):</b> the full state vector is rebuilt each epoch
+	 * to reflect the current satellite geometry. For every satellite in {@code csdList}:
+	 * <ul>
+	 *   <li>If the satellite was tracked continuously (no slip, or slip repaired with no reset),
+	 *       its ambiguity state is carried forward from {@code ambIndexMap} and the repaired
+	 *       slip value is added.</li>
+	 *   <li>Otherwise a fresh ambiguity state is initialised from
+	 *       (phase − pseudorange) / λ with variance 1e16 m².</li>
+	 * </ul>
+	 * Ionospheric VTEC states are managed analogously via {@code ionoIndexMap}. The process
+	 * noise model ({@link KFconfig#configPPP}) is applied before the predict step.
+	 *
+	 * <p><b>Measurement equation (see {@link #get_z_ze_H}):</b> stacks n pseudorange,
+	 * n carrier-phase, n Doppler DR, and {@code ionoParamNum} GIM VTEC pseudo-observations.
+	 * The block-diagonal noise matrix R uses prior variances from {@link GnssDataConfig}.
+	 * Pseudorange and Doppler blocks are optionally outlier-tested before the EKF update.
+	 *
+	 * <p><b>BSD ambiguity resolution (when {@code fixAmb} is true):</b>
+	 * <ol>
+	 *   <li>Satellites are grouped by observation code; the highest-weight satellite
+	 *       (elevation + CN0) in each group is chosen as reference.</li>
+	 *   <li>Between-satellite differences form {@code sd_a} and {@code sd_Q}.</li>
+	 *   <li>LAMBDA (PAR, 99.999 % success-rate threshold) resolves the SD integers.</li>
+	 *   <li>If integers are fixed, a conditional mean/covariance update propagates the
+	 *       fix into position, ambiguity, and ionosphere blocks, preserving all
+	 *       cross-covariances.</li>
+	 * </ol>
+	 *
+	 * @param currentTime        GPS millisecond timestamp of the current epoch
+	 * @param deltaT             elapsed time since the previous epoch (seconds)
+	 * @param csdList            cycle-slip detection objects from {@link #runFilter_vel}
+	 * @param ssiSet             ordered set of GNSS system identifiers
+	 * @param ambIndexMap        satellite ID → current ambiguity state index (updated in place)
+	 * @param ionoIndexMap       satellite ID → current VTEC state index (updated in place)
+	 * @param obsvCodeList       observation codes being processed
+	 * @param rxPCO              receiver phase centre offsets per observation code (metres)
+	 * @param fixAmb             if true, BSD integer AR is attempted after the float update
+	 * @param doAnalyze          if true, innovations, residuals, DOP, and state maps are stored
+	 * @param doTest             if true, pseudorange and Doppler outliers are detected and down-weighted
+	 * @param predictPhaseClock  passed through to the PPP process model ({@link KFconfig#configPPP})
+	 */
 	private void runFilter_pos(long currentTime, double deltaT, ArrayList<CycleSlipDetect> csdList,
-			ListOrderedSet ssiSet, HashMap<String, Integer> ambMap, HashMap<String, Integer> ionoMap,
+			ListOrderedSet ssiSet, HashMap<String, Integer> ambIndexMap, HashMap<String, Integer> ionoIndexMap,
 			String[] obsvCodeList, HashMap<String, double[]> rxPCO, boolean fixAmb, boolean doAnalyze,
 			boolean doTest,boolean predictPhaseClock) throws Exception {
 		HashMap<String, Integer> new_ambMap = new HashMap<String, Integer>();
@@ -586,8 +756,9 @@ public class EKF_PPP extends EKFParent {
 		int clkOffNum = obsvCodeList.length;
 		int clkDriftNum = ssiSet.size();
 		int ionoParamNum = uniqSat.size();
-		int coreStateNum = 6 + clkOffNum + clkDriftNum + 1;
-		int totalStateNum = coreStateNum + n + ionoParamNum;
+		RinexPPPStateLayout layout = new RinexPPPStateLayout(clkOffNum, clkDriftNum, n, ionoParamNum);
+		int coreStateNum = layout.coreStateNum;
+		int totalStateNum = layout.totalStateNum;
 
 		ArrayList<String> uniqSatList = new ArrayList<String>(uniqSat);
 
@@ -604,8 +775,8 @@ public class EKF_PPP extends EKFParent {
 			boolean flag1 = csdObj.isCS() == false;
 			boolean flag2 = csdObj.isCS() == true && csdObj.isRepaired() == true && csdObj.isReset() == false;
 			boolean flag = flag1 || flag2;
-			if (ambMap.containsKey(satObsvCode) && flag) {
-				int k = ambMap.get(satObsvCode);
+			if (ambIndexMap.containsKey(satObsvCode) && flag) {
+				int k = ambIndexMap.get(satObsvCode);
 				double repairedCSval = 0;
 				double repairedCSVar = 0;
 				if (flag2) {
@@ -626,8 +797,8 @@ public class EKF_PPP extends EKFParent {
 					boolean _flag1 = _csdObj.isCS() == false;
 					boolean _flag2 = _csdObj.isCS() == true && _csdObj.isRepaired() == true&&_csdObj.isReset() == false;;
 					boolean _flag = _flag1 || _flag2;
-					if (ambMap.containsKey(_satObsvCode) && _flag) {
-						int _k = ambMap.get(_satObsvCode);
+					if (ambIndexMap.containsKey(_satObsvCode) && _flag) {
+						int _k = ambIndexMap.get(_satObsvCode);
 						_P.set(j, l, P.get(k, _k));
 						_P.set(l, j, P.get(_k, k));
 
@@ -636,8 +807,8 @@ public class EKF_PPP extends EKFParent {
 				for (int l = coreStateNum + n; l < totalStateNum; l++) {
 
 					String satID = uniqSatList.get(l - (coreStateNum + n));
-					if (ionoMap.containsKey(satID)) {
-						int _k = ionoMap.get(satID);
+					if (ionoIndexMap.containsKey(satID)) {
+						int _k = ionoIndexMap.get(satID);
 						_P.set(j, l, P.get(k, _k));
 						_P.set(l, j, P.get(_k, k));
 
@@ -653,17 +824,15 @@ public class EKF_PPP extends EKFParent {
 			}
 
 			new_ambMap.put(satObsvCode, j);
-			System.out.println(satObsvCode + " value: " + _x.get(j) + "  variance  " + _P.get(j, j));
 		}
-		System.out.println("\n");
-		ambMap.clear();
-		ambMap.putAll(new_ambMap);
+		ambIndexMap.clear();
+		ambIndexMap.putAll(new_ambMap);
 
 		for (int j = coreStateNum + n; j < totalStateNum; j++) {
 
 			String satID = uniqSatList.get(j - (coreStateNum + n));
-			if (ionoMap.containsKey(satID)) {
-				int k = ionoMap.get(satID);
+			if (ionoIndexMap.containsKey(satID)) {
+				int k = ionoIndexMap.get(satID);
 				_x.set(j, x.get(k));
 				_P.set(j, j, P.get(k, k));
 				for (int l = 0; l < coreStateNum; l++) {
@@ -672,8 +841,8 @@ public class EKF_PPP extends EKFParent {
 				}
 				for (int l = j + 1; l < totalStateNum; l++) {
 					String _satID = uniqSatList.get(l - (coreStateNum + n));
-					if (ionoMap.containsKey(_satID)) {
-						int _k = ionoMap.get(_satID);
+					if (ionoIndexMap.containsKey(_satID)) {
+						int _k = ionoIndexMap.get(_satID);
 						_P.set(j, l, P.get(k, _k));
 						_P.set(l, j, P.get(_k, k));
 
@@ -689,8 +858,8 @@ public class EKF_PPP extends EKFParent {
 
 			new_ionoMap.put(satID, j);
 		}
-		ionoMap.clear();
-		ionoMap.putAll(new_ionoMap);
+		ionoIndexMap.clear();
+		ionoIndexMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
 		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, false,predictPhaseClock,false);
@@ -705,7 +874,7 @@ public class EKF_PPP extends EKFParent {
 		R.insertIntoThis(n, n, Cyy_phase);
 		R.insertIntoThis(2 * n, 2 * n, Cyy_doppler);
 		R.insertIntoThis(3 * n, 3 * n, Cyy_GIM_iono);
-		Object[] z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
+		Object[] z_ze_H = get_z_ze_H(x, layout, satList,
 				obsvCodeList, rxPCO, ionoParams, csdList, uniqSatList, ssiSet, false, currentTime);
 		SimpleMatrix z = (SimpleMatrix) z_ze_H[0];
 		SimpleMatrix ze = (SimpleMatrix) z_ze_H[1];
@@ -764,7 +933,7 @@ public class EKF_PPP extends EKFParent {
 			SimpleMatrix _dop = RotMat.mult((H_dop.transpose().mult(H_dop)).invert()).mult(RotMat.transpose());
 			double[] dop = new double[] { _dop.get(0, 0), _dop.get(1, 1), _dop.get(2, 2), _dop.get(3, 3) };
 			dopMap.put(currentTime, dop);
-			z_ze_H = get_z_ze_H(x, coreStateNum, clkOffNum, clkDriftNum, ionoParamNum, n, totalStateNum, satList,
+			z_ze_H = get_z_ze_H(x, layout, satList,
 					obsvCodeList, rxPCO, ionoParams, csdList, uniqSatList, ssiSet, true, currentTime);
 			z = (SimpleMatrix) z_ze_H[0];
 			ze = (SimpleMatrix) z_ze_H[1];
@@ -782,8 +951,6 @@ public class EKF_PPP extends EKFParent {
 			System.out.println(floatAmb.toString());
 			System.out.println("Float Ambiguity Covariance");
 			System.out.println(floatAmbCov.toString());
-
-			// ADD BSD HERE
 
 			// Group satellites by system
 			HashMap<String, ArrayList<Integer>> sysGroups = new HashMap<>();
@@ -865,11 +1032,10 @@ public class EKF_PPP extends EKFParent {
 				System.out.println(" Failure Rate : " + (1 - Ps));
 				if (nFixed != 0) {
 					System.out.println(" N Fixed (SD): " + nFixed);
-					// Compute pseudoinverse of SD cov for stability (handles rank issues)
-					SimpleMatrix sd_Q_inv = sd_Q.pseudoInverse(); // Use EJML's pseudoInverse()
-					// Optional regularization if sd_Q is ill-conditioned
+					// Tikhonov regularisation: adds ε·I before inversion to handle near-singular
+					// SD covariance when ambiguities are poorly determined (short arcs, bad geometry).
 					double epsilon = 1e-8;
-					sd_Q_inv = (sd_Q.plus(SimpleMatrix.identity(sd_n).scale(epsilon))).invert();
+					SimpleMatrix sd_Q_inv = (sd_Q.plus(SimpleMatrix.identity(sd_n).scale(epsilon))).invert();
 					// Recovery: UD fixed mean adjustment
 					SimpleMatrix delta_sd = sd_fix.minus(Z.mult(floatAmb));
 					SimpleMatrix adjustment = floatAmbCov.mult(Z.transpose()).mult(sd_Q_inv).mult(delta_sd);
@@ -887,18 +1053,13 @@ public class EKF_PPP extends EKFParent {
 					SimpleMatrix a_hat = new SimpleMatrix(floatAmb);
 					SimpleMatrix delta_a = a_hat.minus(a_caron);
 
-					int bSize = coreStateNum;
-					int aSize = n;
-					int cSize = ionoParamNum;
-					int ionoStart = coreStateNum + n;
-					int ionoEnd = ionoStart + cSize;
-					SimpleMatrix Cba = P.extractMatrix(0, bSize, coreStateNum, coreStateNum + aSize);
-					SimpleMatrix Cca = P.extractMatrix(ionoStart, ionoEnd, coreStateNum, coreStateNum + aSize);
-					SimpleMatrix Cbc = P.extractMatrix(0, bSize, ionoStart, ionoEnd);
-					SimpleMatrix Cbb_hat = P.extractMatrix(0, bSize, 0, bSize);
-					SimpleMatrix Ccc_hat = P.extractMatrix(ionoStart, ionoEnd, ionoStart, ionoEnd);
-					SimpleMatrix b_hat = x.extractMatrix(0, bSize, 0, 1);
-					SimpleMatrix c_hat = x.extractMatrix(ionoStart, ionoEnd, 0, 1);
+					SimpleMatrix Cba = P.extractMatrix(0, layout.coreStateNum, layout.ambStart, layout.ionoStart);
+					SimpleMatrix Cca = P.extractMatrix(layout.ionoStart, layout.totalStateNum, layout.ambStart, layout.ionoStart);
+					SimpleMatrix Cbc = P.extractMatrix(0, layout.coreStateNum, layout.ionoStart, layout.totalStateNum);
+					SimpleMatrix Cbb_hat = P.extractMatrix(0, layout.coreStateNum, 0, layout.coreStateNum);
+					SimpleMatrix Ccc_hat = P.extractMatrix(layout.ionoStart, layout.totalStateNum, layout.ionoStart, layout.totalStateNum);
+					SimpleMatrix b_hat = x.extractMatrix(0, layout.coreStateNum, 0, 1);
+					SimpleMatrix c_hat = x.extractMatrix(layout.ionoStart, layout.totalStateNum, 0, 1);
 					SimpleMatrix Caa_hat_inv = floatAmbCov.invert();
 					SimpleMatrix b_caron = b_hat.minus(Cba.mult(Caa_hat_inv).mult(delta_a));
 					SimpleMatrix c_caron = c_hat.minus(Cca.mult(Caa_hat_inv).mult(delta_a));
@@ -914,17 +1075,17 @@ public class EKF_PPP extends EKFParent {
 					SimpleMatrix x_new = new SimpleMatrix(totalStateNum, 1);
 					x_new.insertIntoThis(0, 0, b_caron);
 					x_new.insertIntoThis(coreStateNum, 0, a_caron);
-					x_new.insertIntoThis(ionoStart, 0, c_caron);
+					x_new.insertIntoThis(layout.ionoStart, 0, c_caron);
 					SimpleMatrix P_new = new SimpleMatrix(totalStateNum, totalStateNum);
 					P_new.insertIntoThis(0, 0, Pbb_c);
 					P_new.insertIntoThis(coreStateNum, coreStateNum, Qa_caron);
-					P_new.insertIntoThis(ionoStart, ionoStart, Pcc_c);
+					P_new.insertIntoThis(layout.ionoStart, layout.ionoStart, Pcc_c);
 					P_new.insertIntoThis(0, coreStateNum, Pba_c);
 					P_new.insertIntoThis(coreStateNum, 0, Pba_c.transpose());
-					P_new.insertIntoThis(0, ionoStart, Pbc_c);
-					P_new.insertIntoThis(ionoStart, 0, Pbc_c.transpose());
-					P_new.insertIntoThis(coreStateNum, ionoStart, Pca_c.transpose());
-					P_new.insertIntoThis(ionoStart, coreStateNum, Pca_c);
+					P_new.insertIntoThis(0, layout.ionoStart, Pbc_c);
+					P_new.insertIntoThis(layout.ionoStart, 0, Pbc_c.transpose());
+					P_new.insertIntoThis(coreStateNum, layout.ionoStart, Pca_c.transpose());
+					P_new.insertIntoThis(layout.ionoStart, coreStateNum, Pca_c);
 					P_new = P_new.plus(P_new.transpose()).scale(0.5);
 					pos_kfObj.setState_ProcessCov(x_new, P_new);
 					System.out.println("Fixed Ambiguity Sequence");
@@ -941,6 +1102,36 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	/**
+	 * Applies a global model test (chi-squared) followed by a per-satellite w-test
+	 * to detect outliers in the velocity filter's pre-fit residuals/innovations.
+	 *
+	 * <p><b>Algorithm:</b>
+	 * <ol>
+	 *   <li>Compute the global test statistic
+	 *       T = vᵀ (HPHᵀ + R)⁻¹ v, where v is the innovation vector.</li>
+	 *   <li>Compare T to a chi-squared distribution with n degrees of freedom at α = 0.01.</li>
+	 *   <li>If the null hypothesis is rejected, find the satellite with the largest
+	 *       normalised w-statistic and remove it from the tested set.</li>
+	 *   <li>Repeat until the global test passes or fewer than n/2 satellites remain.</li>
+	 * </ol>
+	 * When {@code isTDCP} is true (TDCP detection pass), removed satellites are flagged
+	 * as cycle slips in the {@link CycleSlipDetect} list.
+	 * When false (Doppler outlier-removal pass), they are simply excluded from the update.
+	 *
+	 * @param R             measurement noise matrix (shrunk as outliers are removed)
+	 * @param H             design matrix (shrunk as outliers are removed)
+	 * @param n             initial number of observations
+	 * @param m             number of GNSS systems (columns of H beyond the geometry block)
+	 * @param satList       full satellite list used for index mapping into {@code csdList}
+	 * @param testedSatList working copy of {@code satList}; outlier satellites are removed here
+	 * @param z             observation vector (shrunk as outliers are removed)
+	 * @param ze            predicted observation vector (shrunk as outliers are removed)
+	 * @param csdList       cycle-slip detection list; {@code isCS()} set for TDCP outliers
+	 * @param isTDCP        true = TDCP detection pass; false = Doppler outlier-removal pass
+	 * @param kf_Obj        KF object whose current covariance P enters the innovation variance
+	 * @return {@code Object[]{R, H, z, ze}} — pruned matrices after all outliers are removed
+	 */
 	private Object[] performTesting(SimpleMatrix R, SimpleMatrix H, int n, int m, ArrayList<Satellite> satList,
 			ArrayList<Satellite> testedSatList, SimpleMatrix z, SimpleMatrix ze, ArrayList<CycleSlipDetect> csdList,
 			boolean isTDCP, KFconfig kf_Obj) throws Exception {
@@ -1017,6 +1208,25 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	/**
+	 * Applies a global model test to a single observable group in the position filter
+	 * (pseudorange or Doppler). Unlike {@link #performTesting}, outliers are not removed
+	 * from the measurement vector. Instead, their measurement noise variance is inflated
+	 * to 1e16 m², effectively removing their influence on the EKF update while keeping
+	 * the vector dimensions fixed.
+	 *
+	 * <p>The test statistic and chi-squared degrees of freedom use the effective
+	 * redundancy number (trace of I − HK) rather than the raw observation count,
+	 * so the test remains calibrated as variances are progressively inflated.
+	 *
+	 * @param v  pre-fit residual vector for this observable group (n × 1)
+	 * @param P  current state covariance from {@code pos_kfObj}
+	 * @param R  measurement noise block for this group (n × n, modified in place)
+	 * @param H  design matrix rows for this group (n × totalStateNum)
+	 * @param n  number of observations in this group
+	 * @return the (possibly modified) noise matrix {@code R}, with 1e16 on the diagonal
+	 *         for any detected outlier rows
+	 */
 	private SimpleMatrix performObservableTesting(SimpleMatrix v, SimpleMatrix P, SimpleMatrix R, SimpleMatrix H,
 			int n) throws Exception {
 		// Pre-fit residual/innovation
@@ -1066,23 +1276,69 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
-	private Object[] get_z_ze_H(SimpleMatrix x, int coreStateNum, int clkOffNum, int clkDriftNum, int ionoParamNum,
-			int n, int totalStateNum, ArrayList<Satellite> satList, String[] obsvCodeList,
-			HashMap<String, double[]> rxPCO, ArrayList<double[]> ionoParams, ArrayList<CycleSlipDetect> csdList,
-			ArrayList<String> uniqSatList, ListOrderedSet ssiSet, boolean doAnalyze, long currentTime) {
+	/**
+	 * Builds the observation vector {@code z}, the predicted-observation vector {@code ze},
+	 * and the design matrix {@code H} for one update step of the PPP position filter.
+	 *
+	 * <p><b>Observable stacking order</b> (each block has n rows, one row per satellite):
+	 * <pre>
+	 *   rows [0,    n)              — pseudorange (metres)
+	 *   rows [n,   2n)              — carrier phase (metres)
+	 *   rows [2n,  3n)              — Doppler delta-range (m, satellite-velocity corrected)
+	 *   rows [3n,  3n+ionoParamNum) — GIM VTEC pseudo-observation (TECU), one per unique satellite
+	 * </pre>
+	 *
+	 * <p><b>Predicted observables:</b>
+	 * <ul>
+	 *   <li>Geometric range: Euclidean distance from (estimated position + receiver PCO)
+	 *       to satellite ECEF position.</li>
+	 *   <li>Troposphere: wet mapping function {@code sat.getWetMF()} × estimated wet residual.
+	 *       The dry component was pre-removed by {@link com.gnssAug.IGS.IGS#filterSat}.</li>
+	 *   <li>Ionosphere: first-order coefficient (40.3×10¹⁶ / f²) × estimated VTEC.
+	 *       Added to pseudorange, subtracted from phase.</li>
+	 *   <li>Ambiguity: λ × float ambiguity state, added to carrier phase only.</li>
+	 *   <li>Clock offset: GPS signal clock offset always enters both pseudorange and phase;
+	 *       inter-system biases enter only the respective signal pseudorange.</li>
+	 * </ul>
+	 *
+	 * <p>When {@code doAnalyze} is true (post-update pass), estimated ambiguity and VTEC
+	 * values are written to {@code ambMap} and {@code ionoMap}.
+	 *
+	 * @param x            current state vector from {@code pos_kfObj}
+	 * @param layout       index boundaries for the state vector (see {@link RinexPPPStateLayout})
+	 * @param satList      ordered satellite list for this epoch
+	 * @param obsvCodeList observation codes being processed (defines clock-offset grouping)
+	 * @param rxPCO        receiver phase centre offsets per observation code (ECEF, metres)
+	 * @param ionoParams   per-unique-satellite ionospheric initialisation: [elevation_rad, VTEC_TECU]
+	 * @param csdList      cycle-slip detection objects; Doppler DR is read from each object
+	 * @param uniqSatList  unique satellite IDs in the same order as the iono state block
+	 * @param ssiSet       ordered set of GNSS system identifiers (for clock-drift column mapping)
+	 * @param doAnalyze    if true, writes estimated states to {@code ambMap} and {@code ionoMap}
+	 * @param currentTime  GPS millisecond timestamp (map key, used only when {@code doAnalyze})
+	 * @return {@code Object[]{z, ze, H}} — all three as {@link SimpleMatrix} instances
+	 */
+	private Object[] get_z_ze_H(SimpleMatrix x, RinexPPPStateLayout layout, ArrayList<Satellite> satList,
+			String[] obsvCodeList, HashMap<String, double[]> rxPCO, ArrayList<double[]> ionoParams,
+			ArrayList<CycleSlipDetect> csdList, ArrayList<String> uniqSatList, ListOrderedSet ssiSet,
+			boolean doAnalyze, long currentTime) {
+		int n            = layout.n;
+		int ionoParamNum = layout.ionoParamNum;
+		int clkOffNum    = layout.clkOffNum;
+		int clkDriftNum  = layout.clkDriftNum;
+
 		double[] estPos = new double[] { x.get(0), x.get(1), x.get(2) };
-		double[] rxClkOff = new double[clkOffNum];// in meters
+		double[] rxClkOff = new double[clkOffNum];
 		for (int i = 0; i < clkOffNum; i++) {
-			rxClkOff[i] = x.get(i + 3);
+			rxClkOff[i] = x.get(layout.clkOffStart + i);
 		}
-		double[] estVel = new double[] { x.get(3 + clkOffNum), x.get(4 + clkOffNum), x.get(5 + clkOffNum) };
-		double[] rxClkDrift = new double[clkDriftNum];// in meters
+		double[] estVel = new double[] { x.get(layout.velStart), x.get(layout.velStart + 1), x.get(layout.velStart + 2) };
+		double[] rxClkDrift = new double[clkDriftNum];
 		for (int i = 0; i < clkDriftNum; i++) {
-			rxClkDrift[i] = x.get(6 + clkOffNum + i);
+			rxClkDrift[i] = x.get(layout.clkDriftStart + i);
 		}
-		double estTropo = x.get(coreStateNum - 1);
-		SimpleMatrix estAmb = x.extractMatrix(coreStateNum, coreStateNum + n, 0, 1);
-		SimpleMatrix estIonoTec = x.extractMatrix(coreStateNum + n, totalStateNum, 0, 1);
+		double estTropo = x.get(layout.tropoIdx);
+		SimpleMatrix estAmb    = x.extractMatrix(layout.ambStart,  layout.ionoStart,    0, 1);
+		SimpleMatrix estIonoTec = x.extractMatrix(layout.ionoStart, layout.totalStateNum, 0, 1);
 
 		if (doAnalyze) {
 			tropoMap.put(currentTime, estTropo);
@@ -1090,13 +1346,13 @@ public class EKF_PPP extends EKFParent {
 			clkDriftMap.put(currentTime, rxClkDrift);
 		}
 
-		SimpleMatrix H = new SimpleMatrix((3 * n) + ionoParamNum, totalStateNum);
+		SimpleMatrix H = new SimpleMatrix((3 * n) + ionoParamNum, layout.totalStateNum);
 		SimpleMatrix z = new SimpleMatrix((3 * n) + ionoParamNum, 1);
 		SimpleMatrix ze = new SimpleMatrix((3 * n) + ionoParamNum, 1);
 		SimpleMatrix unitLOS = new SimpleMatrix(SatUtil.igs_getUnitLOS(satList, estPos));
 		H.insertIntoThis(0, 0, unitLOS.scale(-1));
 		H.insertIntoThis(n, 0, unitLOS.scale(-1));
-		H.insertIntoThis(2 * n, 3 + clkOffNum, unitLOS.scale(-1));
+		H.insertIntoThis(2 * n, layout.velStart, unitLOS.scale(-1));
 		HashMap<String, Double> _ionoMap = new HashMap<String, Double>();
 		HashMap<String, Double> _ambMap = new HashMap<String, Double>();
 		for (int i = 0; i < n; i++) {
@@ -1125,32 +1381,30 @@ public class EKF_PPP extends EKFParent {
 			ze.set(i + n, estCP);
 			ze.set(i + (2 * n), H.extractMatrix(i, i + 1, 0, 3).mult(new SimpleMatrix(3, 1, true, estVel)).get(0));
 			ze.set(i + n, ze.get(i + n) + rxClkOff[0]);
-			H.set(i + n, 3, 1);
+			H.set(i + n, layout.clkOffStart, 1);
 			for (int j = 0; j < clkOffNum; j++) {
 				double clkOffVal = rxClkOff[0];
 				if (obsvCode.equals(obsvCodeList[j])) {
 					if (j == 0) {
 						clkOffVal = 0;
 					} else {
-						H.set(i, 3, 1);
+						H.set(i, layout.clkOffStart, 1);
 					}
 					ze.set(i, ze.get(i) + rxClkOff[j] + clkOffVal);
-					H.set(i, 3 + j, 1);
+					H.set(i, layout.clkOffStart + j, 1);
 				}
 			}
 			for (int j = 0; j < clkDriftNum; j++) {
 				if ((char) ssiSet.get(j) == ssi) {
-					H.set(i + (2 * n), 6 + clkOffNum + j, 1);
+					H.set(i + (2 * n), layout.clkDriftStart + j, 1);
 					ze.set(i + (2 * n), ze.get(i + (2 * n)) + rxClkDrift[j]);
 				}
 			}
-			H.set(i, coreStateNum - 1, sat.getWetMF());
-			H.set(i + n, coreStateNum - 1, sat.getWetMF());
-
-			H.set(i + n, coreStateNum + i, wavelength);
-
-			H.set(i, coreStateNum + n + ionoIndex, ionoCoeff);
-			H.set(i + n, coreStateNum + n + ionoIndex, -ionoCoeff);
+			H.set(i,      layout.tropoIdx, sat.getWetMF());
+			H.set(i + n,  layout.tropoIdx, sat.getWetMF());
+			H.set(i + n,  layout.ambStart + i, wavelength);
+			H.set(i,      layout.ionoStart + ionoIndex,  ionoCoeff);
+			H.set(i + n,  layout.ionoStart + ionoIndex, -ionoCoeff);
 
 			if (doAnalyze) {
 				_ionoMap.put(satID, estIonoTec.get(ionoIndex));
@@ -1159,10 +1413,9 @@ public class EKF_PPP extends EKFParent {
 
 		}
 		for (int i = 0; i < ionoParamNum; i++) {
-			z.set(i + (3 * n), ionoParams.get(i)[1]);
-			ze.set(i + (3 * n), x.get(coreStateNum + n + i));
-			H.set(i + (3 * n), coreStateNum + n + i, 1);
-
+			z.set(i + (3 * n),  ionoParams.get(i)[1]);
+			ze.set(i + (3 * n), x.get(layout.ionoStart + i));
+			H.set(i + (3 * n),  layout.ionoStart + i, 1);
 		}
 		if (doAnalyze) {
 			ionoMap.put(currentTime, _ionoMap);
@@ -1172,6 +1425,30 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	/**
+	 * Computes and stores post-fit quality metrics for one epoch.
+	 *
+	 * <p>For each observable group (pseudorange, carrier-phase, Doppler DR, GIM iono),
+	 * the following are computed and stored in the corresponding analysis maps:
+	 * <ul>
+	 *   <li><b>Post-fit residuals</b> — {@code z − Hx̂} after the EKF update.</li>
+	 *   <li><b>Redundancy number</b> — trace of the diagonal block of (I − HK), representing
+	 *       the effective number of redundant observations for that group. A value near n
+	 *       means the observations are highly redundant; near 0 means they are absorbed
+	 *       entirely by the state update.</li>
+	 *   <li><b>Post-variance of unit weight (σ̂₀²)</b> — weighted sum of squared post-fit
+	 *       residuals divided by the redundancy number. A value near 1.0 indicates that the
+	 *       stochastic model (measurement noise variances) is correctly calibrated.</li>
+	 * </ul>
+	 *
+	 * @param z           full stacked observation vector (pseudorange | phase | Doppler | GIM)
+	 * @param ze          post-update predicted observation vector (same stacking)
+	 * @param satList     satellite list for the current epoch (used for count and map storage)
+	 * @param R           full measurement noise matrix
+	 * @param H           full design matrix
+	 * @param currentTime GPS millisecond timestamp used as key in all analysis maps
+	 * @param kf_Obj      KF object supplying the Kalman gain K for redundancy computation
+	 */
 	private void performAnalysis(SimpleMatrix z, SimpleMatrix ze, ArrayList<Satellite> satList, SimpleMatrix R,
 			SimpleMatrix H, long currentTime, KFconfig kf_Obj) {
 
@@ -1225,78 +1502,119 @@ public class EKF_PPP extends EKFParent {
 
 	}
 
+	// ── Session-level summary getters ────────────────────────────────────────────────────────
+
+	/** Total cycle slips detected across the full session. */
 	public long getCsDetectedCount() {
 		return csDetectedCount;
 	}
 
+	/** Total cycle slips repaired with LAMBDA across the full session. */
 	public long getCsRepairedCount() {
 		return csRepairedCount;
 	}
 
-	public TreeMap<Long, Integer> getCsDetectedCountMap() {
-		return csDetectedCountMap;
+	/** Total satellite hard-resets (GF test failures + consecutive slip limit exceeded). */
+	public long getHardResetCount() {
+		return resetCount_gfTest + resetCount_consecutive;
 	}
 
-	public TreeMap<Long, Integer> getCsRepairedCountMap() {
-		return csRepairedCountMap;
+	/** Resets due to failing the global model test on TDCP residuals. */
+	public long getResetCount_gfTest() {
+		return resetCount_gfTest;
 	}
 
-	public TreeMap<Long, ArrayList<CycleSlipDetect>> getCsdListMap() {
-		return csdListMap;
+	/** Resets due to exceeding the consecutive cycle-slip detection limit. */
+	public long getResetCount_consecutive() {
+		return resetCount_consecutive;
 	}
 
+	/** Total BSD ambiguities fixed to integer across the full session. */
 	public long getAmbFixedCount() {
 		return ambFixedCount;
 	}
 
-	public TreeMap<Long, Integer> getAmbFixedCountMap() {
-		return ambFixedCountMap;
-	}
-
+	/**
+	 * Per-satellite slip statistics: maps satellite ID (e.g. "G05") to
+	 * {@code int[]{slipCount, totalEpochs}}.
+	 */
 	public HashMap<String, int[]> getCycleSlipCount() {
 		return cycleSlipCount;
 	}
 
+	// ── Per-epoch diagnostic map getters (non-null only when doAnalyze = true) ─────────────
+
+	/** Cycle slips detected at each GPS millisecond epoch. */
+	public TreeMap<Long, Integer> getCsDetectedCountMap() {
+		return csDetectedCountMap;
+	}
+
+	/** Cycle slips repaired at each GPS millisecond epoch. */
+	public TreeMap<Long, Integer> getCsRepairedCountMap() {
+		return csRepairedCountMap;
+	}
+
+	/** Full {@link CycleSlipDetect} list at each epoch. */
+	public TreeMap<Long, ArrayList<CycleSlipDetect>> getCsdListMap() {
+		return csdListMap;
+	}
+
+	/** BSD ambiguities fixed at each epoch. */
+	public TreeMap<Long, Integer> getAmbFixedCountMap() {
+		return ambFixedCountMap;
+	}
+
+	/** Pre-fit innovations per observable group per epoch. */
 	public TreeMap getInnovationMap() {
 		return innovationMap;
 	}
 
+	/** Post-fit residuals per observable group per epoch. */
 	public TreeMap getResidualMap() {
 		return residualMap;
 	}
 
+	/** Post-variance of unit weight per observable group per epoch (σ̂₀² ≈ 1 = well-calibrated). */
 	public TreeMap getPostVarOfUnitWMap() {
 		return postVarOfUnitWMap;
 	}
 
+	/** Satellite list used in the position filter at each epoch. */
 	public TreeMap getSatListMap() {
 		return satListMap;
 	}
 
+	/** Estimated float carrier-phase ambiguities per satellite per epoch (cycles). */
 	public TreeMap<Long, HashMap<String, Double>> getAmbMap() {
 		return ambMap;
 	}
 
+	/** Estimated ionospheric VTEC per satellite per epoch (TECU). */
 	public TreeMap<Long, HashMap<String, Double>> getIonoMap() {
 		return ionoMap;
 	}
 
+	/** Estimated wet troposphere residual per epoch (metres). */
 	public TreeMap<Long, Double> getTropoMap() {
 		return tropoMap;
 	}
 
+	/** Estimated receiver clock offsets per observation code per epoch (metres / c). */
 	public TreeMap<Long, double[]> getClkOffMap() {
 		return clkOffMap;
 	}
 
+	/** Estimated receiver clock drifts per GNSS system per epoch (m/s). */
 	public TreeMap<Long, double[]> getClkDriftMap() {
 		return clkDriftMap;
 	}
 
+	/** Redundancy numbers per observable group per epoch (effective degrees of freedom). */
 	public TreeMap<Long, Map<Measurement, Double>> getRedundancyNoMap() {
 		return redundancyNoMap;
 	}
 
+	/** DOP components [EDOP, NDOP, VDOP, ClkDOP] per epoch. */
 	public TreeMap<Long, double[]> getDopMap() {
 		return dopMap;
 	}

@@ -169,8 +169,7 @@ public class EKF_PPP_LowCostRx extends EKFParent {
 			int n_prev = prevSatList.size();
 			ZonedDateTime zdTime = Time.convertUsingToInstant(currSatList.get(0).getTime());
 			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
-			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
-			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
+			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, timeVaryingTides);
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSVID();

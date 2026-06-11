@@ -45,7 +45,11 @@ public enum EstimatorMode {
     // --- RINEX-specific modes (Android_Static_Rinex) ---
     RINEX_EKF_CODE(104),
     RINEX_PPP_LOWCOST(105),
-    RINEX_PPP_DF(106);
+    RINEX_PPP_DF(106),
+
+    // --- IGS station PPP modes ---
+    IGS_PPP_FLOAT(201),
+    IGS_PPP_AR(202);
 
     public final int legacyCode;
 
@@ -73,7 +77,8 @@ public enum EstimatorMode {
     }
 
     public boolean isPPPMode() {
-        return this == PPP_FLOAT || this == RINEX_PPP_LOWCOST || this == RINEX_PPP_DF;
+        return this == PPP_FLOAT || this == RINEX_PPP_LOWCOST || this == RINEX_PPP_DF
+            || this == IGS_PPP_FLOAT || this == IGS_PPP_AR;
     }
 
     public boolean isAnalysisMode() {

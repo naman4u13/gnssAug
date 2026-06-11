@@ -168,8 +168,7 @@ public class EKF_PPP extends EKFParent {
 					LatLonUtil.ecef2lla(refPos, true)[1]);
 			ZonedDateTime zdTime = Time.convertUsingToInstant(time);
 			double[] timeVaryingTides = ComputeSolidEarthTide.calculateTimeVaryingTides(refPos, false, zdTime);
-			double[] permanentTide = ComputeSolidEarthTide.getMeanTideCorrection(refPos);
-			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, Vector.add(timeVaryingTides, permanentTide));
+			SimpleMatrix earthTide = new SimpleMatrix(3, 1, true, timeVaryingTides);
 			for (int j = 0; j < n_curr; j++) {
 				Satellite current_sat = currSatList.get(j);
 				String satID = current_sat.getObsvCode() + current_sat.getSvid();

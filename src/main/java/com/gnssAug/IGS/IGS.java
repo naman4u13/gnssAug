@@ -1,8 +1,13 @@
 package com.gnssAug.IGS;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.time.ZonedDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -31,6 +36,7 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.utils.IERSConventions;
 
 import com.gnssAug.Rinex.constants.GnssDataConfig;
+import com.gnssAug.Android.constants.EstimatorMode;
 import com.gnssAug.Android.constants.Measurement;
 import com.gnssAug.Android.constants.State;
 import com.gnssAug.Rinex.estimation.EKF_PPP;
@@ -60,14 +66,90 @@ import com.gnssAug.utility.MathUtil;
 import com.gnssAug.utility.Time;
 import com.gnssAug.utility.MakeCSV;
 
+/**
+ * Top-level pipeline for IGS/geodetic receiver positioning using RINEX observation files
+ * and MGEX precise products.
+ *
+ * <p>Supported estimator modes (set via {@link EstimatorMode}):
+ * <ul>
+ *   <li>{@code LLS_CODE} / {@code WLS_CODE} / {@code LLS_WLS_BOTH} — single-epoch
+ *       least-squares (unweighted or weighted) on pseudorange only.</li>
+ *   <li>{@code RINEX_EKF_CODE} — pseudorange EKF for smoothed code-only positioning.</li>
+ *   <li>{@code IGS_PPP_FLOAT} — full UU-PPP float solution via {@link EKF_PPP}.</li>
+ *   <li>{@code IGS_PPP_AR} — UU-PPP with BSD integer ambiguity resolution via
+ *       {@link EKF_PPP} (sets {@code fixAmb = true}).</li>
+ * </ul>
+ *
+ * <p><b>Data flow:</b>
+ * <ol>
+ *   <li>Parse RINEX NAV, RINEX OBS (optionally SINEX for ARP), MGEX orbit/clock/bias/IONEX.</li>
+ *   <li>For each epoch: call {@link SingleFreq#process} to compute satellite positions,
+ *       apply clock/bias/wind-up/relativistic corrections → raw {@link Satellite} list.</li>
+ *   <li>Call {@link #filterSat} to apply elevation/SNR masks and iono/tropo corrections.</li>
+ *   <li>Pass the epoch-keyed satellite map to the selected estimator.</li>
+ *   <li>Compute ENU position errors relative to ARP; print RMS, 95th-percentile, and
+ *       post-variance of unit weight per observable group.</li>
+ *   <li>Plot ENU time series, residuals, DOP, redundancy, and PPP diagnostic plots
+ *       via {@link GraphPlotter}.</li>
+ * </ol>
+ *
+ * <p><b>Output:</b> results are redirected to a {@code .txt} file under
+ * {@code gnss_output/IGS_rinex_output/PhD thesis/<obsName>}.
+ */
 public class IGS {
 
+	/**
+	 * Singleton Orekit {@link Geoid} instance shared across all filterSat calls.
+	 * Initialised once by {@link #buildGeoid()} during {@link #posEstimate}.
+	 * Uses EGM96 (50×50) gravity coefficients over WGS-84.
+	 */
 	private static Geoid geoid = null;
 
-	public static void posEstimate(String osb_bias_path, String dcb_bias_path, String clock_path, String orbit_path,
-			String ionex_path, String sinex_path, boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
+	/**
+	 * Full positioning pipeline for an IGS/geodetic receiver session.
+	 *
+	 * <p>Parses all input files, iterates over RINEX observation epochs, and
+	 * runs the selected estimator. Results (position errors, residuals, DOP,
+	 * post-variance of unit weight) are printed to stdout (redirected to file)
+	 * and plotted via {@link GraphPlotter}.
+	 *
+	 * @param obs_path          path to RINEX 3 observation file ({@code .rnx})
+	 * @param nav_path          path to RINEX 3 mixed navigation file ({@code .rnx})
+	 * @param osb_bias_path     path to MGEX OSB bias file ({@code .BIA}) — satellite
+	 *                          code and phase biases in SINEX BIAS format
+	 * @param dcb_bias_path     path to MGEX DCB file ({@code .BSX / .BIA}) — differential
+	 *                          code biases used for clock product compatibility
+	 * @param clock_path        path to MGEX precise clock file ({@code .CLK})
+	 * @param orbit_path        path to MGEX precise orbit file ({@code .SP3})
+	 * @param ionex_path        path to IONEX GIM file ({@code .INX / .I}) — used when
+	 *                          {@code useGIM = true} for ionospheric corrections
+	 * @param sinex_path        path to IGS SINEX solution file ({@code .SNX}) — used when
+	 *                          {@code useSNX = true} to read the precise ARP ground truth
+	 * @param useBias           if true, load and apply OSB and DCB satellite biases
+	 * @param useGIM            if true, load the IONEX GIM for iono corrections
+	 * @param useIGS            if true, use SP3/CLK precise orbit and clock products;
+	 *                          if false, fall back to broadcast navigation
+	 * @param useSNX            if true, read ARP from the SINEX file as ground truth
+	 * @param obsvCodeList      signals to process (e.g. {@code "G1C", "G5Q"})
+	 * @param minSat            minimum number of satellites required to process an epoch
+	 * @param cutOffAng         elevation cut-off angle in degrees (satellites below are removed)
+	 * @param snrMask           minimum C/N0 in dB-Hz (satellites below are removed); 0 = no mask
+	 * @param corrIono          if true, apply ionospheric corrections via GIM or Klobuchar model
+	 * @param corrTropo         if true, apply full slant tropospheric delay (dry + wet mapping)
+	 * @param estimatorMode     positioning algorithm to use (see {@link EstimatorMode})
+	 * @param doAnalyze         if true, collect and plot residuals, DOP, ambiguities, and state
+	 * @param doTest            if true, apply chi-squared global model test + w-test to outliers
+	 * @param outlierAnalyze    if true, flag outlier satellites in residual plots
+	 * @param discardSet        set of satellite IDs to permanently exclude (e.g. {@code "G10"})
+	 * @param repairCS          if true, attempt integer cycle-slip repair with LAMBDA
+	 * @param predictPhaseClock if true, enable phase-clock prediction in the PPP process model
+	 */
+	public static void posEstimate(String obs_path, String nav_path, String osb_bias_path, String dcb_bias_path,
+			String clock_path, String orbit_path, String ionex_path, String sinex_path,
+			boolean useBias, boolean useGIM, boolean useIGS, boolean useSNX,
 			String[] obsvCodeList, int minSat, double cutOffAng, double snrMask, boolean corrIono, boolean corrTropo,
-			int estimatorType, boolean doAnalyze, boolean doTest, boolean outlierAnalyze, Set<String> discardSet,boolean repairCS) {
+			EstimatorMode estimatorMode, boolean doAnalyze, boolean doTest, boolean outlierAnalyze,
+			Set<String> discardSet, boolean repairCS, boolean predictPhaseClock) {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
@@ -90,17 +172,13 @@ public class IGS {
 			Antenna antenna = null;
 			IONEX ionex = null;
 
-			String base_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";// "C:\\Users\\naman.agarwal\\Downloads\\GNSS\\input_files";
-
-			String nav_path = base_path + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
-
-			String obs_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
+			String base_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";
 
 			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
 
 			String antenna_csv_path = base_path + "/complementary/antenna.csv";
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/PhD thesis/test";
-			// String path = "C:\\Users\\naman.agarwal\\Documents\\gnss_output\\test";
+			String obsName = fileNameOf(obs_path).replaceAll("\\.[^.]+$", "");
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/PhD thesis/" + obsName;
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -110,17 +188,7 @@ public class IGS {
 			} catch (FileNotFoundException e) { // TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			System.out.println("Discarded Satellites: " + discardSet.toString());
-			System.out.println("Elevation Mask in degrees = " + cutOffAng);
-			System.out
-					.println("pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
-			System.out.println("doppler_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
-			System.out.println("TDCP_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
-			System.out.println("Phase_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
-			System.out.println("GIM_TECU_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
-			System.out.println("Q matrix for pos_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
-			System.out.println("Q matrix for vel_rand_walk = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
-			System.out.println("Number of Samples for MC simulation = " + GnssDataConfig.nSamplesMC);
+			// header printed after rxARP is available (see below)
 			geoid = buildGeoid();
 			Map<String, Object> NavMsgComp = NavigationRNX.rinex_nav_process(nav_path, useIGS);
 			@SuppressWarnings("unchecked")
@@ -138,6 +206,8 @@ public class IGS {
 			HashMap<String, double[]> rxPCO = (HashMap<String, double[]>) ObsvMsgComp.get("PCO");
 
 			int interval = (int) ObsvMsgComp.get("interval");
+			printRunHeader(obs_path, obsvCodeList, discardSet, rxARP, estimatorMode, repairCS, predictPhaseClock,
+					doTest, doAnalyze, cutOffAng, snrMask, dcb_bias_path, clock_path, orbit_path, ionex_path, osb_bias_path);
 
 			if (useBias) {
 				osb_bias = new OSB_Bias(osb_bias_path);
@@ -181,18 +251,18 @@ public class IGS {
 
 				satList.stream().forEach(i -> i.setElevAzm(ComputeEleAzm.computeEleAzm(rxARP, i.getSatEci())));
 				filterSat(satList, rxARP, cutOffAng, snrMask, corrIono, corrTropo, ionex, ionoCoeff, time,
-						estimatorType);
+						estimatorMode);
 				if (satList.size() < minSat) {
 					System.err.println("Less than " + minSat + " satellites");
 					continue;
 				}
 				long tRxMilli = (long) (tRx * 1000);
 
-				if (estimatorType == 1 || estimatorType == 2 || estimatorType == 3) {
-					int[] arr = new int[] { estimatorType };
-					if (estimatorType == 3) {
-						arr = new int[] { 1, 2 };
-					}
+				if (estimatorMode == EstimatorMode.LLS_CODE || estimatorMode == EstimatorMode.WLS_CODE || estimatorMode == EstimatorMode.LLS_WLS_BOTH) {
+					int[] arr;
+					if (estimatorMode == EstimatorMode.LLS_CODE)       arr = new int[] { 1 };
+					else if (estimatorMode == EstimatorMode.WLS_CODE)  arr = new int[] { 2 };
+					else                                                arr = new int[] { 1, 2 };
 					for (int i : arr) {
 						boolean isWLS = false;
 						String estType = "LS";
@@ -257,7 +327,7 @@ public class IGS {
 
 				timeList.add(tRxMilli);
 			}
-			if (estimatorType == 3 || estimatorType == 4) {
+			if (estimatorMode == EstimatorMode.LLS_WLS_BOTH || estimatorMode == EstimatorMode.RINEX_EKF_CODE) {
 				satInnMap = new HashMap<Measurement, HashMap<String, HashMap<String, ArrayList<SatResidual>>>>();
 				com.gnssAug.Rinex.estimation.EKF ekf = new com.gnssAug.Rinex.estimation.EKF();
 				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest,
@@ -329,27 +399,30 @@ public class IGS {
 				}
 			}
 			EKF_PPP ekf = null;
-			if (estimatorType == 5) {
-				
+			if (estimatorMode == EstimatorMode.IGS_PPP_FLOAT || estimatorMode == EstimatorMode.IGS_PPP_AR) {
+				boolean fixAmb = (estimatorMode == EstimatorMode.IGS_PPP_AR);
 				ekf = new com.gnssAug.Rinex.estimation.EKF_PPP();
-				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze,doTest, obsvCodeList,
-						rxARP, true, repairCS,false);
+				TreeMap<Long, double[]> estStateMap_pos = ekf.process(satMap, rxPCO, timeList, doAnalyze, doTest, obsvCodeList,
+						rxARP, true, repairCS, fixAmb, predictPhaseClock);
 
 				int n = timeList.size();
 				HashMap<String, int[]> csCountMap = ekf.getCycleSlipCount();
-				System.out.println("These satellite have more than 20% phase data with Cycle Slips");
+				System.out.println("SATELLITES WITH >20% CYCLE SLIPS");
+				int _col = 0;
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
-					double percentage = (csCount[0] * 1.0) / csCount[1];
-					if (percentage > 0.2) {
-						System.out.print(satID + ", ");
+					if ((csCount[0] * 1.0) / csCount[1] > 0.2) {
+						System.out.print("  " + satID);
+						if (++_col % 8 == 0) System.out.println();
 					}
 				}
 				System.out.println();
+				System.out.println("CS DETECTED PER SATELLITE  (detected / total)");
+				_col = 0;
 				for (String satID : csCountMap.keySet()) {
 					int[] csCount = csCountMap.get(satID);
-					System.out.print(satID + " : " + csCount[0] + "/" + csCount[1] + " , ");
-
+					System.out.printf("  %-6s: %3d/%-4d", satID, csCount[0], csCount[1]);
+					if (++_col % 4 == 0) System.out.println();
 				}
 				System.out.println();
 				HashMap<Measurement, HashMap<String, ArrayList<Double>>> RedundancyNoMap = new HashMap<Measurement, HashMap<String, ArrayList<Double>>>();
@@ -421,8 +494,17 @@ public class IGS {
 				}
 				if(doAnalyze)
 				{
-					System.out.println("CS Detected Count : "+ekf.getCsDetectedCount());  
-					System.out.println("CS Repaired Count : "+ekf.getCsRepairedCount());
+					long _dur = timeList.get(n - 1) - timeList.get(0);
+					System.out.println("DATA SUMMARY");
+					System.out.printf("  Epochs processed : %d%n", n - 1);
+					System.out.printf("  Duration         : %.1f s  (%d min %02d s)%n",
+							_dur / 1000.0, _dur / 60000, (_dur % 60000) / 1000);
+					System.out.println("CYCLE SLIP STATISTICS");
+					System.out.println("  Soft CS Detected : " + ekf.getCsDetectedCount());
+					System.out.println("  CS Repaired      : " + ekf.getCsRepairedCount());
+					System.out.println("  Hard Resets      : " + ekf.getHardResetCount());
+					System.out.println("    GF discrepancy   : " + ekf.getResetCount_gfTest());
+					System.out.println("    Consecutive CS   : " + ekf.getResetCount_consecutive());
 					ListOrderedSet ssiSet = new ListOrderedSet();
 					for (int i = 0; i < obsvCodeList.length;i++) {
 						ssiSet.add(obsvCodeList[i].charAt(0)+"");
@@ -474,44 +556,33 @@ public class IGS {
 					
 					if (i == n - 1) {
 
-						System.out.println("Converged Position RMS:");
-						// error in East direction
-						System.out.println("E  - " + Math.sqrt(enu[0] * enu[0]));
-						// error in North direction
-						System.out.println("N  - " + Math.sqrt(enu[1] * enu[1]));
-						// error in Up direction
-						System.out.println("U  - " + Math.sqrt(enu[2] * enu[2]));
-						// 3d error
-						System.out.println("3d Error - " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
-						// 2d error
-						System.out.println("2d Error - " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
+						System.out.println("LAST EPOCH ERROR [m]");
+						System.out.println("  E  : " + Math.sqrt(enu[0] * enu[0]));
+						System.out.println("  N  : " + Math.sqrt(enu[1] * enu[1]));
+						System.out.println("  U  : " + Math.sqrt(enu[2] * enu[2]));
+						System.out.println("  3D : " + Math.sqrt(Arrays.stream(enu).map(j -> j * j).sum()));
+						System.out.println("  2D : " + Math.sqrt((enu[0] * enu[0]) + (enu[1] * enu[1])));
 					}
 
 				}
 
 				GraphPosMap.put(key, enuPosList);
 
-				// RMSE
-				System.out.println("\n" + key);
-				System.out.println("Position RMS - ");
-				System.out.println(" E - " + MathUtil.RMS(posErrList[0]));
-				System.out.println(" N - " + MathUtil.RMS(posErrList[1]));
-				System.out.println(" U - " + MathUtil.RMS(posErrList[2]));
-				System.out.println(" 3d Error - " + MathUtil.RMS(posErrList[3]));
-				System.out.println(" 2d Error - " + MathUtil.RMS(posErrList[4]));
-
-				// 95th Percentile
+				System.out.println("\n" + key + " POSITION RMS [m]");
+				System.out.println("  E  : " + MathUtil.RMS(posErrList[0]));
+				System.out.println("  N  : " + MathUtil.RMS(posErrList[1]));
+				System.out.println("  U  : " + MathUtil.RMS(posErrList[2]));
+				System.out.println("  3D : " + MathUtil.RMS(posErrList[3]));
+				System.out.println("  2D : " + MathUtil.RMS(posErrList[4]));
 
 				IntStream.range(0, 5).forEach(i -> Collections.sort(posErrList[i]));
 				int q95 = (int) (n * 0.95);
-
-				System.out.println("\n" + key + " 95%");
-				System.out.println("RMS - ");
-				System.out.println(" E - " + posErrList[0].get(q95));
-				System.out.println(" N - " + posErrList[1].get(q95));
-				System.out.println(" U - " + posErrList[2].get(q95));
-				System.out.println(" 3d Error - " + posErrList[3].get(q95));
-				System.out.println(" 2d Error - " + posErrList[4].get(q95));
+				System.out.println("\n" + key + " 95th PERCENTILE [m]");
+				System.out.println("  E  : " + posErrList[0].get(q95));
+				System.out.println("  N  : " + posErrList[1].get(q95));
+				System.out.println("  U  : " + posErrList[2].get(q95));
+				System.out.println("  3D : " + posErrList[3].get(q95));
+				System.out.println("  2D : " + posErrList[4].get(q95));
 
 			}
 
@@ -576,22 +647,17 @@ public class IGS {
 				System.out.println(" 2d Error - " + velErrList[4].get(q95));
 
 			}
-			System.out.println("\n\nPost Variance of Unit Weight Calculations");
+			System.out.println("\nPOST VARIANCE OF UNIT WEIGHT");
 			for (Measurement meas : postVarOfUnitWeightMap.keySet()) {
-				System.out.println(meas.toString());
 				for (String est_type : postVarOfUnitWeightMap.get(meas).keySet()) {
-					System.out.println(est_type);
 					ArrayList<Double> data = new ArrayList<Double>(postVarOfUnitWeightMap.get(meas).get(est_type));
 					double sum = 0;
 					int count = 0;
 					for (int i = 0; i < data.size(); i++) {
 						double val = data.get(i);
-						if (val <=0) {
-							continue;
-						}
+						if (val <= 0) continue;
 						sum += val;
 						count++;
-
 					}
 					Collections.sort(data);
 					double avg = sum / count;
@@ -599,10 +665,10 @@ public class IGS {
 					double median = data.get(q50);
 					int _q75 = (int) (count * 0.75);
 					double q75 = data.get(_q75);
-					System.out.println("MEAN : " + avg);
-					System.out.println("MEDIAN : " + median);
-					System.out.println("Q75 : " + q75);
-
+					System.out.println("  " + meas.toString() + " [" + est_type + "]");
+					System.out.println("    MEAN   : " + avg);
+					System.out.println("    MEDIAN : " + median);
+					System.out.println("    Q75    : " + q75);
 				}
 			}
 			long t0 = timeList.get(0);
@@ -646,8 +712,54 @@ public class IGS {
 
 	}
 
+	/**
+	 * Applies satellite quality masking and measurement corrections in place.
+	 *
+	 * <p><b>Step 1 — Quality masking:</b>
+	 * <ul>
+	 *   <li>Elevation mask: removes satellites below {@code cutOffAng} degrees.</li>
+	 *   <li>C/N0 mask: removes satellites with carrier-to-noise density below {@code snrMask} dB-Hz.</li>
+	 * </ul>
+	 *
+	 * <p><b>Step 2 — Ionospheric correction:</b> if {@code corrIono} is true:
+	 * <ul>
+	 *   <li>If a loaded {@link IONEX} GIM is provided, use it for a precise slant iono delay
+	 *       (GIM-interpolated VTEC mapped via thin-shell model).</li>
+	 *   <li>Otherwise fall back to the Klobuchar broadcast model ({@link ComputeIonoCorr})
+	 *       using coefficients from the RINEX NAV header.</li>
+	 * </ul>
+	 *
+	 * <p><b>Step 3 — Tropospheric correction:</b> if {@code corrTropo} is true, computes
+	 * the full slant delay (dry + wet) via {@link ComputeTropoCorr} (Neil mapping function,
+	 * pressure/temperature from the Orekit geoid model). The wet mapping function is stored
+	 * on each satellite for later use as a partial derivative in the EKF wet-tropo residual.
+	 *
+	 * <p><b>PPP mode special handling:</b> when the estimator is in PPP mode
+	 * ({@link EstimatorMode#isPPPMode()}), the ionospheric delay is stored on the satellite
+	 * object ({@link Satellite#setIonoErr}) but NOT subtracted from the measurements.
+	 * The EKF estimates the iono as a state variable; the pre-stored value serves only
+	 * as a pseudo-observation initialisation. For non-PPP modes the iono is pre-corrected.
+	 *
+	 * <p><b>Sign conventions applied to measurements:</b>
+	 * <ul>
+	 *   <li>Pseudorange: {@code PR -= ionoErr + tropoErr}</li>
+	 *   <li>Carrier phase: {@code CP += ionoErr - tropoErr}
+	 *       (iono advances phase, tropo delays it)</li>
+	 * </ul>
+	 *
+	 * @param satList       satellite list to filter and correct (modified in place)
+	 * @param refEcef       approximate receiver ECEF position used for tropo/iono computation
+	 * @param cutOffAng     elevation cut-off angle in degrees; negative value disables the mask
+	 * @param snrMask       minimum C/N0 in dB-Hz; negative or zero disables the mask
+	 * @param corrIono      if true, compute and apply (or store) ionospheric delay
+	 * @param corrTropo     if true, compute and apply full slant tropospheric delay
+	 * @param ionex         loaded IONEX GIM object, or {@code null} to use Klobuchar
+	 * @param ionoCoeff     Klobuchar coefficients from the RINEX NAV header (fallback)
+	 * @param time          UTC epoch as {@link Calendar}, used for iono/tropo model input
+	 * @param estimatorMode current estimator mode, determines PPP vs. non-PPP iono handling
+	 */
 	public static void filterSat(ArrayList<Satellite> satList, double[] refEcef, double cutOffAng, double snrMask,
-			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time, int estimatorType) {
+			boolean corrIono, boolean corrTropo, IONEX ionex, IonoCoeff ionoCoeff, Calendar time, EstimatorMode estimatorMode) {
 		if (cutOffAng >= 0) {
 			satList.removeIf(i -> i.getElevAzm()[0] < Math.toRadians(cutOffAng));
 		}
@@ -685,7 +797,7 @@ public class IGS {
 					tropoErr = tropoParam[0];
 					wetMF = tropoParam[1];
 				}
-				if (estimatorType == 5 || estimatorType == 6) {
+				if (estimatorMode.isPPPMode()) {
 					sat.setIonoErr(ionoErr);
 					ionoErr = 0;
 				}
@@ -697,16 +809,108 @@ public class IGS {
 		}
 	}
 
-	public static Geoid buildGeoid() {
-		// Semi-major axis or Equatorial radius
-		final double ae = 6378137;
-		// flattening
-		final double f = 1 / 298.257223563;
+	/**
+	 * Prints a structured run header to stdout, capturing all configuration that
+	 * affects the result. Output is redirected to the session's {@code .txt} log file,
+	 * so every saved result is self-documenting.
+	 *
+	 * <p>The header includes: UTC timestamp, git commit hash, dataset file names,
+	 * signal list, discard set, SINEX ground truth (if available), estimator settings,
+	 * MGEX product file names, and all {@link GnssDataConfig} filter prior variances.
+	 */
+	private static void printRunHeader(String obs_path, String[] obsvCodeList, Set<String> discardSet,
+			double[] rxARP, EstimatorMode estimatorMode, boolean repairCS, boolean predictPhaseClock,
+			boolean doTest, boolean doAnalyze, double cutOffAng, double snrMask, String dcb_bias_path,
+			String clock_path, String orbit_path, String ionex_path, String osb_bias_path) {
+		String sep = "================================================";
+		System.out.println(sep);
+		System.out.println("Timestamp  : " + ZonedDateTime.now(ZoneOffset.UTC)
+				.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+		System.out.println("Git Commit : " + getGitHash());
+		System.out.println(sep);
+		System.out.println("DATASET");
+		System.out.println("  File     : " + fileNameOf(obs_path));
+		System.out.println("  Signals  : " + String.join("  ", obsvCodeList));
+		System.out.println("  Discard  : " + discardSet);
+		if (rxARP != null) {
+			double[] llh = LatLonUtil.ecef2lla(rxARP);
+			System.out.println("GROUND TRUTH (SINEX ARP)");
+			System.out.printf("  Lat / Lon / H : %.8f deg  %.8f deg  %.4f m%n", llh[0], llh[1], llh[2]);
+			System.out.printf("  ECEF (m)      : %.4f  %.4f  %.4f%n", rxARP[0], rxARP[1], rxARP[2]);
+		}
+		System.out.println("ESTIMATOR");
+		System.out.println("  Mode      : " + estimatorMode.name());
+		System.out.println("  repairCS          : " + repairCS);
+		System.out.println("  predictPhaseClock : " + predictPhaseClock);
+		System.out.println("  doTest    : " + doTest);
+		System.out.println("  doAnalyze : " + doAnalyze);
+		System.out.println("  elMask    : " + cutOffAng + " deg   snrMask : " + snrMask + " dB-Hz");
+		System.out.println("PRODUCTS");
+		System.out.println("  DCB   : " + fileNameOf(dcb_bias_path));
+		System.out.println("  CLK   : " + fileNameOf(clock_path));
+		System.out.println("  ORB   : " + fileNameOf(orbit_path));
+		System.out.println("  IONEX : " + fileNameOf(ionex_path));
+		System.out.println("  OSB   : " + fileNameOf(osb_bias_path));
+		System.out.println("FILTER PARAMETERS");
+		System.out.println("  pseudorange_priorStdOfUnitW = " + Math.sqrt(GnssDataConfig.pseudorange_priorVarOfUnitW));
+		System.out.println("  doppler_priorStdOfUnitW     = " + Math.sqrt(GnssDataConfig.doppler_priorVarOfUnitW));
+		System.out.println("  TDCP_priorStdOfUnitW        = " + Math.sqrt(GnssDataConfig.tdcp_priorVarOfUnitW));
+		System.out.println("  phase_priorStdOfUnitW       = " + Math.sqrt(GnssDataConfig.phase_priorVarOfUnitW));
+		System.out.println("  GIM_TECU_priorStdOfUnitW    = " + Math.sqrt(GnssDataConfig.GIM_TECU_variance));
+		System.out.println("  Q_pos_randWalk              = " + Arrays.toString(GnssDataConfig.qENU_posRandWalk));
+		System.out.println("  Q_vel_randWalk              = " + Arrays.toString(GnssDataConfig.qENU_velRandWalk));
+		System.out.println("  nSamplesMC                  = " + (long) GnssDataConfig.nSamplesMC);
+		System.out.println(sep);
+	}
 
-		// Earth's rotation rate
-		final double spin = 7.2921151467E-5;
-		// Earth's universal gravitational parameter
-		final double GM = 3.986004418E14;
+	/** Extracts the filename (everything after the last {@code /}) from an absolute path. */
+	private static String fileNameOf(String path) {
+		if (path == null) return "N/A";
+		return path.substring(path.lastIndexOf('/') + 1);
+	}
+
+	/**
+	 * Returns the current git commit short hash, with a {@code " (dirty)"} suffix if
+	 * there are uncommitted changes. Falls back to {@code "unknown"} if git is not
+	 * available or the command fails. Used in the run header to tie each result log
+	 * to an exact code version.
+	 */
+	private static String getGitHash() {
+		try {
+			Process p = new ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+					.redirectErrorStream(true).start();
+			String hash = new BufferedReader(new InputStreamReader(p.getInputStream())).readLine();
+			Process p2 = new ProcessBuilder("git", "status", "--porcelain")
+					.redirectErrorStream(true).start();
+			boolean dirty = p2.getInputStream().read() != -1;
+			return (hash != null ? hash : "unknown") + (dirty ? " (dirty)" : "");
+		} catch (Exception e) {
+			return "unknown";
+		}
+	}
+
+	/**
+	 * Initialises and returns an Orekit {@link Geoid} object backed by a 50×50 EGM96
+	 * gravity field over the WGS-84 ellipsoid, referenced to ITRF 2014 / IERS 2010.
+	 *
+	 * <p>The geoid is used by {@link ComputeTropoCorr} to obtain the orthometric height
+	 * (mean sea level altitude) of the station, which enters the pressure/temperature
+	 * model for tropospheric delay computation.
+	 *
+	 * <p>Requires the Orekit data master directory at
+	 * {@code ~/Documents/orekit/orekit-data-master/orekit-data-master}.
+	 * This method is called once during {@link #posEstimate} and the result is cached
+	 * in the {@link #geoid} static field.
+	 *
+	 * @return a configured {@link Geoid} instance
+	 */
+	public static Geoid buildGeoid() {
+		// WGS-84 defining parameters
+		final double ae = 6378137;          // semi-major axis (m)
+		final double f = 1 / 298.257223563; // flattening
+
+		final double spin = 7.2921151467E-5;  // Earth's rotation rate (rad/s)
+		final double GM   = 3.986004418E14;   // Earth's gravitational parameter (m³/s²)
 		File orekitData = new File("/Users/naman.agarwal/Documents/orekit/orekit-data-master/orekit-data-master");
 		DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
 		manager.addProvider(new DirectoryCrawler(orekitData));
