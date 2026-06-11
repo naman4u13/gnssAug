@@ -2,4 +2,11 @@
 .classpath
 .project
 .settings/
-.log
+
+# JVM crash and replay logs
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# macOS metadata
+.DS_Store
