@@ -67,7 +67,7 @@ public class MainApp {
 	 * All other configuration (file paths, signals, estimator flags) is embedded
 	 * in the corresponding {@code case} block inside {@link #main}.
 	 */
-	static final int RUN = PERSONAL_STATIC;
+	static final int RUN = IGS_RINEX;
 
 	/**
 	 * Application entry point. Selects the active dataset via {@link #RUN}, constructs
@@ -87,7 +87,7 @@ public class MainApp {
 			String[] obsvCodeList = new String[] { "G1C", "E1C", "C2I" };
 			String basePath = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/Google Decimeter Challenge/decimeter/train/2021-03-10-US-SVL-1/SamsungS20Ultra";
 			boolean useDiscardSet = false;
-			Set<String> discardSet = useDiscardSet ? Set.of("E11", "E25", "E7", "E8") : Set.of("");
+			Set<String> discardSet = useDiscardSet ? Set.of("E11", "E25", "E7", "E8") : Set.of("G7","G28");
 			String[] yd    = dateFromFolder(basePath, 2); // folder: 2021-03-10-US-SVL-1
 			String year    = yd[0], doy = yd[1];
 			String mobName = basePath.split("/")[basePath.split("/").length - 1];
@@ -113,10 +113,10 @@ public class MainApp {
 		case IGS_RINEX: {
 			// IGS station | 2024 DOY 200 | G1C+G5Q | WUM products
 			String year = "2024", doy = "200";
-			Set<String> discardSet = Set.of("");
+			Set<String> discardSet = Set.of("G7","G28");
 			String dir = pDir(base_url, year, doy);
 			String igs_base   = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";
-			String obs_path   = igs_base + "/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO.rnx";
+			String obs_path   = igs_base + "/Highrate/AJAC00FRA_S_20242000530_15M_01S_MO_plus6x15M.rnx";
 			String nav_path   = igs_base + "/BRDC00IGS_R_20201000000_01D_MN.rnx/BRDC00IGS_R_20201000000_01D_MN.rnx";
 			String dcb_bias_path = dir + "CAS0OPSRAP_" + year + doy + "0000_01D_01D_DCB.BIA";
 			String osb_bias_path = dir + "WUM0MGXFIN_" + year + doy + "0000_01D_01D_OSB.BIA";
@@ -129,8 +129,8 @@ public class MainApp {
 					/*useBias*/ true, /*useGIM*/ true, /*useIGS*/ true, /*useSNX*/ true,
 					new String[] { "G1C", "G5Q" }, /*minSat*/ 4, /*cutOffAng*/ 1, /*snrMask*/ 0,
 					/*corrIono*/ true, /*corrTropo*/ true, EstimatorMode.IGS_PPP_FLOAT,
-					/*doAnalyze*/ true, /*doTest*/ false, /*outlierAnalyze*/ false,
-					discardSet, /*repairCS*/ true, /*predictPhaseClock*/ false);
+					/*doAnalyze*/ true, /*doTest*/ true, /*outlierAnalyze*/ false,
+					discardSet, /*repairCS*/ false, /*predictPhaseClock*/ false);
 			break;
 		}
 

@@ -88,6 +88,18 @@ public class EKF_PPP extends EKFParent {
 	private TreeMap<Long, double[]> clkOffMap;
 	/** Estimated receiver clock drifts per GNSS system per epoch (m/s). */
 	private TreeMap<Long, double[]> clkDriftMap;
+	/** Position uncertainty (1-σ) in ENU frame per epoch [σE, σN, σU] (metres). */
+	private TreeMap<Long, double[]> posSigmaMap;
+	/** Troposphere ZWD uncertainty (1-σ) per epoch (metres). */
+	private TreeMap<Long, Double> tropoSigmaMap;
+	/** Float ambiguity uncertainty (1-σ) per satellite-signal per epoch (cycles). */
+	private TreeMap<Long, HashMap<String, Double>> ambSigmaMap;
+	/** Ionospheric VTEC uncertainty (1-σ) per satellite per epoch (TECU). */
+	private TreeMap<Long, HashMap<String, Double>> ionoSigmaMap;
+	/** GIM post-fit residuals per satellite per epoch (TECU), keyed by constellation+SVid (e.g. "G5"). */
+	private TreeMap<Long, HashMap<String, Double>> gimResMap;
+	/** GIM pre-fit innovations per satellite per epoch (TECU), keyed by constellation+SVid (e.g. "G5"). */
+	private TreeMap<Long, HashMap<String, Double>> gimInnMap;
 
 	// ── Cycle-slip and ambiguity counters ─────────────────────────────────────────────────────
 
@@ -259,6 +271,12 @@ public class EKF_PPP extends EKFParent {
 			clkOffMap = new TreeMap<Long, double[]>();
 			clkDriftMap = new TreeMap<Long, double[]>();
 			dopMap = new TreeMap<Long, double[]>();
+			posSigmaMap   = new TreeMap<Long, double[]>();
+			tropoSigmaMap = new TreeMap<Long, Double>();
+			ambSigmaMap   = new TreeMap<Long, HashMap<String, Double>>();
+			ionoSigmaMap  = new TreeMap<Long, HashMap<String, Double>>();
+			gimResMap     = new TreeMap<Long, HashMap<String, Double>>();
+			gimInnMap     = new TreeMap<Long, HashMap<String, Double>>();
 
 		}
 		cycleSlipCount = new HashMap<String, int[]>();
@@ -862,7 +880,7 @@ public class EKF_PPP extends EKFParent {
 		ionoIndexMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, false,predictPhaseClock,false);
+		pos_kfObj.configPPP_IGS(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 		SimpleMatrix R = new SimpleMatrix((3 * n) + ionoParamNum, (3 * n) + ionoParamNum);
@@ -898,6 +916,11 @@ public class EKF_PPP extends EKFParent {
 					Measurement.CarrierPhase, phase_e_prior_hat, Measurement.Doppler, doppler_e_prior_hat,
 					Measurement.GIM_Iono, iono_e_prior_hat);
 			innovationMap.put(currentTime, measMap);
+			HashMap<String, Double> _gimInn = new HashMap<>();
+			for (int i = 0; i < uniqSatList.size(); i++) {
+				_gimInn.put(uniqSatList.get(i), iono_e_prior_hat[i]);
+			}
+			gimInnMap.put(currentTime, _gimInn);
 		}
 		if (doTest) {
 			P = pos_kfObj.getCovariance();
@@ -911,6 +934,7 @@ public class EKF_PPP extends EKFParent {
 		}
 		pos_kfObj.update(z, R, ze, H);
 		if (doAnalyze) {
+			csdListMap.put(currentTime, csdList);
 			x = pos_kfObj.getState();
 //			P = pos_kfObj.getCovariance();
 //			System.out.println("Design Matrix");
@@ -937,7 +961,7 @@ public class EKF_PPP extends EKFParent {
 					obsvCodeList, rxPCO, ionoParams, csdList, uniqSatList, ssiSet, true, currentTime);
 			z = (SimpleMatrix) z_ze_H[0];
 			ze = (SimpleMatrix) z_ze_H[1];
-			performAnalysis(z, ze, satList, R, H, currentTime, pos_kfObj);
+			performAnalysis(z, ze, satList, R, H, currentTime, pos_kfObj, layout, uniqSatList);
 
 		}
 
@@ -1450,7 +1474,8 @@ public class EKF_PPP extends EKFParent {
 	 * @param kf_Obj      KF object supplying the Kalman gain K for redundancy computation
 	 */
 	private void performAnalysis(SimpleMatrix z, SimpleMatrix ze, ArrayList<Satellite> satList, SimpleMatrix R,
-			SimpleMatrix H, long currentTime, KFconfig kf_Obj) {
+			SimpleMatrix H, long currentTime, KFconfig kf_Obj,
+			RinexPPPStateLayout layout, ArrayList<String> uniqSatList) {
 
 		int n = satList.size();
 		SimpleMatrix e_post_hat = z.minus(ze);
@@ -1500,6 +1525,36 @@ public class EKF_PPP extends EKFParent {
 		satListMap.put(currentTime, satList);
 		satCountMap.put(currentTime, (long) n);
 
+		// Sigma maps — extract from post-update covariance
+		SimpleMatrix P = kf_Obj.getCovariance();
+		double[] refPos = { kf_Obj.getState().get(0), kf_Obj.getState().get(1), kf_Obj.getState().get(2) };
+		SimpleMatrix R_enu = new SimpleMatrix(LatLonUtil.getEcef2EnuRotMat(refPos));
+		SimpleMatrix P_pos_enu = R_enu.mult(P.extractMatrix(0, 3, 0, 3)).mult(R_enu.transpose());
+		posSigmaMap.put(currentTime, new double[] {
+			Math.sqrt(Math.max(0, P_pos_enu.get(0, 0))),
+			Math.sqrt(Math.max(0, P_pos_enu.get(1, 1))),
+			Math.sqrt(Math.max(0, P_pos_enu.get(2, 2)))
+		});
+		tropoSigmaMap.put(currentTime, Math.sqrt(Math.max(0, P.get(layout.tropoIdx, layout.tropoIdx))));
+		HashMap<String, Double> _ambSigma = new HashMap<>();
+		for (int i = 0; i < n; i++) {
+			Satellite sat = satList.get(i);
+			String key = sat.getObsvCode() + sat.getSVID();
+			_ambSigma.put(key, Math.sqrt(Math.max(0, P.get(layout.ambStart + i, layout.ambStart + i))));
+		}
+		ambSigmaMap.put(currentTime, _ambSigma);
+		HashMap<String, Double> _ionoSigma = new HashMap<>();
+		for (int i = 0; i < uniqSatList.size(); i++) {
+			_ionoSigma.put(uniqSatList.get(i), Math.sqrt(Math.max(0, P.get(layout.ionoStart + i, layout.ionoStart + i))));
+		}
+		ionoSigmaMap.put(currentTime, _ionoSigma);
+		HashMap<String, Double> _gimRes = new HashMap<>();
+		double[] gimResArr = Matrix.matrix2ArrayVec(iono_e_post_hat);
+		for (int i = 0; i < uniqSatList.size(); i++) {
+			_gimRes.put(uniqSatList.get(i), gimResArr[i]);
+		}
+		gimResMap.put(currentTime, _gimRes);
+
 	}
 
 	// ── Session-level summary getters ────────────────────────────────────────────────────────
@@ -1514,7 +1569,7 @@ public class EKF_PPP extends EKFParent {
 		return csRepairedCount;
 	}
 
-	/** Total satellite hard-resets (GF test failures + consecutive slip limit exceeded). */
+	/** Total satellite hard-resets (TDCP model test failures + consecutive slip limit exceeded). */
 	public long getHardResetCount() {
 		return resetCount_gfTest + resetCount_consecutive;
 	}
@@ -1617,6 +1672,34 @@ public class EKF_PPP extends EKFParent {
 	/** DOP components [EDOP, NDOP, VDOP, ClkDOP] per epoch. */
 	public TreeMap<Long, double[]> getDopMap() {
 		return dopMap;
+	}
+
+	/** Position 1-σ uncertainty in ENU [σE, σN, σU] (metres) per epoch. */
+	public TreeMap<Long, double[]> getPosSigmaMap() {
+		return posSigmaMap;
+	}
+
+	/** Troposphere ZWD 1-σ uncertainty (metres) per epoch. */
+	public TreeMap<Long, Double> getTropoSigmaMap() {
+		return tropoSigmaMap;
+	}
+
+	/** Float ambiguity 1-σ uncertainty (cycles) per satellite-signal per epoch. */
+	public TreeMap<Long, HashMap<String, Double>> getAmbSigmaMap() {
+		return ambSigmaMap;
+	}
+
+	/** Ionospheric VTEC 1-σ uncertainty (TECU) per satellite per epoch. */
+	public TreeMap<Long, HashMap<String, Double>> getIonoSigmaMap() {
+		return ionoSigmaMap;
+	}
+
+	public TreeMap<Long, HashMap<String, Double>> getGimResMap() {
+		return gimResMap;
+	}
+
+	public TreeMap<Long, HashMap<String, Double>> getGimInnMap() {
+		return gimInnMap;
 	}
 
 }

@@ -616,7 +616,7 @@ public class EKF_PPP extends EKFParent {
 		ionoMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, true, predictPhaseClock,false);
+		pos_kfObj.configPPP_Android(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, predictPhaseClock, false);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 

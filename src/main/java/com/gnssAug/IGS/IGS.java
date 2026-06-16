@@ -174,11 +174,17 @@ public class IGS {
 
 			String base_path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/input_files";
 
-			String antenna_path = base_path + "/complementary/igs14.atx/igs14.atx";
+			String antenna_path = base_path + "/complementary/igs20.atx";
 
-			String antenna_csv_path = base_path + "/complementary/antenna.csv";
+			String antenna_csv_path = base_path + "/complementary/antenna_igs20.csv";
 			String obsName = fileNameOf(obs_path).replaceAll("\\.[^.]+$", "");
-			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/PhD thesis/" + obsName;
+			String[] _obsNameParts = obsName.split("_");
+			String _siteID   = _obsNameParts.length > 0 ? _obsNameParts[0] : obsName;
+			String _epochTag = _obsNameParts.length > 2 ? _obsNameParts[2] : obsName;
+			String _signals  = String.join("-", obsvCodeList);
+			String _mode     = estimatorMode.name();
+			String runLabel  = _siteID + "_" + _epochTag + "_" + _signals + "_" + _mode;
+			String path = "/Users/naman.agarwal/Library/CloudStorage/OneDrive-UniversityofCalgary/gnss_output/IGS_rinex_output/PPP_AR/" + runLabel+"_discarded";
 			File output = new File(path + ".txt");
 			PrintStream stream;
 
@@ -221,6 +227,25 @@ public class IGS {
 				clock = new Clock(clock_path, dcb_bias);
 				antenna = new Antenna(antenna_csv_path);
 
+			}
+			if (useSNX && antenna != null) {
+				String antennaTypeKey = (String) ObsvMsgComp.getOrDefault("antennaType", null);
+				if (antennaTypeKey != null) {
+					for (String code : obsvCodeList) {
+						double[] existing = rxPCO.get(code);
+						if (existing == null || (existing[0] == 0.0 && existing[1] == 0.0 && existing[2] == 0.0)) {
+							char ssi = code.charAt(0);
+							int freq = Integer.parseInt(String.valueOf(code.charAt(1)));
+							double[] enu = antenna.getRxPCO_ENU(antennaTypeKey, ssi, freq);
+							if (enu != null) {
+								double[] apc = LatLonUtil.enu2ecef(enu, rxARP, true);
+								rxPCO.put(code, new double[]{ apc[0] - rxARP[0], apc[1] - rxARP[1], apc[2] - rxARP[2] });
+							} else {
+								System.err.println("Rx PCO unavailable in both SINEX and ANTEX for " + code + " (antenna: " + antennaTypeKey + ")");
+							}
+						}
+					}
+				}
 			}
 			if (useGIM) {
 				ionex = new IONEX(ionex_path);
@@ -513,6 +538,15 @@ public class IGS {
 					GraphPlotter.graphSatRes(satInnMap, outlierAnalyze, true);
 					GraphPlotter.graphRedundancyPPP(RedundancyNoMap, timeList);
 					GraphPlotter.createPPPplots(ekf, obsvCodeList,ssiLabel, timeList.get(0));
+					long _t0s = (timeList.get(0)      / 1000) % 86400;
+					long _tNs = (timeList.get(n - 1)  / 1000) % 86400;
+					String _utcTag = String.format("%02d%02d-%02d%02d",
+							_t0s / 3600, (_t0s % 3600) / 60,
+							_tNs / 3600, (_tNs % 3600) / 60);
+					String taggedPath = path + "_" + _utcTag;
+					output.renameTo(new File(taggedPath + ".txt"));
+					GraphPlotter.writeEpochJSONL(taggedPath + "_epochs.jsonl", ekf, timeList,
+							obsvCodeList, useSNX ? rxARP : null, estStateMap_pos);
 				}
 			}
 		
@@ -828,8 +862,25 @@ public class IGS {
 				.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")));
 		System.out.println("Git Commit : " + getGitHash());
 		System.out.println(sep);
+		// Parse receiver / antenna from RINEX header (first occurrence only)
+		String siteMarker = "", recType = "", antType = "";
+		try (java.util.Scanner hSc = new java.util.Scanner(new java.io.File(obs_path))) {
+			while (hSc.hasNextLine()) {
+				String hl = hSc.nextLine();
+				if (hl.contains("END OF HEADER")) break;
+				if (hl.contains("MARKER NAME")     && siteMarker.isEmpty())
+					siteMarker = hl.substring(0, Math.min(60, hl.length())).trim();
+				if (hl.contains("REC # / TYPE / VERS") && recType.isEmpty())
+					recType = hl.length() >= 40 ? hl.substring(20, 40).trim() : hl.substring(20).trim();
+				if (hl.contains("ANT # / TYPE")    && antType.isEmpty())
+					antType = hl.length() >= 40 ? hl.substring(20, 40).trim() : hl.substring(20).trim();
+			}
+		} catch (Exception ignored) {}
 		System.out.println("DATASET");
 		System.out.println("  File     : " + fileNameOf(obs_path));
+		System.out.println("  Site     : " + siteMarker);
+		System.out.println("  Receiver : " + recType);
+		System.out.println("  Antenna  : " + antType);
 		System.out.println("  Signals  : " + String.join("  ", obsvCodeList));
 		System.out.println("  Discard  : " + discardSet);
 		if (rxARP != null) {

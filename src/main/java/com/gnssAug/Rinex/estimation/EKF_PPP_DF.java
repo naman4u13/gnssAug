@@ -689,7 +689,7 @@ public class EKF_PPP_DF extends EKFParent {
 		ionoMap.putAll(new_ionoMap);
 		pos_kfObj.setState_ProcessCov(_x, _P);
 		// Assign Q and F matrix
-		pos_kfObj.configPPP(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams, false);
+		pos_kfObj.configPPP_IGS(deltaT, clkOffNum, clkDriftNum, totalStateNum, ionoParams);
 		pos_kfObj.predict();
 		x = pos_kfObj.getState();
 		SimpleMatrix R = new SimpleMatrix((3 * n), (3 * n));

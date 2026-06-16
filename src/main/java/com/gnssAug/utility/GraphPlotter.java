@@ -2626,5 +2626,246 @@ public class GraphPlotter extends ApplicationFrame {
 	        e.printStackTrace();
 	    }
 	}
-	
+
+	/**
+	 * Writes a JSONL (JSON Lines) file with one epoch record per line for the full PPP session.
+	 * Each line is a self-contained JSON object. Call this after {@code ekf.process()} when
+	 * {@code doAnalyze = true}.
+	 *
+	 * <p>Satellite entries are keyed as {@code signal+PRN} (e.g. {@code "G1C05"}). Iono and
+	 * ambiguity maps use slightly different internal key formats but are matched automatically.
+	 *
+	 * @param outPath      destination file path (e.g. {@code path + "_epochs.jsonl"})
+	 * @param ekf          completed {@link EKF_PPP} instance with all analysis maps populated
+	 * @param timeList     ordered GPS millisecond timestamps; index 0 is skipped (no prior epoch)
+	 * @param obsvCodeList observation codes (e.g. {@code {"G1C","G5Q"}})
+	 * @param rxARP        receiver ARP in ECEF for ENU error; {@code null} if unknown
+	 * @param estStateMap  ECEF position estimates returned by {@code ekf.process()}; used for ENU error
+	 */
+	@SuppressWarnings("unchecked")
+	public static void writeEpochJSONL(String outPath, EKF_PPP ekf, ArrayList<Long> timeList,
+			String[] obsvCodeList, double[] rxARP,
+			java.util.TreeMap<Long, double[]> estStateMap) {
+		try (FileWriter fw = new FileWriter(new File(outPath))) {
+			int epochIdx = 0;
+			for (int i = 1; i < timeList.size(); i++) {
+				long t = timeList.get(i);
+
+				ArrayList<com.gnssAug.Rinex.models.Satellite> satList =
+						(ArrayList<com.gnssAug.Rinex.models.Satellite>) ekf.getSatListMap().get(t);
+				if (satList == null) continue;
+
+				Map<com.gnssAug.Android.constants.Measurement, double[]> resMap =
+						(Map<com.gnssAug.Android.constants.Measurement, double[]>) ekf.getResidualMap().get(t);
+				Map<com.gnssAug.Android.constants.Measurement, double[]> innMap =
+						(Map<com.gnssAug.Android.constants.Measurement, double[]>) ekf.getInnovationMap().get(t);
+				Map<com.gnssAug.Android.constants.Measurement, Double> pvuwMap =
+						(Map<com.gnssAug.Android.constants.Measurement, Double>) ekf.getPostVarOfUnitWMap().get(t);
+				Map<com.gnssAug.Android.constants.Measurement, Double> redunMap =
+						(Map<com.gnssAug.Android.constants.Measurement, Double>) ekf.getRedundancyNoMap().get(t);
+				double[] clkOff   = ekf.getClkOffMap()    != null ? ekf.getClkOffMap().get(t)    : null;
+				double[] clkDrift = ekf.getClkDriftMap()  != null ? ekf.getClkDriftMap().get(t)  : null;
+				Double   tropoZWD = ekf.getTropoMap()      != null ? ekf.getTropoMap().get(t)     : null;
+				Double   tropoSig = ekf.getTropoSigmaMap() != null ? ekf.getTropoSigmaMap().get(t): null;
+				double[] dop      = ekf.getDopMap()        != null ? ekf.getDopMap().get(t)       : null;
+				double[] posSigma = ekf.getPosSigmaMap()   != null ? ekf.getPosSigmaMap().get(t)  : null;
+				HashMap<String, Double> ambVals  = ekf.getAmbMap()       != null ? ekf.getAmbMap().get(t)       : null;
+				HashMap<String, Double> ambSigs  = ekf.getAmbSigmaMap()  != null ? ekf.getAmbSigmaMap().get(t)  : null;
+				HashMap<String, Double> ionoVals = ekf.getIonoMap()      != null ? ekf.getIonoMap().get(t)      : null;
+				HashMap<String, Double> ionoSigs = ekf.getIonoSigmaMap() != null ? ekf.getIonoSigmaMap().get(t) : null;
+				HashMap<String, Double> gimResVals = ekf.getGimResMap()  != null ? ekf.getGimResMap().get(t)   : null;
+				HashMap<String, Double> gimInnVals = ekf.getGimInnMap()  != null ? ekf.getGimInnMap().get(t)   : null;
+				ArrayList<com.gnssAug.Android.models.CycleSlipDetect> csdList =
+						ekf.getCsdListMap() != null ? ekf.getCsdListMap().get(t) : null;
+
+				// ENU position error vs ARP ground truth
+				String errENUjson = "null";
+				if (rxARP != null && estStateMap != null) {
+					double[] estPos = estStateMap.get(t);
+					if (estPos != null) {
+						double[] delta = { estPos[0] - rxARP[0], estPos[1] - rxARP[1], estPos[2] - rxARP[2] };
+						double[][] R = LatLonUtil.getEcef2EnuRotMat(rxARP);
+						double dE = R[0][0]*delta[0] + R[0][1]*delta[1] + R[0][2]*delta[2];
+						double dN = R[1][0]*delta[0] + R[1][1]*delta[1] + R[1][2]*delta[2];
+						double dU = R[2][0]*delta[0] + R[2][1]*delta[1] + R[2][2]*delta[2];
+						errENUjson = "[" + fmt(dE) + "," + fmt(dN) + "," + fmt(dU) + "]";
+					}
+				}
+
+				StringBuilder sb = new StringBuilder("{");
+				sb.append("\"epoch\":").append(epochIdx++);
+				sb.append(",\"gps_ms\":").append(t);
+				sb.append(",\"n_sats\":").append(satList.size());
+
+				// pos
+				sb.append(",\"pos\":{");
+				sb.append("\"err_enu\":").append(errENUjson);
+				if (posSigma != null) {
+					sb.append(",\"sigma_enu\":[")
+					  .append(fmt(posSigma[0])).append(",")
+					  .append(fmt(posSigma[1])).append(",")
+					  .append(fmt(posSigma[2])).append("]");
+				} else {
+					sb.append(",\"sigma_enu\":null");
+				}
+				sb.append("}");
+
+				// clock
+				sb.append(",\"clock\":{\"offsets_m\":{");
+				if (clkOff != null) {
+					for (int j = 0; j < obsvCodeList.length && j < clkOff.length; j++) {
+						if (j > 0) sb.append(",");
+						sb.append("\"").append(obsvCodeList[j]).append("\":").append(fmt(clkOff[j]));
+					}
+				}
+				sb.append("},\"drift_mps\":{");
+				if (clkDrift != null && clkDrift.length > 0) {
+					sb.append("\"base\":").append(fmt(clkDrift[0]));
+					for (int j = 1; j < clkDrift.length; j++) {
+						sb.append(",\"isb").append(j).append("\":").append(fmt(clkDrift[j]));
+					}
+				}
+				sb.append("}}");
+
+				// tropo
+				sb.append(",\"tropo\":{");
+				sb.append("\"zwd_m\":").append(tropoZWD != null ? fmt(tropoZWD) : "null");
+				sb.append(",\"sigma_m\":").append(tropoSig != null ? fmt(tropoSig) : "null");
+				sb.append("}");
+
+				// geometry
+				sb.append(",\"geometry\":{");
+				if (dop != null) {
+					sb.append("\"pdop\":").append(fmt(Math.sqrt(dop[0] + dop[1] + dop[2])));
+					sb.append(",\"hdop\":").append(fmt(Math.sqrt(dop[0] + dop[1])));
+					sb.append(",\"vdop\":").append(fmt(Math.sqrt(dop[2])));
+				} else {
+					sb.append("\"pdop\":null,\"hdop\":null,\"vdop\":null");
+				}
+				sb.append("}");
+
+				// pvuw
+				sb.append(",\"pvuw\":{");
+				appendMeasDouble(sb, pvuwMap, "phase", com.gnssAug.Android.constants.Measurement.CarrierPhase);
+				sb.append(","); appendMeasDouble(sb, pvuwMap, "pr",      com.gnssAug.Android.constants.Measurement.Pseudorange);
+				sb.append(","); appendMeasDouble(sb, pvuwMap, "doppler", com.gnssAug.Android.constants.Measurement.Doppler);
+				sb.append(","); appendMeasDouble(sb, pvuwMap, "gim",     com.gnssAug.Android.constants.Measurement.GIM_Iono);
+				sb.append("}");
+
+				// redundancy
+				sb.append(",\"redundancy\":{");
+				appendMeasDouble(sb, redunMap, "phase", com.gnssAug.Android.constants.Measurement.CarrierPhase);
+				sb.append(","); appendMeasDouble(sb, redunMap, "pr",      com.gnssAug.Android.constants.Measurement.Pseudorange);
+				sb.append(","); appendMeasDouble(sb, redunMap, "doppler", com.gnssAug.Android.constants.Measurement.Doppler);
+				sb.append(","); appendMeasDouble(sb, redunMap, "gim",     com.gnssAug.Android.constants.Measurement.GIM_Iono);
+				sb.append("}");
+
+				// CS flags by satellite key (signal+svid, no padding — matches csdList format)
+				HashMap<String, Boolean> csFlags    = new HashMap<>();
+				HashMap<String, Boolean> resetFlags = new HashMap<>();
+				if (csdList != null) {
+					for (com.gnssAug.Android.models.CycleSlipDetect csd : csdList) {
+						String csdKey;
+						if (csd.getSat() != null) {
+							csdKey = csd.getSat().getObsvCode() + csd.getSat().getSvid();
+						} else if (csd.getIgs_sat() != null) {
+							csdKey = csd.getIgs_sat().getObsvCode() + csd.getIgs_sat().getSVID();
+						} else {
+							continue;
+						}
+						csFlags.put(csdKey, csd.isCS());
+						resetFlags.put(csdKey, csd.isReset());
+					}
+				}
+
+				// per-satellite array
+				sb.append(",\"satellites\":[");
+				int n = satList.size();
+				for (int j = 0; j < n; j++) {
+					com.gnssAug.Rinex.models.Satellite sat = satList.get(j);
+					// Human-readable key: e.g. "G1C05"
+					String satLabel = sat.getObsvCode() + String.format("%02d", sat.getSVID());
+					// Internal lookup keys matching existing map formats
+					String ambKey  = sat.getObsvCode() + sat.getSVID();               // "G1C5"
+					String ionoKey = "" + sat.getObsvCode().charAt(0) + sat.getSVID();// "G5"
+
+					if (j > 0) sb.append(",");
+					sb.append("{");
+					sb.append("\"id\":\"").append(satLabel).append("\"");
+
+					double[] elevAzm = sat.getElevAzm();
+					sb.append(",\"elev_deg\":").append(elevAzm != null ? fmt(Math.toDegrees(elevAzm[0])) : "null");
+					sb.append(",\"azim_deg\":").append(elevAzm != null ? fmt(Math.toDegrees(elevAzm[1])) : "null");
+					sb.append(",\"cn0_dbhz\":").append(fmt(sat.getCNo()));
+
+					// post-fit residuals
+					appendSatDouble(sb, ",\"resid_pr_m\":",  resMap, com.gnssAug.Android.constants.Measurement.Pseudorange, j);
+					appendSatDouble(sb, ",\"resid_cp_m\":",  resMap, com.gnssAug.Android.constants.Measurement.CarrierPhase, j);
+					appendSatDouble(sb, ",\"resid_dop_mps\":", resMap, com.gnssAug.Android.constants.Measurement.Doppler, j);
+
+					// pre-fit innovations
+					appendSatDouble(sb, ",\"innov_pr_m\":",  innMap, com.gnssAug.Android.constants.Measurement.Pseudorange, j);
+					appendSatDouble(sb, ",\"innov_cp_m\":",  innMap, com.gnssAug.Android.constants.Measurement.CarrierPhase, j);
+
+					// iono (keyed by constellation+SVid — one entry per physical satellite)
+					sb.append(",\"iono_tecu\":");
+					sb.append(ionoVals != null && ionoVals.containsKey(ionoKey) ? fmt(ionoVals.get(ionoKey)) : "null");
+					sb.append(",\"iono_sigma_tecu\":");
+					sb.append(ionoSigs != null && ionoSigs.containsKey(ionoKey) ? fmt(ionoSigs.get(ionoKey)) : "null");
+					// GIM pseudo-observable residual & innovation (TECU, one per physical satellite)
+					sb.append(",\"resid_gim_tecu\":");
+					sb.append(gimResVals != null && gimResVals.containsKey(ionoKey) ? fmt(gimResVals.get(ionoKey)) : "null");
+					sb.append(",\"innov_gim_tecu\":");
+					sb.append(gimInnVals != null && gimInnVals.containsKey(ionoKey) ? fmt(gimInnVals.get(ionoKey)) : "null");
+
+					// ambiguity (keyed by signal+SVid)
+					sb.append(",\"amb_float_cyc\":");
+					sb.append(ambVals != null && ambVals.containsKey(ambKey) ? fmt(ambVals.get(ambKey)) : "null");
+					sb.append(",\"amb_sigma_cyc\":");
+					sb.append(ambSigs != null && ambSigs.containsKey(ambKey) ? fmt(ambSigs.get(ambKey)) : "null");
+
+					// cycle-slip flags
+					sb.append(",\"cs\":").append(csFlags.getOrDefault(ambKey, false));
+					sb.append(",\"reset\":").append(resetFlags.getOrDefault(ambKey, false));
+
+					sb.append("}");
+				}
+				sb.append("]}");
+				fw.write(sb.toString());
+				fw.write("\n");
+			}
+			System.out.println("Epoch JSONL written: " + outPath);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static String fmt(double v) {
+		if (Double.isNaN(v) || Double.isInfinite(v)) return "null";
+		return String.format("%.6g", v);
+	}
+
+	private static void appendMeasDouble(StringBuilder sb,
+			Map<com.gnssAug.Android.constants.Measurement, Double> map,
+			String label, com.gnssAug.Android.constants.Measurement key) {
+		sb.append("\"").append(label).append("\":");
+		if (map != null && map.containsKey(key)) {
+			double v = map.get(key);
+			sb.append(Double.isNaN(v) || Double.isInfinite(v) ? "null" : fmt(v));
+		} else {
+			sb.append("null");
+		}
+	}
+
+	private static void appendSatDouble(StringBuilder sb, String field,
+			Map<com.gnssAug.Android.constants.Measurement, double[]> map,
+			com.gnssAug.Android.constants.Measurement key, int idx) {
+		sb.append(field);
+		if (map != null && map.containsKey(key) && map.get(key).length > idx) {
+			sb.append(fmt(map.get(key)[idx]));
+		} else {
+			sb.append("null");
+		}
+	}
+
 }

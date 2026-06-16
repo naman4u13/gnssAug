@@ -43,11 +43,14 @@ import com.opencsv.CSVWriter;
 public class Antenna {
 
 	private HashMap<Character, HashMap<Integer, HashMap<Integer, ArrayList<IGSAntenna>>>> satAntMap;
+	// antennaTypeKey (e.g. "TRM115000.00 NONE") → SSI → freq band → [E, N, U] in metres
+	private HashMap<String, HashMap<Character, HashMap<Integer, double[]>>> rxAntMap = new HashMap<>();
 	private static final double SPEED_OF_LIGHT = 299792458;
 	private CelestialBody sun;
 	private static final double ECLIPSE_RECOVERY_SECONDS = 1800.0;
 	private final HashMap<String, Double> eclipseExitMap = new HashMap<>();
 	private final HashMap<String, Boolean> prevInEclipseMap = new HashMap<>();
+	private static final java.util.Set<String> _pcoWarnedSet = new java.util.HashSet<>();
 
 	/**
 	 * @param path  Path to the pre-processed satellite antenna CSV (produced by {@link #buildCSV}).
@@ -84,9 +87,19 @@ public class Antenna {
 			while ((line = reader.readNext()) != null) {
 
 				char antType = line[0].charAt(0);
-				if (antType != 'S') {
-					reader.close();
-					return;
+				if (antType == 'R') {
+					// Receiver PCO row: antennaTypeKey → SSI → freq → [E, N, U] in metres
+					String antennaKey = line[1].replaceAll("\\s+", " ").trim();
+					char ssi = line[6].charAt(0);
+					int freq = Integer.parseInt(line[6].substring(1));
+					double[] neu_mm = StringUtil.str2arr_D(line[7]); // ANTEX order: [N, E, U] in mm
+					double[] enu_m = { neu_mm[1] / 1000.0, neu_mm[0] / 1000.0, neu_mm[2] / 1000.0 };
+					rxAntMap.computeIfAbsent(antennaKey, k -> new HashMap<>())
+							.computeIfAbsent(ssi, k -> new HashMap<>())
+							.put(freq, enu_m);
+					continue;
+				} else if (antType != 'S') {
+					continue;
 				}
 				String _SVID = line[1];
 				char SSI = _SVID.charAt(0);
@@ -105,6 +118,24 @@ public class Antenna {
 			e.printStackTrace();
 			throw new Exception("Error occured during reading and parsing of Antenna(.csv) file \n" + e);
 		}
+	}
+
+	/**
+	 * Returns the receiver Phase Center Offset as [E, N, U] in metres for the given
+	 * antenna type, satellite system, and frequency band, loaded from the ANTEX CSV.
+	 *
+	 * @param antennaTypeKey  Normalised antenna type string, e.g. {@code "TRM115000.00 NONE"}.
+	 *                        Must match the normalised form stored during {@link #readCSV}.
+	 * @param ssi             Satellite system identifier char, e.g. {@code 'G'} for GPS.
+	 * @param freq            Frequency band number, e.g. {@code 1} for L1, {@code 5} for L5.
+	 * @return [E, N, U] in metres, or {@code null} if not found in the CSV.
+	 */
+	public double[] getRxPCO_ENU(String antennaTypeKey, char ssi, int freq) {
+		HashMap<Character, HashMap<Integer, double[]>> ssiMap = rxAntMap.get(antennaTypeKey);
+		if (ssiMap == null) return null;
+		HashMap<Integer, double[]> freqMap = ssiMap.get(ssi);
+		if (freqMap == null) return null;
+		return freqMap.get(freq);
 	}
 
 	/**
@@ -150,7 +181,11 @@ public class Antenna {
 		if (satAntList == null) {
 			// No PCO data: return uncorrected position so the satellite is still usable
 			System.arraycopy(satMC, 0, satPC_windUp, 0, 3);
-			System.err.println("Sat " + SVID + " PCO info unavailable for frequency - " + freq + " !");
+			String _warnKey = SSI + SVID + "_" + freq;
+			if (_pcoWarnedSet.add(_warnKey)) {
+				System.err.println("Sat " + SVID + " PCO info unavailable for frequency - " + freq
+						+ " ! (not calibrated in ATX — using uncorrected satellite position)");
+			}
 			return satPC_windUp;
 		}
 

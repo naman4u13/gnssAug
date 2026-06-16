@@ -112,7 +112,12 @@ public class SINEX {
 
 			}
 			input.close();
-			return compute_ARP_PCO(MM, deltaARP, PCO, obsvCode);
+			Map<String, Object> result = new HashMap<>(compute_ARP_PCO(MM, deltaARP, PCO, obsvCode));
+			if (antennaType[0] != null) {
+				String key = antennaType[0] + (antennaType[1] != null ? " " + antennaType[1] : "");
+				result.put("antennaType", key);
+			}
+			return result;
 
 		} catch (
 
@@ -135,7 +140,6 @@ public class SINEX {
 			double[] pco = PCO.containsKey(SSI) ? PCO.get(SSI).getOrDefault(freq, null) : null;
 			double[] pco_ecef = new double[3];
 			if (pco == null) {
-				System.err.println("Rx PCO info unavailable for frequency - " + obsvCode + " !");
 				PCO_ECEF.put(obsvCode, new double[3]);
 				continue;
 			}
