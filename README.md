@@ -1,31 +1,23 @@
 # gnssAug
 
-**A Java engine for decimeter-level smartphone GNSS positioning**, built to implement and validate the PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, Department of Geomatics Engineering, University of Calgary, 2026). It processes both consumer smartphone GNSS (raw Android `GnssLogger` logs) and geodetic-grade receiver data (RINEX 3 + IGS/MGEX precise products) through a shared stack of physical correction models, Kalman filter estimators, and a full Java port of the TU Delft **LAMBDA 4.0** integer ambiguity resolution toolbox.
+A Java engine for high-precision GNSS positioning. It processes both consumer smartphone GNSS (raw Android `GnssLogger` logs) and geodetic-grade receiver data (RINEX 3 + IGS/MGEX precise products) through a shared stack of physical correction models, Kalman filter estimators, and a full Java port of the TU Delft **LAMBDA 4.0** integer ambiguity resolution toolbox — covering everything from single-epoch least squares to a full undifferenced-uncombined Precise Point Positioning (PPP) filter with cycle-slip detection and repair.
 
-📖 **[Full documentation is in `docs/`](docs/README.md)** — ten documents tracing every estimator and physical model in this codebase back to the thesis chapter that derived it.
+The codebase originated as the implementation and validation vehicle for a PhD thesis on smartphone GNSS positioning; that research record — motivation, theory, and validated experiment results — lives in [`docs/thesis/`](docs/thesis/README.md) and is worth reading for the *why*. This README and the rest of `docs/` describe the codebase as it stands today.
 
-## The problem
+## What's in here
 
-Smartphone GNSS chipsets expose raw carrier-phase and Doppler measurements, which in principle enables decimeter-level positioning on commodity hardware. In practice, three things stand in the way, all specific to low-cost, consumer-grade GNSS hardware:
+- **Two positioning stacks**: `Android.*` for consumer raw-log data (Google Decimeter Challenge and general `GnssLogger` captures), `Rinex.*`/`IGS.*` for RINEX 3 observations and geodetic reference stations — sharing the same correction models and estimator families.
+- **A family of Kalman filters**: from conventional position/velocity random-walk EKFs, through a Doppler-driven filter that automates process-noise tuning, an adaptive filter that learns measurement noise in real time, a hierarchical cycle-slip detection-and-repair engine, up to a full PPP filter.
+- **A full LAMBDA 4.0 port**: ILS, IA-FFRT, BIE, PAR, PAR-FFRT, IR, IB, plus a Monte Carlo variance-estimation engine — used for both cycle-slip repair and ambiguity resolution.
+- **Standard GNSS file-format support**: RINEX 3, SP3, CLK, ANTEX, IONEX, SINEX, DCB/OSB bias files, plus Android raw logs and Google Decimeter Challenge CSVs.
 
-1. **Erratic dynamics** — a phone moves unpredictably (pocketed, handheld, running, driving), so a Kalman filter's process-noise model (`Q`), normally hand-tuned, can't keep up.
-2. **Volatile measurement quality** — signal quality swings from open sky to urban canyon far faster than a fixed elevation/C-N₀ weighting table can track.
-3. **Chronic cycle slips** — smartphone antennas and oscillators lose carrier-phase lock constantly. The standard fix — reset the ambiguity and start over — is stable but destroys the precision that carrier phase exists to provide.
+## Documentation
 
-> *"For geodetic receivers, cycle slips are occasional anomalies. For smartphones, they are a chronic condition."*
+📖 **[docs/](docs/README.md)** is split into two tracks:
 
-This codebase's central position, matching the thesis: **don't discard corrupted phase — repair it.** Estimate the cycle slip as a stochastic integer with an associated variance, and feed that repair back into the filter rather than resetting.
-
-## The three pillars
-
-| Pillar | What it does | Headline result | Code | Docs |
-|---|---|---|---|---|
-| **1a. Robust Dynamics** — Doppler-Based Prediction (DBP) | Drives Kalman filter state prediction from Doppler-derived velocity instead of a heuristic motion model, which automates process-noise (`Q`) estimation | **57%** lower horizontal RMSE than standard Doppler-aided filters under mismatched dynamics (17.89 m → 7.75 m); eliminates 1,800+ false outlier flags | `EKFDoppler` | [docs/03](docs/03-pillar1-dbp.md) |
-| **1b. Adaptive Stochastics** — AKF via Variance Component Estimation | Learns the true measurement noise (`R`) in real time from the innovation sequence, binned by elevation angle and C/N₀, instead of a static look-up table | **35.4%** (static) / **27.3%** (vehicular) horizontal accuracy gain over the best conventional filter; de-weights noisy measurements instead of discarding them, preserving geometry | `AKFDoppler` | [docs/04](docs/04-pillar1-akf-vce.md) |
-| **2. Cycle Slip Detection & Repair (CSDR)** | A hierarchical framework fusing Android hardware flags with geometry-free/geometry-based statistical detection, then resolving slips as integers via LAMBDA (ILS, BIE, PAR, PAR-FFRT, IA-FFRT) with a stochastic "soft fix" | Hybrid detection found **1,783** unique slips vs. 1,108–1,243 from either source alone; PAR-FFRT repairs **~79%** of slips at **<1%** failure rate | `EKF_TDCP_ambFix2`, `helper.lambdaNew.*` | [docs/05](docs/05-cycle-slip-detection.md), [docs/06](docs/06-lambda-estimators.md) |
-| **3. Validation — UU-PPP Engine** | Integrates CSDR into a custom Undifferenced-Uncombined, ionosphere-constrained PPP filter with decoupled code/phase clocks, validated against IGS reference data and real smartphones | On IGS data with 1,045 artificial slips: repaired accuracy matches the clean baseline (15.9 cm vs 16.0 cm Up RMSE) vs. 52.9 cm for reset. On real Pixel 4 data: **45%** vertical RMSE improvement, 2-min convergence success up from 65%→88% | `Rinex.estimation.EKF_PPP` | [docs/07](docs/07-ppp-engine.md) |
-
-Positioning also supports plain code-based baselines (`LLS_CODE`, `WLS_CODE`, `RINEX_EKF_CODE`) and loose GNSS/INS fusion (`GNSS_INS`) as comparison points against the three pillars above. See [docs/10](docs/10-results-and-recommendations.md) for every quantified result in one place, and [docs/01](docs/01-motivation-and-problem.md) for the full motivation and publication list.
+- **Living reference** (`docs/*.md`) — package-by-package documentation of the codebase as it exists today: [architecture](docs/architecture.md), the Android pipeline, the RINEX/IGS pipeline, the Kalman filter family, the PPP engine, the LAMBDA estimators, physical correction models, file parsers, and utilities. This is the entry point for extending or understanding the current code.
+- **Thesis record** (`docs/thesis/`) — the original PhD thesis this codebase implements: full theoretical derivations, and validated experiment results with real numbers, datasets, and figures. Frozen as of the thesis defense; a great read for the research story, not necessarily in sync with the current code.
+- **Generated API docs** — method-level Javadoc, published at [naman4u13.github.io/gnssAug](https://naman4u13.github.io/gnssAug/), regenerated on every push.
 
 ## Architecture
 
@@ -37,16 +29,16 @@ flowchart TD
     D --> E[Filtering<br/>elevation/SNR mask · discard list · chi-squared + w-test outlier rejection]
     E --> F{EstimatorMode}
     F --> G1[LS / WLS<br/>code-only baseline]
-    F --> G2["EKF — DBP / Adaptive KF<br/>(Pillar 1)"]
-    F --> G3["EKF — TDCP + hierarchical CSDR<br/>(Pillar 2)"]
-    F --> G4["EKF — UU-PPP float / AR<br/>(Pillar 3)"]
+    F --> G2[EKF family<br/>DBP / Adaptive KF]
+    F --> G3[EKF TDCP<br/>+ cycle-slip detection/repair]
+    F --> G4[PPP filters<br/>float / AR]
     G1 --> H[Analysis & plotting<br/>ENU RMS/95th-pct · residuals · DOP · GraphPlotter / ppp_viewer.py]
     G2 --> H
     G3 --> H
     G4 --> H
 ```
 
-Four top-level pipelines cover the datasets used across the thesis: `Android.Android` (raw logs, kinematic, Google Decimeter Challenge ground truth), `Android.Android_Static` (raw logs, static benchmark at a surveyed point), `Android.Android_Static_Rinex` (Android data via the RINEX/PPP pipeline), and `IGS.IGS` (RINEX + MGEX products, geodetic reference stations). Full package layout, the `EstimatorMode` dispatch table, and the per-pipeline breakdown are in **[docs/02 — Architecture](docs/02-architecture.md)**.
+Four top-level pipelines: `Android.Android` (raw logs, kinematic), `Android.Android_Static` (raw logs, static benchmark at a surveyed point), `Android.Android_Static_Rinex` (Android data via the RINEX/PPP pipeline), and `IGS.IGS` (RINEX + MGEX products, geodetic reference stations). Full package layout and the `EstimatorMode` dispatch table are in **[docs/architecture.md](docs/architecture.md)**.
 
 ## Requirements
 
@@ -69,11 +61,11 @@ mvn exec:java -Dexec.mainClass=com.gnssAug.MainApp
 
 ## Data formats supported
 
-RINEX 3 (observation & navigation), SP3 (precise orbits), CLK (precise clocks), ANTEX-derived antenna PCO/PCV, IONEX (Global Ionosphere Maps), SINEX (station solutions), DCB and OSB bias files (MGEX SINEX BIAS format), raw Android `GnssLogger` logs, and Google Smartphone Decimeter Challenge `derived.csv` / ground-truth CSVs. Full detail in [docs/09](docs/09-file-formats-and-parsers.md).
+RINEX 3 (observation & navigation), SP3 (precise orbits), CLK (precise clocks), ANTEX-derived antenna PCO/PCV, IONEX (Global Ionosphere Maps), SINEX (station solutions), DCB and OSB bias files (MGEX SINEX BIAS format), raw Android `GnssLogger` logs, and Google Smartphone Decimeter Challenge `derived.csv` / ground-truth CSVs. Full detail in [docs/file-formats-and-parsers.md](docs/file-formats-and-parsers.md).
 
 ## Status
 
-Active research codebase — see `git log` for the chronological build-out (Monte Carlo variance weighting → PPP for IGS stations → solid Earth tide & phase wind-up → OSB/DCB bias handling → BSD integer ambiguity resolution → dual-frequency PPP → Android RINEX support → kinematic smartphone PPP → cycle-slip detection using Android API ADR state). Not packaged for external reuse: paths and station configuration are embedded in `MainApp` and adjacent pipeline classes rather than externalized to config files. Device compatibility for the CSDR/PPP path is limited — see the [device suitability checklist](docs/10-results-and-recommendations.md) in docs/10 before pointing it at a new phone.
+Active research codebase — see `git log` for the chronological build-out. Not packaged for external reuse: paths and station configuration are embedded in `MainApp` and adjacent pipeline classes rather than externalized to config files. Device compatibility for the smartphone cycle-slip-repair/PPP path is limited — see the device suitability checklist in [docs/thesis/10-results-and-recommendations.md](docs/thesis/10-results-and-recommendations.md) before pointing it at a new phone.
 
 ## License
 

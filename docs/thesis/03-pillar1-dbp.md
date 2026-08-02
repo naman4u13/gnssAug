@@ -60,6 +60,14 @@ Outlier rejection uses Baarda's Iterative Data Snooping on two levels: innovatio
 
 **Dataset:** Google Smartphone Decimeter Challenge, `2021-04-29-US-SJC-2`, Samsung Galaxy S20 Ultra + Google Pixel 4 (both Snapdragon 865), driven around the San Francisco Bay Area, ground truth from NovAtel SPAN + Waypoint Inertial Explorer. GPS + Galileo + BeiDou, single-frequency only (mass-market representative).
 
+<p align="center"><img src="images/fig3-1.jpeg" width="70%" alt="Pseudorange and Doppler error for GPS L1 + GAL E1 + BDS B1I"></p>
+
+*Figure 3-1 — Pseudorange and Doppler error for GPS L1 + GAL E1 + BDS B1I. Pseudorange error is on the order of tens of metres; Doppler error is ≈1 m/s.*
+
+<p align="center"><img src="images/fig3-2.jpeg" width="70%" alt="Delta-range from GPS PRN 28 observables, Samsung Galaxy S20 Ultra"></p>
+
+*Figure 3-2 — Delta-range from GPS PRN 28 observables (Samsung Galaxy S20 Ultra). Doppler- and phase-derived delta-ranges show an "inter observation-type bias" against pseudorange-derived delta-range (attributed to receiver clock drift), while Doppler and carrier-phase delta-ranges track each other closely — the empirical basis for using Doppler as a carrier-phase stand-in in DBP.*
+
 ### With correctly-tuned `Q` (2D RMSE, m)
 
 | Filter | S20 Ultra | Pixel 4 |
@@ -72,6 +80,13 @@ Outlier rejection uses Baarda's Iterative Data Snooping on two levels: innovatio
 
 With a correctly tuned `Q`, DBP and VRWD perform comparably — **VRWD can even slightly outperform DBP** when its `Q` is well tuned. DBP's advantage isn't accuracy under ideal tuning; it's that its `Q` estimation is fully automated.
 
+<p align="center">
+  <img src="images/fig3-3.png" width="48%" alt="FDE processed ENU positioning results">
+  <img src="images/fig3-4.png" width="48%" alt="FDE processed horizontal positioning results">
+</p>
+
+*Figure 3-3 / 3-4 — FDE-processed ENU and horizontal positioning results under correctly-tuned `Q`.*
+
 ### With deliberately mistuned `Q` (2D RMSE, m; PSD reduced ×30 for VRW/VRWD, ×10 for PRW)
 
 | Filter | S20 (no FDE) | S20 (with FDE) | Pixel 4 (no FDE) | Pixel 4 (with FDE) |
@@ -83,9 +98,27 @@ With a correctly tuned `Q`, DBP and VRWD perform comparably — **VRWD can even 
 
 This is the headline robustness result: with a maladjusted `Q` and FDE enabled, PRW and VRW blow up to hundreds of metres of error (FDE actively makes it *worse*, since it starts rejecting good measurements based on the wrong `Q`), while DBP's numbers are completely unchanged from the well-tuned case — because its `Q` can't be maladjusted, it's measured every epoch. Outlier counts confirm the mechanism: with incorrect `Q`, VRWD's outlier flags jump from 1,149 to 2,967 (many good measurements wrongly rejected), while DBP stays essentially flat at 1,149→1,161.
 
+<p align="center"><img src="images/fig3-5.png" width="55%" alt="Horizontal position trajectory"></p>
+
+*Figure 3-5 — Horizontal position trajectory. With correct `Q`, VRWD and DBP track the true path closely; with incorrect `Q`, conventional EKFs visibly deviate during vehicle turns and take time to re-converge, while DBP stays on-track.*
+
+<p align="center">
+  <img src="images/fig3-6.png" width="48%" alt="Outliers in pseudorange measurements for VRWD filter">
+  <img src="images/fig3-7.png" width="48%" alt="Outliers in pseudorange measurements for the DBP filter">
+</p>
+
+*Figure 3-6 / 3-7 — Outlier flags in pseudorange measurements: VRWD (left, correct `Q` above / incorrect `Q` below) vs. DBP (right). VRWD's outlier count roughly doubles under incorrect `Q`; DBP's is essentially unchanged.*
+
 ### L5 vs L1 (Google Pixel 4)
 
 L5 pseudorange is markedly cleaner than L1 (SD 37.46 m vs 50.17 m) despite far worse satellite geometry (7.8 vs 16.4 average satellites, PDOP 6.92 vs 1.45), and produces better positioning accuracy in the correctly-tuned case — but degrades faster under outlier rejection due to lower measurement redundancy. DBP's robustness advantage under incorrect dynamics holds on both bands (2D error with FDE: DBP 10.56 m / 9.57 m on L5/L1 vs. PRW's 472.95 m / 278.11 m).
+
+<p align="center">
+  <img src="images/fig3-8.jpeg" width="48%" alt="Pseudorange and Doppler error for L5 vs L1, Pixel 4">
+  <img src="images/fig3-9.jpeg" width="48%" alt="Satellite count and DOP of Google Pixel 4 handset">
+</p>
+
+*Figure 3-8 / 3-9 — L5 vs L1 pseudorange/Doppler error (left) and satellite count/DOP (right), Google Pixel 4. L5 is cleaner per-measurement but has markedly worse geometry.*
 
 ## Conclusion (as stated in the thesis)
 

@@ -90,6 +90,34 @@ R₂ / R₁ > μ(P_f, n)
 
 (Failure-rate threshold for FFRT: 0.1%. Minimum success-rate threshold for PAR: 99%. BIE confidence: `1 − 10⁻⁴`. Adding L5 to L1 roughly **quadruples** the number of detected slips due to the added redundancy and geometry.)
 
+<p align="center">
+  <img src="images/fig6-1a.jpeg" width="48%" alt="AR estimators result for L1 signals, part 1">
+  <img src="images/fig6-1b.jpeg" width="48%" alt="AR estimators result for L1 signals, part 2">
+</p>
+
+*Figure 6-1 — TDCP error (cycles) per estimator, L1 signals; top rows are pre-repair (Inliers / CS Detect / CS Repair), bottom rows are the same epochs after repair.*
+
+<p align="center">
+  <img src="images/fig6-2a.jpeg" width="48%" alt="Histograms for Figure 6-1, part 1">
+  <img src="images/fig6-2b.jpeg" width="48%" alt="Histograms for Figure 6-1, part 2">
+</p>
+
+*Figure 6-2 — Corresponding histograms for Figure 6-1 (L1). Pre-repair σ ≈ 10–12 cycles collapses to post-repair σ ≈ 0.2–0.32 cycles across all four estimators shown.*
+
+<p align="center">
+  <img src="images/fig6-3a.jpeg" width="48%" alt="AR estimators result for L1+L5 signals, part 1">
+  <img src="images/fig6-3b.jpeg" width="48%" alt="AR estimators result for L1+L5 signals, part 2">
+</p>
+
+*Figure 6-3 — Same layout as Figure 6-1, for L1+L5 signals.*
+
+<p align="center">
+  <img src="images/fig6-4a.jpeg" width="48%" alt="Histograms for Figure 6-3, part 1">
+  <img src="images/fig6-4b.jpeg" width="48%" alt="Histograms for Figure 6-3, part 2">
+</p>
+
+*Figure 6-4 — Corresponding histograms for Figure 6-3 (L1+L5), all five estimators. Post-repair σ collapses to ≈0.24–0.31 cycles across the board.*
+
 ### Verdict per estimator
 
 - **ILS — high risk.** 100% repair rate, but no validation: on L1 that means roughly **1 in 20 repairs introduces a cycle error**, which is unacceptable to feed back into a position filter.

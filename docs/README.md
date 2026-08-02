@@ -1,30 +1,27 @@
-# gnssAug Documentation
+# Documentation
 
-Detailed technical documentation for the gnssAug GNSS positioning engine, tracing each module back to the PhD thesis it implements: *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, University of Calgary, 2026). See [CITATION.md](../CITATION.md) and the top-level [README.md](../README.md) for the project overview.
+This folder has two tracks, deliberately kept separate so one doesn't rot while the other is maintained.
 
-## Reading order
+## Living reference (this folder)
 
-| # | Document | Covers |
-|---|---|---|
-| 1 | [Motivation & Problem Statement](01-motivation-and-problem.md) | Why this exists, the three failure points in smartphone GNSS, the three-pillar solution, performance metric definitions, publications |
-| 2 | [Architecture](02-architecture.md) | Package layout, `EstimatorMode` dispatch table, entry points, processing pipeline |
-| 3 | [Pillar 1a — Doppler-Based Prediction](03-pillar1-dbp.md) | Complementary-filter theory, automated process-noise (`Q`) estimation, FDE, results |
-| 4 | [Pillar 1b — Adaptive Kalman Filter (VCE)](04-pillar1-akf-vce.md) | Variance Component Estimation, elevation/C-N₀ binning, real-time `R` adaptation, results |
-| 5 | [Pillar 2a — Cycle Slip Detection](05-cycle-slip-detection.md) | Android ADR hardware states, geometry-free/geometry-based detection, the 9-step hierarchical pipeline |
-| 6 | [Pillar 2b — LAMBDA Estimators & Stochastic Repair](06-lambda-estimators.md) | ILS, IA-FFRT, BIE, PAR, PAR-FFRT — Monte Carlo variance estimation, comparative results, code map |
-| 7 | [Pillar 3 — UU-PPP Engine](07-ppp-engine.md) | Observation model, state vector, rank deficiencies, CSDR integration, IGS + smartphone validation results |
-| 8 | [Physical Correction Models](08-corrections-and-models.md) | Satellite position/clock, ionosphere, troposphere, solid Earth tide, phase wind-up, antenna PCO/PCV |
-| 9 | [File Formats & Parsers](09-file-formats-and-parsers.md) | RINEX, SP3, CLK, ANTEX, IONEX, SINEX, DCB/OSB, Android raw logs, Decimeter Challenge CSVs |
-| 10 | [Results Summary & Recommendations](10-results-and-recommendations.md) | Every headline number in one place, implementation recommendations, device suitability checklist, future work |
+Package-by-package documentation of the codebase **as it exists today**. Present tense, no historical claims, no thesis-chapter framing — this is what gets updated whenever the code changes. Method-level detail is deferred to the generated Javadoc (published at [naman4u13.github.io/gnssAug](https://naman4u13.github.io/gnssAug/)) rather than duplicated here.
 
-## Quick map: thesis chapter → doc → code
+| Doc | Covers |
+|---|---|
+| [architecture.md](architecture.md) | Package layout, the four entry-point pipelines, the `EstimatorMode` dispatch table, the processing pipeline — start here |
+| [android-pipeline.md](android-pipeline.md) | `Android.*` — entry points, constants, non-KF estimation, file parsers/models, INS support |
+| [kalman-filters.md](kalman-filters.md) | `Android.estimation.KalmanFilter.*` — every EKF/AKF variant except the PPP filters |
+| [rinex-igs-pipeline.md](rinex-igs-pipeline.md) | `IGS.*`, non-PPP `Rinex.estimation.*`, IGS/Rinex data models |
+| [ppp-engine.md](ppp-engine.md) | The PPP filter family across `Rinex.estimation.*` and `Android.estimation.KalmanFilter.*` |
+| [lambda-ambiguity-resolution.md](lambda-ambiguity-resolution.md) | `helper.lambdaNew.*` (LAMBDA 4.0 port) and the legacy `helper.lambda.*` |
+| [corrections-and-models.md](corrections-and-models.md) | `helper.Compute*` — satellite position/clock, ionosphere, troposphere, solid Earth tide |
+| [file-formats-and-parsers.md](file-formats-and-parsers.md) | Every supported file format and its parser |
+| [utilities.md](utilities.md) | `com.gnssAug.utility.*` — linear algebra, geodesy, time, weighting, plotting |
 
-| Thesis chapter | Doc | Primary package |
-|---|---|---|
-| Ch. 1–2 (Intro, literature) | [01](01-motivation-and-problem.md) | — |
-| Ch. 3 (Robust Dynamics / DBP) | [03](03-pillar1-dbp.md) | `Android.estimation.KalmanFilter.EKFDoppler` |
-| Ch. 4 (Adaptive Variance / AKF) | [04](04-pillar1-akf-vce.md) | `Android.estimation.KalmanFilter.AKFDoppler` |
-| Ch. 5 (Cycle Slip Detection) | [05](05-cycle-slip-detection.md) | `Android.estimation.KalmanFilter.EKF_TDCP_ambFix2` |
-| Ch. 6 (Stochastic Repair Engine) | [06](06-lambda-estimators.md) | `helper.lambdaNew.*` |
-| Ch. 7 (PPP Validation) | [07](07-ppp-engine.md) | `Rinex.estimation.EKF_PPP` |
-| Ch. 8 (Conclusion) | [10](10-results-and-recommendations.md) | — |
+## Thesis record ([`thesis/`](thesis/README.md))
+
+The PhD thesis this codebase originally implemented and validated: full motivation, theoretical derivations, and experiment results tied to specific datasets and figures. Frozen as of the thesis defense — read it for the research story and the "why," not as a guide to the current code. Start at [thesis/README.md](thesis/README.md).
+
+## Generated API docs
+
+Method-level Javadoc is generated from source via `mvn javadoc:javadoc` and published to GitHub Pages on every push to `master`: **[naman4u13.github.io/gnssAug](https://naman4u13.github.io/gnssAug/)**. This is the authoritative source for method signatures, parameters, and return values — the living docs above intentionally don't duplicate it.

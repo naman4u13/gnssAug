@@ -51,6 +51,10 @@ All non-AKF filters use the Tay & Marais combined elevation/C-N₀ model:
 
 which the thesis critiques directly: single-parameter models are insufficient in urban environments — elevation-only penalizes clean low-elevation signals, C/N₀-only ignores geometric propagation error — and the function still needs a scale factor tied to the dataset's real noise level.
 
+<p align="center"><img src="images/fig4-1.png" width="55%" alt="Pseudorange error for GPS L1 + GAL E1 + BDS B1I"></p>
+
+*Figure 4-1 — Pseudorange error for GPS L1 + GAL E1 + BDS B1I across the three datasets used below.*
+
 ## Datasets
 
 | Scenario | Dataset label | Device |
@@ -59,6 +63,21 @@ which the thesis critiques directly: single-parameter models are insufficient in
 | Bicycle | T-A-SIS-09 (same source) | Xiaomi Mi 10T Pro |
 | Vehicle (urban) | Google Smartphone Challenge 2021, `2021-04-29-SJC-2` | Samsung S20 Ultra (BCM47755) |
 
+<p align="center">
+  <img src="images/fig4-2a.png" width="32%" alt="Stationary dataset trajectory">
+  <img src="images/fig4-2b.png" width="32%" alt="Bicycle dataset trajectory">
+  <img src="images/fig4-2c.png" width="32%" alt="Vehicle dataset trajectory">
+</p>
+
+*Figure 4-2 — Stationary, bicycle, and vehicle-based smartphone GNSS datasets (left to right).*
+
+<p align="center">
+  <img src="images/fig4-3a.png" width="48%" alt="SD function based on elevation angle">
+  <img src="images/fig4-3b.png" width="48%" alt="SD function based on C/N0 ratio">
+</p>
+
+*Figure 4-3 — Standard deviation function based on elevation angle and C/N₀ ratio — the Tay & Marais baseline model being critiqued above.*
+
 ## Results (RMSE, m)
 
 | Scenario | WLS | 2nd-best baseline | Proposed AKF | Horizontal gain | Vertical gain |
@@ -66,6 +85,22 @@ which the thesis critiques directly: single-parameter models are insufficient in
 | **Static** | 13.10 (2D) | PRW 7.34 (2D) | **4.74 (2D) / 15.03 (3D)** | **35.4%** vs PRW | **13.2%** vs PRW |
 | **Bicycle** | 4.01 (2D) | DBP 2.58 (2D) | **2.31 (2D) / 2.97 (3D)** | **10.5%** vs DBP | **50.5%** vs DBP |
 | **Vehicle** | 10.66 (2D) | VRWD 7.24 (2D) | **5.26 (2D) / 6.61 (3D)** | **27.3%** vs VRWD | **59.6%** vs VRWD |
+
+<p align="center">
+  <img src="images/fig4-4a.png" width="32%" alt="Adaptive SD vs true SD, stationary">
+  <img src="images/fig4-4b.png" width="32%" alt="Adaptive SD vs true SD, bicycle">
+  <img src="images/fig4-4c.png" width="32%" alt="Adaptive SD vs true SD, vehicle">
+</p>
+
+*Figure 4-4 — VCE-adapted measurement-noise SD vs. true SD (stationary / bicycle / vehicle). The adaptive SD tracks the true noise level far more closely than the fixed elevation/C-N₀ mapping in Figure 4-3, especially at high elevation and C/N₀ where the fixed model underestimates noise.*
+
+<p align="center"><img src="images/fig4-5.jpeg" width="70%" alt="Proposed AKF vs conventional methods"></p>
+
+*Figure 4-5 — Proposed AKF (purple) vs. conventional methods (WLS, PRW/VRW, DBP) in static and kinematic environments — notably smoother trajectories and reduced Up-component noise.*
+
+<p align="center"><img src="images/fig4-6.jpeg" width="70%" alt="Horizontal positioning results"></p>
+
+*Figure 4-6 — Horizontal positioning results, all filters, all scenarios.*
 
 ### Why de-weighting beats exclusion (vehicle dataset)
 
@@ -78,6 +113,13 @@ Running FDE purely as a diagnostic (not to actually exclude anything) after `R` 
 | VRWD | 65,574 | 678 |
 
 Only 67 of the AKF's measurements would even be flagged as outliers by a fixed-`R` test, versus 650+ for the other filters — because the AKF correctly inflates the variance of multipath-affected measurements, their *normalized* innovation (innovation ÷ σ) drops below the rejection threshold, and they're retained (de-weighted) rather than excluded. This preserves satellite geometry that a fixed-variance filter loses whenever it rejects ~650 measurements. The normalized-residual histogram confirms this quantitatively: AKF SD ≈ **1.48** (close to the ideal standard-normal), vs. ≈ **2.09–2.10** for DBP/VRWD.
+
+<p align="center">
+  <img src="images/fig4-7.jpeg" width="48%" alt="Outliers in normalized pseudorange errors, vehicle dataset">
+  <img src="images/fig4-8.png" width="48%" alt="Histogram of normalized pseudorange errors, vehicle dataset">
+</p>
+
+*Figure 4-7 / 4-8 — Outliers (left) and histogram (right) of normalized pseudorange errors across filters, vehicle dataset. Red bars mark FDE-flagged outliers; the AKF's histogram sits closest to a standard normal.*
 
 ## Conclusion (as stated in the thesis)
 

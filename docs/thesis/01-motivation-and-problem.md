@@ -1,6 +1,6 @@
 # Motivation and Problem Statement
 
-> Source: PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, University of Calgary, Department of Geomatics Engineering, 2026), Chapter 1. See [CITATION.md](../CITATION.md).
+> Source: PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, University of Calgary, Department of Geomatics Engineering, 2026), Chapter 1. See [CITATION.md](../../CITATION.md).
 
 ## Why this exists
 

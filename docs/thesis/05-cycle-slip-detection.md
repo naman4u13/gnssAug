@@ -40,6 +40,13 @@ test qty = (Φ_{k+Δt} − Φ_k) − ((D_{k+Δt} + D_k)/2)·Δt = λ·CS + ε
 
 But it's only good for *large* slips: both Doppler and phase can have standard deviations as large as ½ an L1 cycle in kinematic data, so it can't reliably catch small slips, and systematic Doppler/TDCP biases in smartphone data can also trigger false alarms if used too aggressively.
 
+<p align="center">
+  <img src="images/fig5-1.png" width="48%" alt="Carrier phase and Doppler derived delta-range error in cycles">
+  <img src="images/fig5-2.png" width="48%" alt="Test quantity for different GF-CSD combinations">
+</p>
+
+*Figure 5-1 / 5-2 — Left: carrier-phase and Doppler-derived delta-range error (cycles), GPS L1 + GAL E1 + BDS B1I. Right: test quantity for different GF-CSD combinations (GF, MW, PMC, Phase-Prediction) — GF and Phase-Prediction are cm-level, MW and PMC are metre-level because they inherit pseudorange noise.*
+
 ## Hardware-Layer Screening: Android ADR states
 
 The Android `GnssMeasurement` API exposes an **Accumulated Delta Range (ADR) State** bitfield per measurement — a hardware-layer diagnostic straight from the chipset's phase-lock loop, not something Android computes itself (it's a mandatory pass-through field the chipset vendor's HAL driver populates).
@@ -90,6 +97,10 @@ Runs inside a **Velocity-based Kalman Filter (VKF)**, strictly sequential per ep
 ## Validation
 
 Galileo E1C PRN 29, Google Pixel 7 Pro, ~510–555 s window: `ADR_STATE_CYCLE_SLIP` was raised by the chipset at 7 distinct epochs, all of which the framework correctly flagged as repair candidates. But **at epoch 520 the framework detected a slip the chipset never flagged** — caught purely by the geometry-based fine check — directly demonstrating why the hybrid (hardware + model) approach is necessary rather than trusting either source alone. Cross-checked at scale on the Pixel 4 dataset (Ch. 7): chipset-only detection found 1,108 Galileo slips, model-only found 1,243, and the **hybrid found 1,783** — each source catches slips the other misses.
+
+<p align="center"><img src="images/fig5-3.jpeg" width="80%" alt="Proposed cycle slip detection, Pixel 7 Pro E1C PRN 29"></p>
+
+*Figure 5-3 — Proposed cycle-slip detection on Google Pixel 7 Pro data, Galileo E1C PRN 29. Blue squares = detected by the hierarchical engine; maroon diamonds = forced ambiguity reset; the epoch-520 slip (detected without a chipset flag) is visible here.*
 
 ## Code
 

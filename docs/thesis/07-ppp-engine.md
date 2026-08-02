@@ -67,6 +67,10 @@ The CSDR module is not a pre-processing pass — it's a **tightly coupled feedba
 
 **Setup:** 15 minutes of 1 Hz RINEX from IGS station **AJAC** (Ajaccio, France), 18 July 2024, GPS L1+L5, 10 satellites throughout, WUM MGEX final products. **1,045 artificial cycle slips** were injected into 6 satellites (PRN 5, 10, 16, 18, 23, 26) at 3–8 s intervals — about 7.3% of the data.
 
+<p align="center"><img src="images/fig7-1.jpeg" width="70%" alt="Satellite count, signal availability, and DOP of IGS validation data"></p>
+
+*Figure 7-1 — Satellite count, signal availability, and DOP for the IGS AJAC validation dataset.*
+
 | Case | Strategy | Up RMSE |
 |---|---|---|
 | 1 — Clean baseline | no slips | 16.0 cm |
@@ -75,16 +79,78 @@ The CSDR module is not a pre-processing pass — it's a **tightly coupled feedba
 
 Repair recovers accuracy statistically indistinguishable from the clean baseline; Reset triples the vertical error. Both strategies show the same "staircase" jump in the ambiguity state when a slip hits, but Reset shows a visible re-convergence wobble afterward, while Repair jumps instantaneously with **zero** convergence cost — it's just adding the (correctly estimated) slip value to the existing, still-precise ambiguity.
 
+<p align="center">
+  <img src="images/fig7-2a.jpeg" width="48%" alt="Carrier phase innovation, Case 1/3 vs Case 2">
+  <img src="images/fig7-2b.jpeg" width="48%" alt="Carrier phase innovation, Case 2 detail">
+</p>
+
+*Figure 7-2 — Carrier-phase innovation (m). Left: Case 1/3 (slips absent or repaired) stays stable; right: Case 2 (slips present, unrepaired) shows clear discontinuities.*
+
+<p align="center">
+  <img src="images/fig7-3a.jpeg" width="48%" alt="Phase ambiguity, Case 1">
+  <img src="images/fig7-3b.jpeg" width="48%" alt="Phase ambiguity, Case 2 and 3">
+</p>
+
+*Figure 7-3 — Phase ambiguity (cycles). Left: Case 1 (no artificial slips); right: Case 2 & 3 (slips introduced) — both show the same staircase step, but only Reset (Case 2) shows a re-convergence wobble afterward.*
+
+<p align="center">
+  <img src="images/fig7-4a.jpeg" width="48%" alt="ENU positioning error, Case 1/3">
+  <img src="images/fig7-4b.jpeg" width="48%" alt="ENU positioning error, Case 2">
+</p>
+
+*Figure 7-4 — ENU positioning error (m). Left: Case 1 and 3 (slips absent or repaired); right: Case 2 (slips present, unrepaired) — the ambiguity resets visibly propagate into position error.*
+
 ## Validation 2 — real smartphone data (Google Pixel 4)
 
 Of a wide device sweep (Pixel 4/5/7 Pro/8a, Samsung S22), **only the Pixel 4** had stable enough continuous raw data (clean ADR states, no aggressive clock steering) to validate CSDR properly. Location: University of Calgary, next to Alberta Survey Control Marker ASCM 419739. Three sessions: Pixel 4 Fall (21 Nov 2025), Pixel 4 Winter (28 Jan 2025), Pixel 7 Pro (21 Nov 2025).
+
+<p align="center">
+  <img src="images/fig7-5a.jpeg" width="32%" alt="Dataset collection near University of Calgary campus, part 1">
+  <img src="images/fig7-5b.jpeg" width="32%" alt="Dataset collection near University of Calgary campus, part 2">
+  <img src="images/fig7-5c.jpeg" width="32%" alt="Dataset collection near University of Calgary campus, part 3">
+</p>
+
+*Figure 7-5 — Dataset collection near the University of Calgary campus, at Alberta Survey Control Marker ASCM 419739.*
 
 Two structural findings specific to smartphone hardware, both directly shaping the state vector above:
 
 - **Phase clock drifts by over 1,500 m (Pixel 4) / 2,000,000 m (Pixel 7 Pro)** over 15 minutes, with per-signal inter-signal biases fluctuating **±10 cm** — empirical confirmation that a single shared clock state would leave these fluctuations unmodelled and contaminate residuals.
 - **Code clock offset carries a ~−2,350 m bias** that itself evolves over time — confirming `DSB_r^Code`/`DSB_r^Phase` need to be *estimated states*, not constants.
 
+<p align="center">
+  <img src="images/fig7-6a.png" width="90%" alt="Phase and code clock offset, Pixel 4 Fall dataset">
+</p>
+<p align="center">
+  <img src="images/fig7-6b.jpeg" width="32%" alt="Pixel 4 Fall clock detail 1">
+  <img src="images/fig7-6c.jpeg" width="32%" alt="Pixel 4 Fall clock detail 2">
+  <img src="images/fig7-6d.png" width="32%" alt="Pixel 4 Fall clock detail 3">
+</p>
+
+*Figure 7-6 — Phase and code clock offset, plus per-signal DSB, Pixel 4 (Fall) dataset. Signal-specific divergences fluctuate within ±10 cm even after the common drift is removed.*
+
+<p align="center">
+  <img src="images/fig7-7a.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 1">
+  <img src="images/fig7-7b.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 2">
+</p>
+<p align="center">
+  <img src="images/fig7-7c.png" width="48%" alt="Pixel 7 Pro clock offset detail 3">
+  <img src="images/fig7-7d.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 4">
+</p>
+
+*Figure 7-7 — Phase and code clock offset, plus per-signal DSB, Pixel 7 Pro dataset — the same divergence pattern as Figure 7-6, at a larger drift magnitude.*
+
+<p align="center">
+  <img src="images/fig7-8a.jpeg" width="48%" alt="Clock drift from Doppler vs TDCP, part 1">
+  <img src="images/fig7-8b.jpeg" width="48%" alt="Clock drift from Doppler vs TDCP, part 2">
+</p>
+
+*Figure 7-8 — Clock drift derived from Doppler vs. TDCP measurements, Pixel 4. The two estimates behave nearly identically for this handset, justifying the Phase-Prediction coarse check (Ch. 5) for this device.*
+
 ### Dual-frequency (L1+L5) positioning accuracy — Pixel 4 (Fall)
+
+<p align="center"><img src="images/fig7-9.jpeg" width="70%" alt="Satellite count, signal availability, and DOP, Pixel 4 (Nov)"></p>
+
+*Figure 7-9 — Satellite count, signal availability, and DOP, Pixel 4 (Fall/Nov) dataset. ~18–22 satellites, PDOP ≈ 1.*
 
 | Constellation | Vertical RMSE, Reset | Vertical RMSE, Repair | Improvement |
 |---|---|---|---|
@@ -94,6 +160,10 @@ Two structural findings specific to smartphone hardware, both directly shaping t
 
 Repair matters most exactly where geometry is weakest: with strong combined-constellation redundancy, a single reset ambiguity gets absorbed by the rest of the solution, but in single-constellation cases with weaker geometry, resetting one satellite spikes DOP and error directly — CSDR is a stabilizer specifically for users with limited satellite visibility.
 
+<p align="center"><img src="images/fig7-10.jpeg" width="80%" alt="Pixel 4 (Nov) PPP positioning error for L1+L5"></p>
+
+*Figure 7-10 — Pixel 4 (Fall) PPP positioning error, L1+L5, Reset vs. Repair, per constellation.*
+
 ### Convergence stability (2-minute time-sliced "cold start" stress test)
 
 The 15-minute session was chopped into independent 2-minute windows, each forcing a full filter reset and re-convergence, scoring the RMSE of the last 30 seconds of each window (a proxy for realistic short smartphone sessions — check a map, lock the screen, check again).
@@ -101,6 +171,10 @@ The 15-minute session was chopped into independent 2-minute windows, each forcin
 - Average **vertical** RMSE improvement across all slices: **Galileo 38.3%**, **GPS 17.0%**, **combined GPS+GAL 35.4%**.
 - For combined GPS+Galileo, repair raised the probability of reaching sub-metre accuracy within 2 minutes **from 65% to 88%**.
 - Mechanism: resetting during the fragile early-convergence window discards exactly the information needed to keep DOP low; repairing preserves continuity and keeps the filter's geometry stable through the stress test.
+
+<p align="center"><img src="images/fig7-11.jpeg" width="80%" alt="Time-sliced RMSE comparison"></p>
+
+*Figure 7-11 — Last-30s RMSE per 2-minute time slice (Reset vs. Repair). Top: GPS L1+L5; middle: Galileo L1+L5; bottom: GPS+GAL L1+L5.*
 
 ### Single-frequency PPP
 
@@ -116,16 +190,41 @@ Disabling either half of the hybrid detector in isolation:
 
 Confirms the [detection framework](05-cycle-slip-detection.md)'s design: neither the hardware flag nor the statistical model alone is sufficient; the fusion is load-bearing, not a nice-to-have.
 
+<p align="center"><img src="images/fig7-12.jpeg" width="80%" alt="Chipset-based vs model-based CSD"></p>
+
+*Figure 7-12 — Chipset-based vs. model-based cycle-slip detection, GPS+GAL L1+L5. Top: both enabled; middle: chipset-only; bottom: model-only disabled — the bottom row shows Repair performing *worse* than Reset when the model-based check is missing.*
+
 ### Reproducibility (Pixel 4, Winter dataset)
 
+<p align="center"><img src="images/fig7-13.jpeg" width="70%" alt="Satellite count, signal availability, and DOP, Pixel 4 (Winter)"></p>
+
+*Figure 7-13 — Satellite count, signal availability, and DOP, Pixel 4 (Winter) dataset.*
+
 Same handset, different date/geometry, to rule out the Fall results being an artifact of specific conditions. GPS had decent geometry (9.4 sats, VDOP 1.8) and improved Vertical RMSE 212.0→184.6 cm; Galileo had poor geometry (4.7 sats, VDOP 3.3) and barely moved (301.4→298.3 cm) — **if the underlying geometry can't support a reliable float ambiguity in the first place, integer repair can't rescue it.** Combined GPS+Galileo (14.2 sats, VDOP 1.2) again showed a clear ~16 cm vertical gain. Net conclusion: repair consistently matches-or-beats reset across both sessions, with the *magnitude* of the win scaling with how much redundancy the geometry provides.
+
+<p align="center"><img src="images/fig7-14.jpeg" width="80%" alt="Pixel 4 (Winter) PPP positioning error"></p>
+
+*Figure 7-14 — Pixel 4 (Winter) PPP positioning error, Reset vs. Repair, per constellation.*
 
 ## Device suitability and limitations
 
 Three specific hardware behaviours were found to defeat the framework, worth knowing before pointing this codebase at a new device:
 
 1. **Very low cycle-slip density** (Pixel 7 Pro: 0.07% GPS, 0.49% Galileo slip density) — not a failure, just not enough slip events to statistically demonstrate a difference; repair still worked correctly on the few Galileo slips that did occur (50 cm converged-position improvement).
+
+   <p align="center">
+     <img src="images/fig7-15.jpeg" width="48%" alt="Pixel 7 Pro satellite count, signal availability, and DOP">
+     <img src="images/fig7-16.jpeg" width="48%" alt="Pixel 7 Pro PPP positioning results, Reset vs Repair">
+   </p>
+
+   *Figure 7-15 / 7-16 — Pixel 7 Pro satellite geometry (left) and PPP positioning results, Reset vs. Repair (right). Strong native tracking means little room for Repair to demonstrate a difference, but the few Galileo slips present were still handled correctly.*
+
 2. **Aggressive clock steering** (OnePlus Nord 2, Tampere University dataset) — periodic, non-physical jumps in the code clock that a Kalman filter can't distinguish from a real geometric error, making the phase data unsuitable for integer resolution altogether.
+
+   <p align="center"><img src="images/fig7-17.jpeg" width="60%" alt="OnePlus Nord 2 periodic code clock steering"></p>
+
+   *Figure 7-17 — OnePlus Nord 2 periodic code clock steering: a sawtooth pattern in the code clock offset that defeats integer cycle-slip repair.*
+
 3. **No dual-frequency signal** (Pixel 8a, Samsung S22) — as above, single-frequency repair is unreliable due to unmodelled ionospheric residuals masking the integer nature of the slip.
 
 ## Code
