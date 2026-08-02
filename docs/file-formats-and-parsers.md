@@ -29,6 +29,27 @@ for ephemerides and Earth models.
 | Decimeter Challenge ground truth | `Android.fileParser.GroundTruth` | `[GPStime, week, lat, lon, alt, vel]` rows |
 | ECEF reference trajectory | `Android.fileParser.GroundTruth_GSA` | `[GPStime, week, x, y, z]` rows |
 
+```mermaid
+flowchart LR
+    subgraph Geodetic["Geodetic / precise-product formats"]
+        RO[RINEX 3 obs] --> ObservationRNX --> OM[ObservationMsg / Observable]
+        RN[RINEX 3 nav] --> NavigationRNX --> NM["NavigationMsg, IonoCoeff, TimeCorrection"]
+        SP3[SP3 orbit] --> Orbit --> IGSOrbit
+        CLK[CLK clock] --> Clock --> IGSClock
+        ATX[ANTEX] --> Antenna --> IGSAntenna
+        IONX[IONEX] --> IONEX --> VTEC[VTEC grid]
+        SNX[SINEX] --> SINEX --> ARP[ARP / PCO]
+        DSB[SINEX-BIAS DSB] --> DCB_Bias --> ISC[per-signal correction]
+        OSB[SINEX-BIAS OSB] --> OSB_Bias --> BiasEntry
+    end
+    subgraph Consumer["Consumer / smartphone formats"]
+        LOG[GnssLogger raw log] --> GNSS_Log --> GNSSLog2["GNSSLog, IMUsensor"]
+        DER[Decimeter derived.csv] --> DerivedCSV --> Derived
+        GT[Decimeter ground truth] --> GroundTruth
+        GSA[ECEF reference traj.] --> GroundTruth_GSA
+    end
+```
+
 ## Data model index
 
 | Model | Represents |
@@ -86,8 +107,12 @@ GPS ephemeris records into `NavigationMsg` objects, grouped by PRN and sorted by
 The `getIonoOnly` flag short-circuits after reading the Klobuchar coefficients. This exists
 because when precise products are in use the ephemeris body is not needed at all — only the
 ionosphere coefficients as a fallback — and skipping the body parse on a multi-constellation
-broadcast file is a meaningful saving. Note the consequence of this design: **body parsing is
-GPS-only**, breaking out of the loop at the first non-`G` record.
+broadcast file is a meaningful saving.
+
+> [!WARNING]
+> **Body parsing is GPS-only** — it breaks out of the loop at the first non-`G` record. Don't
+> expect `NavigationRNX` to return Galileo/BeiDou ephemerides from a mixed broadcast file, only
+> the header-level Klobuchar coefficients.
 
 Numeric field splitting goes through `utility.SymbolToken.split`, which handles the RINEX quirk
 of adjacent fixed-width Fortran-formatted numbers running together when a negative exponent
@@ -109,9 +134,10 @@ satellite velocity — as a `double[2][3]`. Splitting window selection from eval
 locate the window once per epoch and then evaluate it for every satellite. `getPV` returns `null`
 if the requested PRN is missing from any epoch in the window.
 
-The window selection clamps at both ends of the file, so requesting a time past the last epoch
-extrapolates from the final `n` points rather than failing. Be aware of that when a session
-straddles a day boundary — load the adjacent day's product rather than relying on extrapolation.
+> [!WARNING]
+> The window selection clamps at both ends of the file, so requesting a time past the last epoch
+> **extrapolates** from the final `n` points rather than failing. Be aware of that when a session
+> straddles a day boundary — load the adjacent day's product rather than relying on extrapolation.
 
 ### CLK precise clocks — `Clock`
 
@@ -132,9 +158,13 @@ header version. Only `AS` (satellite) records are read; `AR` (receiver) records 
 
 `Antenna` does not parse ANTEX at runtime. `buildCSV(atxPath, csvPath)` is a one-time offline
 utility that flattens an IGS ANTEX file (currently `igs20.atx`) into a row-per-(antenna,
-frequency) CSV; the runtime constructor `new Antenna(csvPath)` reads that CSV. Re-run `buildCSV`
-whenever the ANTEX file is updated. The CSV is ordered satellite rows first (`TYPE = 'S'`), then
-receiver rows (`'R'`), and the loader uses that ordering as an early-exit sentinel.
+frequency) CSV; the runtime constructor `new Antenna(csvPath)` reads that CSV. The CSV is
+ordered satellite rows first (`TYPE = 'S'`), then receiver rows (`'R'`), and the loader uses
+that ordering as an early-exit sentinel.
+
+> [!NOTE]
+> Re-run `buildCSV` whenever the ANTEX file is updated — the runtime path never re-reads the
+> `.atx` file itself, so an ANTEX update silently has no effect until the CSV is rebuilt.
 
 Beyond parsing, this class provides the two corrections described in
 [corrections-and-models.md](corrections-and-models.md#antenna-phase-center-and-phase-wind-up):
@@ -142,15 +172,17 @@ PCO-corrected satellite phase center position, and carrier-phase wind-up. Both c
 single `getSatPC_windup(...)` call returning `double[4]` — three position components plus the
 wind-up in metres.
 
-**Eclipse exclusion is the behaviour most likely to surprise a new caller.** During Earth umbra
-passage or a noon/midnight yaw singularity, the nominal yaw-steering body frame no longer
-describes the satellite's real attitude, so both the PCO rotation and the wind-up become
-meaningless. `getSatPC_windup` returns `null` for the eclipse duration plus a 30-minute recovery
-window (Kouba 2009), tracked per satellite in `eclipseExitMap`/`prevInEclipseMap`. A `null` return
-means *drop this satellite for this epoch and delete its stored wind-up value* — carrying the stale
-value across the gap injects a phase discontinuity that cycle-slip detection will flag as a real
-slip. Umbra detection uses a cylindrical (point-source Sun) shadow model, which slightly
-over-estimates the umbra edge; that is conservative and intentional. Penumbra is not detected.
+> [!WARNING]
+> **Eclipse exclusion is the behaviour most likely to surprise a new caller.** During Earth umbra
+> passage or a noon/midnight yaw singularity, the nominal yaw-steering body frame no longer
+> describes the satellite's real attitude, so both the PCO rotation and the wind-up become
+> meaningless. `getSatPC_windup` returns `null` for the eclipse duration plus a 30-minute recovery
+> window (Kouba 2009), tracked per satellite in `eclipseExitMap`/`prevInEclipseMap`. A `null`
+> return means *drop this satellite for this epoch and delete its stored wind-up value* — carrying
+> the stale value across the gap injects a phase discontinuity that cycle-slip detection will flag
+> as a real slip. Umbra detection uses a cylindrical (point-source Sun) shadow model, which
+> slightly over-estimates the umbra edge; that is conservative and intentional. Penumbra is not
+> detected.
 
 Receiver antennas are handled separately by `getRxPCO_ENU(antennaTypeKey, ssi, freq)`, which
 returns `[E, N, U]` in metres, or `null` when the antenna model is absent from the ANTEX file —
@@ -229,8 +261,10 @@ An Android `GnssLogger` log interleaves several record types on `#`-prefixed sec
 Results land in two static fields retrieved via `getGnssLogMaps()` (a `TreeMap` keyed by receiver
 time in milliseconds, then by observation code, holding the satellite list) and `getImuList()`.
 
-The parser is static and stateful — calling `process` twice replaces the previous results. That is
-fine for the single-session entry points but worth knowing before parallelising anything.
+> [!WARNING]
+> The parser is static and stateful — calling `process` twice replaces the previous results.
+> That's fine for the single-session entry points but worth knowing before parallelising
+> anything.
 
 IMU timestamps arrive as device boot-relative nanoseconds. The parser establishes a boot-to-GPS
 time origin from the first `Raw` record's `bootGPStime` and then rebases every IMU sample onto it,

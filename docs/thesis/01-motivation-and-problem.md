@@ -1,6 +1,6 @@
 # Motivation and Problem Statement
 
-> Source: PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, University of Calgary, Department of Geomatics Engineering, 2026), Chapter 1. See [CITATION.md](../../CITATION.md).
+> Source: PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, University of Calgary, Department of Geomatics Engineering, 2026), Chapter 1. DOI: [10.11575/PRISM/51108](https://doi.org/10.11575/PRISM/51108). See [CITATION.md](../../CITATION.md).
 
 ## Why this exists
 
@@ -62,7 +62,7 @@ A deliberate scope decision underlies pillar 3: this work targets **PPP-Float**,
 5. N. Agarwal and K. O'Keefe, "Cycle Slip repair for single-frequency smartphone GNSS using the Best Integer Equivariant estimator," *2025 IEEE/ION PLANS*, Monterey CA, Apr. 2025, pp. 1536–1543. doi: [10.1109/PLANS61210.2025.11028424](https://doi.org/10.1109/PLANS61210.2025.11028424)
 6. N. Agarwal and K. O'Keefe, "Investigating Cycle Slip Repair for Single and Multi-Frequency Smartphone GNSS," *ION GNSS+ 2025*, Denver CO, Sept. 2025.
 
-Full thesis: Agarwal, N. (2026). *Improving precise smartphone GNSS with robust dynamics, adaptive stochastics, and cycle slip repair* (Doctoral thesis, University of Calgary). https://hdl.handle.net/1880/124167
+Full thesis: Agarwal, N. (2026). *Improving precise smartphone GNSS with robust dynamics, adaptive stochastics, and cycle slip repair* (Doctoral thesis, University of Calgary). DOI: [10.11575/PRISM/51108](https://doi.org/10.11575/PRISM/51108). https://hdl.handle.net/1880/124167
 
 ## See also
 

@@ -113,7 +113,8 @@ It has two branches controlled by the `useIGS` flag:
   satellite (for example during eclipse), its map entry is removed so wind-up continuity
   restarts cleanly on reacquisition.
 
-Because that wind-up map is static, a single JVM run should process one dataset at a time.
+> [!WARNING]
+> That wind-up map is static, so a single JVM run should process one dataset at a time.
 
 ## Constants and configuration
 
@@ -128,11 +129,14 @@ in one pass. The full mode-to-class dispatch table is documented in
 
 `GnssDataConfig` holds the a-priori variance of unit weight for each measurement type
 (pseudorange, Doppler, TDCP, carrier phase, GIM TEC) and the ENU random-walk process noise
-vectors `qENU_posRandWalk` / `qENU_velRandWalk`. These are the primary tuning knobs; the
-file currently carries commented-out alternatives for kinematic tuning alongside the active
-near-zero static values, so check which pair is uncommented before interpreting a run. The
+vectors `qENU_posRandWalk` / `qENU_velRandWalk`. These are the primary tuning knobs. The
 drivers echo these values into the run header so an output file records the tuning it was
 produced with.
+
+> [!WARNING]
+> The file currently carries commented-out alternatives for kinematic tuning alongside the
+> active near-zero static values — check which pair is actually uncommented before
+> interpreting a run's behaviour.
 
 The remaining constants classes are lookup data rather than tuning: `Constellation` maps a
 constellation letter and band index to a carrier frequency, `ClockAllanVar` converts TCXO
@@ -148,8 +152,11 @@ These three classes are stateless in the filtering sense — each call solves on
 one epoch pair) independently. All three follow the same internal shape: build the design
 matrix and weight matrix, iterate the linearised solution, optionally run quality control,
 and stash residuals, `Cyy`, `Cxx_hat` and the posterior variance of unit weight in static
-fields that the caller retrieves through getters. That static-getter pattern means these
-classes are not thread-safe and results must be read before the next call.
+fields that the caller retrieves through getters.
+
+> [!WARNING]
+> That static-getter pattern means these classes are not thread-safe — results must be read
+> before the next call, or a concurrent call will overwrite them first.
 
 ### `LinearLeastSquare`
 
@@ -186,9 +193,10 @@ parameter that is resolved with `helper.lambda.Lambda` and folded back into the 
 The class tracks `ambDetectedCount` / `ambRepairedCount` (both totals and per-epoch maps) so
 that detection and repair rates can be plotted.
 
-Note that this class uses the older `helper.lambda` package, while the filtered equivalent
-`EKF_TDCP_ambFix2` uses the newer `helper.lambdaNew`. See
-[lambda-ambiguity-resolution.md](lambda-ambiguity-resolution.md) for the difference.
+> [!NOTE]
+> This class uses the older `helper.lambda` package, while the filtered equivalent
+> `EKF_TDCP_ambFix2` uses the newer `helper.lambdaNew`. See
+> [lambda-ambiguity-resolution.md](lambda-ambiguity-resolution.md) for the difference.
 
 ## File parsers and data models
 
@@ -255,8 +263,10 @@ equality test, because the drivers' analysis blocks already key off the predicat
 block in `MainApp` rather than a new driver class. Write a new driver only when the *shape*
 of the epoch loop changes — a different truth cadence, a different observation source, or a
 different `Satellite` model — which is precisely what separates the three existing drivers.
-Note that output paths are currently hard-coded inside each driver's `posEstimate`, so a new
-scenario means editing that string too.
+
+> [!NOTE]
+> Output paths are currently hard-coded inside each driver's `posEstimate`, so a new scenario
+> means editing that string too.
 
 **Adding a new tuning parameter.** Put it in `GnssDataConfig` (measurement or process noise)
 or `ImuDataSheets` (a new device), and echo it in `Android_Static.printRunHeader` so runs

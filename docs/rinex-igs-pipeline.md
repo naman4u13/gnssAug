@@ -24,11 +24,24 @@ The `com.gnssAug.IGS` package is the entry point for positioning a geodetic (IGS
 
 `IGS.posEstimate` is a single static method that takes file paths and a large set of boolean/enum switches, and produces a run's worth of output. Its class Javadoc lists every parameter; the parts worth understanding structurally are the ordering and the side effects.
 
+```mermaid
+flowchart TD
+    A["1. Output redirection & run header\ngit hash, ARP, switches, product filenames"] --> B["2. Parsing\nNAV, OBS, precise products (conditional on useIGS/useBias/useGIM)"]
+    B --> C["3. Static Orekit setup\nEGM96 geoid, cached once"]
+    C --> D["4. Per-epoch loop\nSingleFreq.process → LinearLeastSquare ref pos → elevation/azimuth"]
+    D --> E["5. filterSat\nelevation/CN0 mask, iono/tropo — stores-not-subtracts iono in PPP mode"]
+    E --> F["6. Estimator dispatch\nLS/WLS, RINEX_EKF_CODE, or IGS_PPP_FLOAT/AR by EstimatorMode"]
+    F --> G["7. Analysis & output\nENU stats, plots, JSONL/CSV export"]
+```
+
 **1. Output redirection and the run header.** Before any work happens, `System.out` is redirected to a `.txt` file whose name is built from the RINEX site ID, epoch tag, signal list, and estimator mode. `printRunHeader` then writes a structured block containing the UTC timestamp, the current git commit short hash (with a `(dirty)` marker if the tree has uncommitted changes), the RINEX header's marker/receiver/antenna strings, the ground-truth ARP if SINEX was loaded, all estimator switches, the product file names, and every prior variance from `GnssDataConfig`. Every saved log is therefore self-documenting and traceable to an exact code revision — worth preserving if you refactor this method.
 
 **2. Parsing.** RINEX NAV is parsed first (yielding broadcast ephemerides, Klobuchar coefficients, and time-system corrections), then RINEX OBS (yielding the observation messages, the antenna reference point, receiver PCOs, and the sampling interval). Precise products are loaded conditionally: `Orbit` (SP3) and `Clock` (CLK, with DCBs folded in) when `useIGS` is set, `OSB_Bias` and `DCB_Bias` when `useBias` is set, `IONEX` when `useGIM` is set. If SINEX supplied an ARP but not a receiver PCO for some signal, `IGS` falls back to the ANTEX table via `Antenna.getRxPCO_ENU`, converting the ENU offset to an ECEF delta about the ARP.
 
-**3. Static Orekit setup.** `buildGeoid()` builds a 50×50 EGM96 geoid over WGS-84 in ITRF 2014 / IERS 2010 and caches it in a static field. `ComputeTropoCorr` uses it to get orthometric station height for the pressure/temperature model. Note the two hard-coded absolute paths in this class — the Orekit data directory and the input-file base path — which are the first thing to parameterise if the code is ever run on another machine.
+**3. Static Orekit setup.** `buildGeoid()` builds a 50×50 EGM96 geoid over WGS-84 in ITRF 2014 / IERS 2010 and caches it in a static field. `ComputeTropoCorr` uses it to get orthometric station height for the pressure/temperature model.
+
+> [!NOTE]
+> This class has two hard-coded absolute paths — the Orekit data directory and the input-file base path — which are the first thing to parameterise if the code is ever run on another machine.
 
 **4. Per-epoch loop.** For every `ObservationMsg`: call `SingleFreq.process` to build the epoch's `Satellite` list, drop the epoch if fewer than `minSat` satellites survive, compute a rough position with `LinearLeastSquare` for use as the next epoch's wind-up geometry reference, attach elevation/azimuth via `ComputeEleAzm`, and call `filterSat`. In least-squares modes the epoch is solved immediately inside the loop; in EKF and PPP modes the epoch is only accumulated into `satMap` and `timeList`, and the estimator runs once over the whole session after the loop.
 
@@ -46,7 +59,12 @@ The `com.gnssAug.IGS` package is the entry point for positioning a geodetic (IGS
 
 `SingleFreq.process` converts one `ObservationMsg` into the `Satellite` list the rest of the pipeline consumes. It has two modes. In **broadcast mode** (`useIGS = false`) it delegates to `ComputeSatPos` and applies no PCO, wind-up, or bias correction; multi-constellation processing is rejected in this mode. In **IGS mode** it runs the full precise chain per satellite: estimate transmit time from the pseudorange, look up the precise clock offset and drift (the DCB is already folded into the clock product by the `Clock` parser), look up OSB code and phase biases in metres, interpolate SP3 position and velocity with a 10th-order Lagrange polynomial, apply the relativistic clock term and recompute the transmit time, then call `Antenna.getSatPC_windup` for the phase-centre-corrected position and the cumulative carrier-phase wind-up.
 
-Two pieces of state deserve attention. First, `phase_windup_map` is a **static** accumulator keyed by signal + PRN that carries wind-up continuity across epochs — meaning `SingleFreq` is not reentrant and cannot process two sessions concurrently. Second, eclipse handling: when `getSatPC_windup` returns `null` (satellite in umbra or inside the post-eclipse recovery window), the satellite is dropped from the epoch *and* its wind-up entry is removed, so continuity restarts cleanly when it re-emerges rather than resuming from a stale value.
+Two pieces of state deserve attention.
+
+> [!WARNING]
+> `phase_windup_map` is a **static** accumulator keyed by signal + PRN that carries wind-up continuity across epochs — `SingleFreq` is not reentrant and cannot process two sessions concurrently.
+
+Second, eclipse handling: when `getSatPC_windup` returns `null` (satellite in umbra or inside the post-eclipse recovery window), the satellite is dropped from the epoch *and* its wind-up entry is removed, so continuity restarts cleanly when it re-emerges rather than resuming from a stale value.
 
 ## `IGS.models` — precise-product records
 
@@ -56,7 +74,8 @@ These three classes are thin, immutable-by-convention carriers with no logic bey
 - `IGSClock` mirrors that shape for clock biases (`Character → Integer → Double`), consumed by `Rinex.fileParser.Clock`.
 - `IGSAntenna` holds one ANTEX antenna block — eccentricity vector (PCO, converted from millimetres), zenith-angle grid, validity window, and both the azimuth-independent (`PCV_NOAZI`) and azimuth-dependent (`PCV_AZI`) phase-centre-variation tables. `checkValidity(double[] time)` selects the right block when an antenna has several dated entries. `Rinex.fileParser.Antenna` owns the lookup and applies the result.
 
-Note the package boundary: these live under `IGS.models` but are used exclusively by `Rinex.fileParser`. That is historical rather than architectural; treat them as product-record types for the shared parser layer.
+> [!NOTE]
+> Package boundary worth knowing: these classes live under `IGS.models` but are used exclusively by `Rinex.fileParser`. That's historical rather than architectural — treat them as product-record types for the shared parser layer, not as something specific to the `IGS` package.
 
 ## `Rinex.constants.GnssDataConfig`
 
@@ -68,7 +87,12 @@ A small class of `public static final` constants defining the geodetic-receiver 
 
 A static-method solver for single-epoch positioning. `getEstPos` (pseudorange → position + clock) and `getEstVel` (Doppler → velocity + drift) are thin wrappers over `process`, which builds the weight matrix (identity for LS, elevation/C/N0-based via `Weight` for WLS), calls `estimate` to iterate the linearised normal equations, and optionally runs detection-identification-adaptation. Two DIA strategies exist behind an internal `DIA_type` switch; the active one removes the single worst satellite at a time via `qualityControl2` and re-estimates until no satellite fails, marking rejected satellites with `setOutlier(true)`.
 
-Its results (residuals, post-variance of unit weight, state covariance, DOP, the surviving satellite list) are stashed in **static** maps keyed by `Measurement` and read back through the `getResidual` / `getPostVarOfUnitW` / `getCxx_hat` / `getDop` / `getTestedSatList` accessors. This makes the class effectively single-threaded and order-dependent: you must read the accessors immediately after the corresponding solve. Beyond its role as a standalone estimator, `LinearLeastSquare` is the bootstrap for every filter in the codebase — the PPP filters call `getEstPos`/`getEstVel` on the first epoch to initialise their state vectors, and `IGS` calls it every epoch to get a reference position for wind-up geometry.
+Its results (residuals, post-variance of unit weight, state covariance, DOP, the surviving satellite list) are stashed in **static** maps keyed by `Measurement` and read back through the `getResidual` / `getPostVarOfUnitW` / `getCxx_hat` / `getDop` / `getTestedSatList` accessors.
+
+> [!WARNING]
+> Those static result maps make the class effectively single-threaded and order-dependent — you must read the accessors immediately after the corresponding solve, before anything else calls into `LinearLeastSquare` again.
+
+Beyond its role as a standalone estimator, `LinearLeastSquare` is the bootstrap for every filter in the codebase — the PPP filters call `getEstPos`/`getEstVel` on the first epoch to initialise their state vectors, and `IGS` calls it every epoch to get a reference position for wind-up geometry.
 
 ### `Rinex.estimation.EKF`
 

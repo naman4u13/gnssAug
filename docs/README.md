@@ -18,6 +18,45 @@ Package-by-package documentation of the codebase **as it exists today**. Present
 | [file-formats-and-parsers.md](file-formats-and-parsers.md) | Every supported file format and its parser |
 | [utilities.md](utilities.md) | `com.gnssAug.utility.*` — linear algebra, geodesy, time, weighting, plotting |
 
+How they relate — the two entry-point pipelines sit on top of two filter families, which in turn draw on three support layers (with `utilities.md` underpinning everything):
+
+```mermaid
+flowchart TD
+    ARCH[architecture.md\nstart here]
+
+    subgraph Pipelines["Entry-point pipelines"]
+        AP[android-pipeline.md]
+        RP[rinex-igs-pipeline.md]
+    end
+
+    subgraph Filters["Filter families"]
+        KF[kalman-filters.md]
+        PPP[ppp-engine.md]
+    end
+
+    subgraph Support["Support layers"]
+        LAM[lambda-ambiguity-resolution.md]
+        COR[corrections-and-models.md]
+        FMT[file-formats-and-parsers.md]
+    end
+
+    UTIL[utilities.md]
+
+    ARCH --> AP
+    ARCH --> RP
+    AP --> KF
+    AP --> PPP
+    RP --> PPP
+    KF --> LAM
+    PPP --> LAM
+    AP --> COR
+    RP --> COR
+    AP --> FMT
+    RP --> FMT
+    Filters --> UTIL
+    Support --> UTIL
+```
+
 ## Thesis record ([`thesis/`](thesis/README.md))
 
 The PhD thesis this codebase originally implemented and validated: full motivation, theoretical derivations, and experiment results tied to specific datasets and figures. Frozen as of the thesis defense — read it for the research story and the "why," not as a guide to the current code. Start at [thesis/README.md](thesis/README.md).

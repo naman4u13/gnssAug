@@ -10,6 +10,30 @@ diagnostic maps that the drivers read after a run. The PPP filters in this packa
 (`EKF_PPP`, `EKF_PPP3`, `PPPStateLayout`) are documented separately in
 [ppp-engine.md](ppp-engine.md).
 
+```mermaid
+classDiagram
+    class EKFParent {
+        <<base>>
+        +KFconfig kfObj
+        +getInnovationMap()
+        +getResidualMap()
+        +getPostVarUnitWMap()
+        +getSatCountMap()
+    }
+    class EKF {
+        <<does NOT extend EKFParent>>
+    }
+    EKFParent <|-- EKFDoppler
+    EKFParent <|-- AKFDoppler
+    EKFParent <|-- AKFDoppler_Static
+    EKFParent <|-- EKF_TDCP_ambFix2
+    EKFParent <|-- EKF_TDCP_ambFix_allEst
+    EKFParent <|-- EKF_PPP
+    EKFParent <|-- EKF_PPP3
+```
+
+*All non-PPP filters except `EKF` extend `EKFParent` directly — it's a flat hierarchy, not a deep one. `EKF_PPP`/`EKF_PPP3` are documented in [ppp-engine.md](ppp-engine.md). `INSfusion` also sits outside this hierarchy (see below).*
+
 ## Classes
 
 | Class | Responsibility |
@@ -86,10 +110,14 @@ getters, so a new filter that extends `EKFParent` and fills the maps under `doAn
 the whole analysis pipeline for free.
 
 `EKFDoppler`, `AKFDoppler`, `AKFDoppler_Static`, `EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst`
-and the PPP filters extend it. **`EKF` does not** — it predates the base class and keeps its
-own maps keyed by `(time, Measurement)` and `(time, State)` because it can estimate from two
-measurement types simultaneously, which the flat `EKFParent` maps cannot express. That is the
-main structural inconsistency in the package.
+and the PPP filters extend it.
+
+> [!WARNING]
+> **`EKF` does not extend `EKFParent`.** It predates the base class and keeps its own maps
+> keyed by `(time, Measurement)` and `(time, State)` because it can estimate from two
+> measurement types simultaneously, which the flat `EKFParent` maps cannot express. This is
+> the main structural inconsistency in the package — don't assume every filter in this
+> package shares the `EKFParent` diagnostic-map contract without checking.
 
 ### `Models.State`, `Models.Covariance`, `Models.Flag`
 
@@ -100,13 +128,17 @@ from the linear *error* state it actually filters, and the total state needs som
 live between epochs.
 
 `Covariance` is a diagonal 15×15 matrix with named getters/setters for the INS blocks
-(position, velocity, attitude, accelerometer bias, gyro bias). It is currently referenced
-nowhere — `INSfusion` builds its 17×17 `P` directly, having grown two clock states beyond
-what `Covariance` models. Treat it as dead code and either extend it to 17 states or delete
-it rather than assuming it reflects the live layout.
+(position, velocity, attitude, accelerometer bias, gyro bias).
 
-`Flag` selects `EKF`'s kinematic model. Only `POSITION` and `VELOCITY` are handled;
-`ACCELERATION` is declared but not implemented.
+> [!WARNING]
+> **`Models.Covariance` is dead code.** It is currently referenced nowhere — `INSfusion`
+> builds its 17×17 `P` directly, having grown two clock states beyond what `Covariance`
+> models. Don't assume it reflects the live INS state layout; either extend it to 17 states
+> or delete it.
+
+> [!NOTE]
+> `Flag` selects `EKF`'s kinematic model. Only `POSITION` and `VELOCITY` are handled —
+> `ACCELERATION` is declared but not implemented.
 
 ## The filters
 
@@ -228,9 +260,22 @@ the ambiguity states are then **dropped again**, shrinking the state back to `3 
 next epoch. This keeps the state dimension bounded: ambiguities exist only for the epoch in
 which a slip occurs.
 
-There is also a partially implemented wide-lane path (`enableWL`) that reuses the ambiguity
-mechanism for satellites whose slip was seen on a sibling signal; it is currently gated off
-because the driver only supplies single-frequency observation codes.
+```mermaid
+stateDiagram-v2
+    [*] --> Steady: state dim = 3 + m
+    Steady --> Steady: Doppler update, TDCP update (no slip flagged)
+    Steady --> Augmented: slip flagged on one or more satellites
+    Augmented --> Augmented: grow x/P by ambCount, large variance on new diagonal, H column = wavelength
+    Augmented --> Resolved: augmented update, LAMBDA.computeLambda (BIE)
+    Resolved --> Steady: conditional-solution correction, drop ambiguity states
+```
+
+*The ambiguity state only exists for the epoch in which a slip occurs — it's added and removed every time, never carried forward. This is what keeps the filter's steady-state dimension fixed regardless of how many slips have happened over a run.*
+
+> [!NOTE]
+> There is also a partially implemented wide-lane path (`enableWL`) that reuses the ambiguity
+> mechanism for satellites whose slip was seen on a sibling signal; it is currently gated off
+> because the driver only supplies single-frequency observation codes.
 
 The filter reports `getAmbDetectedCount` / `getAmbRepairedCount` and their per-epoch maps,
 and a `csdListMap` of the full `CycleSlipDetect` records for analysis. Theory background in
@@ -304,8 +349,11 @@ update, apply the conditional-solution correction, then extract the permanent su
 call `setState_ProcessCov` to shrink back. This keeps the steady-state dimension fixed.
 
 **Statistical testing.** Every filter has its own `performTesting`, all built around a
-chi-squared threshold on innovations or residuals. They have drifted apart; if you touch one,
-check whether the change belongs in the others too.
+chi-squared threshold on innovations or residuals.
+
+> [!TIP]
+> These have drifted apart across filters — if you touch one, check whether the change
+> belongs in the others too.
 
 ## See also
 

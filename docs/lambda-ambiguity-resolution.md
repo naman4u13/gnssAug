@@ -55,6 +55,28 @@ side of the same problem.
 `LAMBDA.computeLambda(aHat, QaHat, method, estimateVar, varArgs...)` is the single entry
 point, and every estimator sees the same pre- and post-processing:
 
+```mermaid
+flowchart TD
+    A[Origin translation\nshift float ambiguities into -1,1] --> B["Decorrelation\nDecomposeLtDL + TransformZ → zHat, L, d, Z"]
+    B --> C[Baseline success rate\nComputeSR_IBexact, bootstrapped]
+    C --> D{"Dispatch on EstimatorType"}
+    D -->|ILS| E1[EstimatorILS_GHAH]
+    D -->|IA_FFRT| E2[EstimatorIA_FFRT]
+    D -->|BIE| E3[EstimatorBIE]
+    D -->|PAR| E4[EstimatorPAR]
+    D -->|PAR_FFRT| E5[EstimatorPAR_FFRT]
+    E1 --> F{estimateVar?}
+    E2 --> F
+    E3 --> F
+    E4 --> F
+    E5 --> F
+    F -->|yes| G[ComputeVariance\nMonte Carlo covariance of the fix]
+    F -->|no| H[Near-zero diagonal\nfix treated as exact]
+    G --> I[Back-transformation\nout of Z-space, restore origin offset]
+    H --> I
+    I --> J[LambdaResult]
+```
+
 1. **Origin translation.** Each float ambiguity is shifted by its floor so the working vector
    lies in `(-1, 1)`. This is purely numerical; the offset is added back at the end.
 2. **Decorrelation.** `DecorrelateVC` runs `DecomposeLtDL` then `TransformZ`, producing the
@@ -122,10 +144,11 @@ less than five separate `LAMBDA` calls. `EKF_TDCP_ambFix_allEst` is the caller t
   rate (`ComputeSR_IBexact`) is what the whole subsystem uses as a cheap proxy for ILS
   reliability.
 
-`EstimatorIR` and `EstimatorIB` are ported but not reachable from `LAMBDA.java`: they have no
-`EstimatorType` constant and no call sites. They are kept because the analytical IB success
-rate is central to PAR and IA-FFRT, and because a future estimator (see *Extending this*) would
-use them as block estimators.
+> [!NOTE]
+> `EstimatorIR` and `EstimatorIB` are ported but not reachable from `LAMBDA.java`: they have no
+> `EstimatorType` constant and no call sites. They are kept because the analytical IB success
+> rate is central to PAR and IA-FFRT, and because a future estimator (see *Extending this*) would
+> use them as block estimators.
 
 ## `EstimatorILS_GHAH` vs `EstimatorILS`
 
@@ -173,8 +196,9 @@ from the bootstrapped success rate using the Chebyshev bound in `Utilities.compu
 BIE for `LAMBDA_all`. `computeVariance2` and `computeVarianceAll2` are the earlier
 single-threaded versions of the same two methods, kept as references and not called.
 
-This is the expensive part of the subsystem — it runs a full integer search per sample — so
-callers pass `estimateVar = false` when they only need the fix itself.
+> [!TIP]
+> This is the expensive part of the subsystem — it runs a full integer search per sample — so
+> callers pass `estimateVar = false` when they only need the fix itself.
 
 ## Legacy `lambda/` package
 
@@ -199,17 +223,20 @@ searching call sites rather than assumed:
   `Parsearch2.java` and `MyNormalDistribution.java` have no callers anywhere in the tree
   (`Parsearch2` survives only in a commented-out line of `Lambda.java`).
 
-Treat `lambda/` as frozen. New code should call `lambdaNew`; the remaining use in
-`LLS_TDCP_ambFix` is the one migration still outstanding, and it is a contained one — the
-call sites need `Jama.Matrix` swapped for `SimpleMatrix` and the method constants mapped onto
-`EstimatorType`.
+> [!TIP]
+> Treat `lambda/` as frozen. New code should call `lambdaNew`; the remaining use in
+> `LLS_TDCP_ambFix` is the one migration still outstanding, and it is a contained one — the
+> call sites need `Jama.Matrix` swapped for `SimpleMatrix` and the method constants mapped onto
+> `EstimatorType`.
 
 ### `helper/IntegerLeastSquares.java`
 
-Unrelated to both packages and unused. It is a standalone brute-force ILS: it enumerates every
-integer within ±3 cycles of each float ambiguity, scores the full Cartesian product by
-Mahalanobis distance, and applies a hardcoded ratio test of 3. It predates the LAMBDA ports,
-has no decorrelation step, and scales as `7ⁿ`. Nothing references it. Use `lambdaNew`.
+> [!WARNING]
+> Unrelated to both packages and **unused** — nothing references it. It is a standalone
+> brute-force ILS: it enumerates every integer within ±3 cycles of each float ambiguity, scores
+> the full Cartesian product by Mahalanobis distance, and applies a hardcoded ratio test of 3.
+> It predates the LAMBDA ports, has no decorrelation step, and scales as `7ⁿ`. Use `lambdaNew`
+> instead of reviving this.
 
 ## Extending this
 
@@ -249,9 +276,10 @@ example:
 7. **Wire it into `LAMBDA_all`** if it belongs in side-by-side comparisons: add it to the
    estimator arrays there and to the `aFixMap` / `nFixedMap` / `qFixMap` population.
 
-If the estimator produces a real-valued (non-integer) answer, as BIE does, note that
-`OptimizedVarCalc` counts only all-integer samples toward success or failure, so its empirical
-rates will read as zero — that is by design, not a bug, and `LAMBDA_all` handles it as such.
+> [!NOTE]
+> If the estimator produces a real-valued (non-integer) answer, as BIE does, `OptimizedVarCalc`
+> counts only all-integer samples toward success or failure, so its empirical rates will read
+> as zero — that is by design, not a bug, and `LAMBDA_all` handles it as such.
 
 ## See also
 

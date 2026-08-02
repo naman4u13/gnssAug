@@ -118,26 +118,24 @@ Two structural findings specific to smartphone hardware, both directly shaping t
 - **Code clock offset carries a ~−2,350 m bias** that itself evolves over time — confirming `DSB_r^Code`/`DSB_r^Phase` need to be *estimated states*, not constants.
 
 <p align="center">
-  <img src="images/fig7-6a.png" width="90%" alt="Phase and code clock offset, Pixel 4 Fall dataset">
+  <img src="images/fig7-6a.png" width="90%" alt="Phase clock offset with zoomed inset, Pixel 4 Fall dataset">
 </p>
 <p align="center">
-  <img src="images/fig7-6b.jpeg" width="32%" alt="Pixel 4 Fall clock detail 1">
-  <img src="images/fig7-6c.jpeg" width="32%" alt="Pixel 4 Fall clock detail 2">
-  <img src="images/fig7-6d.png" width="32%" alt="Pixel 4 Fall clock detail 3">
+  <img src="images/fig7-6b.jpeg" width="48%" alt="Code clock offset detail, Pixel 4 Fall dataset">
+  <img src="images/fig7-6c.jpeg" width="48%" alt="Phase clock offset, full six-signal legend, Pixel 4 Fall dataset">
 </p>
 
-*Figure 7-6 — Phase and code clock offset, plus per-signal DSB, Pixel 4 (Fall) dataset. Signal-specific divergences fluctuate within ±10 cm even after the common drift is removed.*
+*Figure 7-6 — Pixel 4 (Fall) dataset. Top: phase clock offset (G1C) with a zoomed inset showing the other signals stay near zero by comparison. Bottom left: code clock offset detail. Bottom right: phase clock offset across all six tracked signals. Signal-specific divergences fluctuate within ±10 cm even after the common drift is removed.*
 
 <p align="center">
-  <img src="images/fig7-7a.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 1">
-  <img src="images/fig7-7b.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 2">
+  <img src="images/fig7-7a.jpeg" width="48%" alt="Phase clock offset, full six-signal legend, Pixel 7 Pro dataset">
+  <img src="images/fig7-7b.jpeg" width="48%" alt="Phase clock offset detail, Pixel 7 Pro dataset">
 </p>
 <p align="center">
-  <img src="images/fig7-7c.png" width="48%" alt="Pixel 7 Pro clock offset detail 3">
-  <img src="images/fig7-7d.jpeg" width="48%" alt="Pixel 7 Pro clock offset detail 4">
+  <img src="images/fig7-7c.jpeg" width="60%" alt="Code clock offset, Pixel 7 Pro dataset">
 </p>
 
-*Figure 7-7 — Phase and code clock offset, plus per-signal DSB, Pixel 7 Pro dataset — the same divergence pattern as Figure 7-6, at a larger drift magnitude.*
+*Figure 7-7 — Pixel 7 Pro dataset: phase clock offset (full scale and zoomed detail) and code clock offset across all six tracked signals — the same divergence pattern as Figure 7-6, at a larger drift magnitude.*
 
 <p align="center">
   <img src="images/fig7-8a.jpeg" width="48%" alt="Clock drift from Doppler vs TDCP, part 1">

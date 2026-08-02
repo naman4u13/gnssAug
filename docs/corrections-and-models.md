@@ -100,7 +100,11 @@ delay versus phase advance.
 Unlike the other models in this package, this one is instantiated per epoch:
 `new ComputeTropoCorr(llh, time, geoid)` fixes the site latitude, day of year, and orthometric
 height, then precomputes the zenith delays once; `getSlantDelay(elevation)` is then called per
-satellite. Construction is where the cost is, so hoist it out of your satellite loop.
+satellite.
+
+> [!TIP]
+> Construction is where the cost is, so hoist it out of your satellite loop — build one
+> `ComputeTropoCorr` per epoch, not per satellite.
 
 The zenith delay follows the UNB3m structure: average and seasonal-amplitude tables of barometric
 pressure, temperature, relative humidity, temperature lapse rate, and water-vapour pressure height
@@ -109,10 +113,12 @@ latitude, then modulated by a `cos(2π(D − Dmin)/365.25)` annual term with the
 flipped between hemispheres. Those meteorological values feed a Saastamoinen-family formulation
 that splits the result into hydrostatic (dry) and wet zenith delays.
 
-Height enters twice and it is easy to conflate them. The constructor converts the ellipsoidal
-height in `llh[2]` to orthometric height using Orekit's `Geoid.getUndulation` — that orthometric
-height `H` is what the Saastamoinen and Niell height-correction formulas expect. Passing an
-ellipsoidal height directly would introduce a geoid-undulation-sized error in the delay.
+> [!WARNING]
+> Height enters twice and it is easy to conflate them. The constructor converts the ellipsoidal
+> height in `llh[2]` to orthometric height using Orekit's `Geoid.getUndulation` — that
+> orthometric height `H` is what the Saastamoinen and Niell height-correction formulas expect.
+> Passing an ellipsoidal height directly would introduce a geoid-undulation-sized error in the
+> delay.
 
 Mapping to the line of sight uses the Niell functions, implemented here as a Marini continued
 fraction normalised to unity at zenith, with the standard height correction applied to the dry
@@ -133,10 +139,12 @@ from `CelestialBodyFactory` and ITRF built with Earth-orientation parameters.
 to **add** to the station position; the `isLLA` flag lets callers pass either geodetic or ECEF
 coordinates.
 
-The one configuration choice that materially changes the result is the final `false` argument to
-the `TidalDisplacement` constructor (`removePermanentDeformation`). With it false, Orekit's
-output already embeds the permanent tide, so no separate permanent-tide term may be added
-elsewhere in the pipeline — doing so double-counts and produces a static vertical bias.
+> [!WARNING]
+> The one configuration choice that materially changes the result is the final `false` argument
+> to the `TidalDisplacement` constructor (`removePermanentDeformation`). With it false, Orekit's
+> output already embeds the permanent tide, so no separate permanent-tide term may be added
+> elsewhere in the pipeline — doing so double-counts and produces a static vertical bias.
+
 `getMeanTideCorrection` exists for the case where you deliberately want to move between the
 tide-free and mean-tide conventions; it is a separate, explicit call and is not composed
 automatically with `calculateTimeVaryingTides`.
@@ -148,9 +156,10 @@ identically.
 
 Ocean tide loading and pole tides are not modelled.
 
-Note that `ComputeSolidEarthTide implements StationDisplacement` but its `displacement` override
-returns `null` — the interface is vestigial and the class is used purely through its static
-methods. Do not pass an instance to Orekit code expecting a working `StationDisplacement`.
+> [!WARNING]
+> `ComputeSolidEarthTide implements StationDisplacement`, but its `displacement` override
+> returns `null` — the interface is vestigial and the class is used purely through its static
+> methods. Do not pass an instance to Orekit code expecting a working `StationDisplacement`.
 
 ## Rotation utilities — `Rotation`
 
@@ -182,9 +191,12 @@ performs two corrections that belong conceptually here:
 model, so the body frame — and therefore both the PCO rotation and the wind-up — becomes
 unreliable. `Antenna` detects umbra with a cylindrical shadow model and also catches the
 noon/midnight yaw singularity, then returns `null` from `getSatPC_windup` for the eclipse
-duration plus a 30-minute recovery window. **Callers must treat `null` as "drop this satellite
-this epoch and clear its wind-up history"** — reusing a stale wind-up value across an eclipse gap
-produces a phase discontinuity that cycle-slip detection will happily report as a real slip.
+duration plus a 30-minute recovery window.
+
+> [!WARNING]
+> Callers must treat `null` as "drop this satellite this epoch and clear its wind-up history" —
+> reusing a stale wind-up value across an eclipse gap produces a phase discontinuity that
+> cycle-slip detection will happily report as a real slip.
 
 ## Hardware biases
 

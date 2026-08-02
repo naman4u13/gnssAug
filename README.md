@@ -73,9 +73,9 @@ Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) — free for 
 
 ## Citation
 
-This codebase underpins the PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, Department of Geomatics Engineering, University of Calgary, 2026). If you use this code or its methods in academic work, please cite it — see [CITATION.md](CITATION.md) for the full reference, BibTeX entry, and the list of peer-reviewed papers each module is drawn from.
+This codebase underpins the PhD thesis *"Improving Precise Smartphone GNSS with Robust Dynamics, Adaptive Stochastics, and Cycle Slip Repair"* (N. Agarwal, Department of Geomatics Engineering, University of Calgary, 2026; DOI: [10.11575/PRISM/51108](https://doi.org/10.11575/PRISM/51108)). If you use this code or its methods in academic work, please cite it — see [CITATION.md](CITATION.md) for the full reference, BibTeX entry, and the list of peer-reviewed papers each module is drawn from.
 
 ## Author
 
 Naman Agarwal — PhD, Department of Geomatics Engineering, University of Calgary.
-[Thesis](https://ucalgary.scholaris.ca/items/e9b24a29-0d68-4f5d-ab0f-6a401eef1c9d) · naman4u13@gmail.com
+[Thesis](https://ucalgary.scholaris.ca/items/e9b24a29-0d68-4f5d-ab0f-6a401eef1c9d) · [DOI](https://doi.org/10.11575/PRISM/51108) · naman4u13@gmail.com

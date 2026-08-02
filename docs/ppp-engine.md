@@ -23,6 +23,17 @@ The PPP engine is the codebase's undifferenced, uncombined Precise Point Positio
 
 Each PPP class instantiates two independent `KFconfig` objects and runs them in sequence every epoch.
 
+```mermaid
+flowchart TD
+    A["vel_kfObj — velocity/TDCP filter\nstate: vel(3) | clkDrift | driftRate"] -->|"1. Doppler pass\n(velocity + clock drift update)"| B[Doppler-updated state]
+    B -->|"2. TDCP detection pass\nstatistical test flags slips on CycleSlipDetect"| C[Slip-flagged satellites]
+    C -->|"3. TDCP update + repair pass\naugment with float slip states, LAMBDA fix"| D[CycleSlipDetect list\nslip flags + repaired integers]
+    D -->|only hand-off between the two filters| E["pos_kfObj — position/PPP filter\nstate: pos | clk | vel | tropo | amb | iono"]
+    E --> F[Per-epoch position estimate]
+```
+
+*The two filters are deliberately decoupled: the velocity filter is small, always full-rank, and re-estimated every epoch — a stable place to run slip detection. The position filter is large and resized every epoch as satellites come and go. Only the `CycleSlipDetect` list crosses between them.*
+
 **`vel_kfObj` — the velocity / TDCP filter.** State vector `[ vel(3) | clkDrift(nSys) | driftRate(nSys) ]`. It is updated in three passes per epoch (documented in detail on `runFilter_vel`):
 
 1. A **Doppler pass** updates velocity and clock drift from Doppler-derived delta-range, optionally after chi-squared + w-test outlier pruning.
@@ -31,7 +42,7 @@ Each PPP class instantiates two independent `KFconfig` objects and runs them in 
 
 **`pos_kfObj` — the position / PPP filter.** State vector as laid out below. It runs after the velocity filter, consumes the slip flags and repair values the velocity filter wrote onto the `CycleSlipDetect` list, and produces the epoch's position estimate.
 
-The two filters are deliberately decoupled: the velocity filter is small, always full-rank, and re-estimated per epoch, which makes it a stable place to run slip detection; the position filter is large and resized every epoch as satellites come and go. Only the `CycleSlipDetect` list crosses between them. Both filters share the predict/update implementation in `KF` and the process-model builders in `KFconfig` — see [kalman-filters.md](kalman-filters.md).
+Both filters share the predict/update implementation in `KF` and the process-model builders in `KFconfig` — see [kalman-filters.md](kalman-filters.md).
 
 ## The position-filter state vector
 
@@ -69,15 +80,24 @@ Undifferenced uncombined PPP is rank-deficient in its raw form: receiver clock, 
 3. **Receiver phase biases are absorbed into the float ambiguities** in the geodetic parameterisation. `KFconfig.configPPP_IGS` states this explicitly: no separate phase-clock states are included. The direct consequence is that the estimated float ambiguities are *not* integers — they are integer ambiguity plus a receiver-dependent bias plus whatever residual satellite phase bias the OSB product left behind.
 4. **Integer recovery therefore happens in the between-satellite-differenced (BSD) domain.** Differencing two satellites observed on the same observation code cancels the receiver-dependent part, leaving a quantity that is integer-valued if the satellite phase biases have been correctly removed. This is why the ambiguity-resolution step builds a `Z` matrix of single differences rather than handing the undifferenced ambiguities to LAMBDA directly.
 5. **The ionosphere block needs external support in the single-frequency case.** With one signal per satellite, ionosphere is not separable from the ambiguity and clock terms by geometry alone, so `EKF_PPP` and the low-cost variants append `ionoParamNum` **GIM VTEC pseudo-observations** — one direct observation of each satellite's ionosphere state, weighted by `GnssDataConfig.GIM_TECU_variance`. `EKF_PPP_DF` omits this block entirely because dual-frequency data makes the ionosphere estimable from the observations themselves. The pseudo-observations act as a soft datum constraint: strengthen or loosen them by changing that one variance.
-6. **Low-cost variants add a phase-clock block instead of absorbing.** `configPPP_Android` appends `phaseClkOffNum` phase-clock states with their own large process noise, on the grounds that consumer hardware exhibits code and phase clock behaviour that a single clock state cannot track. This re-introduces a near-deficiency between the phase clock and the ambiguity block, which is held in check only by the very different process noise assigned to each (phase clock: `1e4·dt`; ambiguities: `1e-16·dt`, i.e. effectively constant between slips). If you change either constant, expect the split between "phase clock" and "ambiguity" to change with it.
+6. **Low-cost variants add a phase-clock block instead of absorbing.** `configPPP_Android` appends `phaseClkOffNum` phase-clock states with their own large process noise, on the grounds that consumer hardware exhibits code and phase clock behaviour that a single clock state cannot track. This re-introduces a near-deficiency between the phase clock and the ambiguity block, which is held in check only by the very different process noise assigned to each (phase clock: `1e4·dt`; ambiguities: `1e-16·dt`, i.e. effectively constant between slips).
 
-The process-noise model also encodes several structural assumptions worth knowing: position/velocity noise is built in ENU and rotated to ECEF; clock-drift index 0 (base oscillator) gets much larger noise than the inter-system drift states (slow thermal variation); the troposphere is a slow random walk; ambiguities get a tiny non-zero noise purely to keep `Q` positive definite; and ionosphere noise is scaled by `1/sin²(elevation)` so that a constant slant-domain noise level is achieved. `KFconfig` asserts positive-definiteness of `Q` and throws if it fails — a useful early warning when a tuning change goes wrong.
+> [!WARNING]
+> If you change either the phase-clock or ambiguity process-noise constant in `configPPP_Android`, expect the implicit split between "phase clock" and "ambiguity" to shift with it — they're only separated by that noise ratio, not by anything structural.
+
+The process-noise model also encodes several structural assumptions worth knowing: position/velocity noise is built in ENU and rotated to ECEF; clock-drift index 0 (base oscillator) gets much larger noise than the inter-system drift states (slow thermal variation); the troposphere is a slow random walk; ambiguities get a tiny non-zero noise purely to keep `Q` positive definite; and ionosphere noise is scaled by `1/sin²(elevation)` so that a constant slant-domain noise level is achieved.
+
+> [!TIP]
+> `KFconfig` asserts positive-definiteness of `Q` and throws if it fails — a useful early warning when a tuning change goes wrong.
 
 ### Per-epoch state rebuilding
 
 The single most intricate mechanic in `runFilter_pos` is not the filter maths but the bookkeeping: because `n` and `ionoParamNum` change every epoch, the whole state vector and covariance matrix are **rebuilt from scratch each epoch** before the predict step, with `ambIndexMap` and `ionoIndexMap` (satellite ID → previous state index) carrying continuity.
 
-For each satellite in the current epoch, the ambiguity state is carried forward if the satellite was tracked cleanly (`!isCS()`) or was slipped-but-repaired-and-not-reset; in the carried-forward case the repaired integer slip and its variance are *added* to the state and its variance. Otherwise a fresh ambiguity is initialised from `(phase − pseudorange)/λ` with variance 1e16. Critically, the rebuild also copies the **cross-covariances** — ambiguity↔core, ambiguity↔ambiguity, and ambiguity↔ionosphere — rather than just diagonal terms, which is what preserves the filter's convergence across satellite set changes. Ionosphere states are handled the same way, falling back to zero with variance 1e6 for a newly seen satellite. This nested index-mapping code is verbose and easy to break; if you change the state layout, this is the section to update most carefully.
+For each satellite in the current epoch, the ambiguity state is carried forward if the satellite was tracked cleanly (`!isCS()`) or was slipped-but-repaired-and-not-reset; in the carried-forward case the repaired integer slip and its variance are *added* to the state and its variance. Otherwise a fresh ambiguity is initialised from `(phase − pseudorange)/λ` with variance 1e16. Critically, the rebuild also copies the **cross-covariances** — ambiguity↔core, ambiguity↔ambiguity, and ambiguity↔ionosphere — rather than just diagonal terms, which is what preserves the filter's convergence across satellite set changes. Ionosphere states are handled the same way, falling back to zero with variance 1e6 for a newly seen satellite.
+
+> [!WARNING]
+> This nested index-mapping code is verbose and easy to break. If you change the state layout, the per-epoch rebuild in `runFilter_pos` is the section to update most carefully — it's the one place cross-covariance preservation across a changing satellite set actually happens.
 
 ## Cycle-slip detection and repair
 
@@ -102,7 +122,8 @@ When `fixAmb` is set, the position filter attempts integer resolution after ever
 4. `LAMBDA.computeLambda(sd_a, sd_Q, EstimatorType.PAR, …)` with a 99.999 % success-rate threshold resolves as many single-differenced integers as it can. The integration surface is deliberately narrow: the filter passes a float vector and its covariance, and receives back `nFixed`, a success rate, the fixed vector, and its covariance via `LambdaResult`. Swapping estimators is a one-line change of the `EstimatorType` argument. See [lambda-ambiguity-resolution.md](lambda-ambiguity-resolution.md) for what happens inside.
 5. If anything was fixed, the SD fix is mapped back to the undifferenced ambiguities (`sd_Q` inverted with a small Tikhonov `ε·I` regularisation, since short arcs and poor geometry make it near-singular), and a **conditional mean and covariance update** propagates the fix through the rest of the state. `EKF_PPP` does this properly across three blocks — core states, ambiguities, and ionosphere — recomputing `Pbb`, `Pcc`, `Pbc`, `Pba`, `Pca` so that no cross-covariance is silently dropped, then symmetrises the result before writing it back. The velocity filter's slip repair uses the same conditional-update formula over a two-block (core, slip) partition.
 
-Note that this fix is applied to the filter state itself, not held as a separate "fixed solution" alongside a float solution — subsequent epochs propagate from the fixed state.
+> [!NOTE]
+> This fix is applied to the filter state itself, not held as a separate "fixed solution" alongside a float solution — subsequent epochs propagate from the fixed state.
 
 ## What distinguishes the variants
 
@@ -132,7 +153,8 @@ Position-filter outlier handling differs from the velocity filter's: `performObs
 
 **Retuning.** Measurement priors live in `Rinex.constants.GnssDataConfig` / `Android.constants.GnssDataConfig`; process noise lives in `KFconfig.configPPP_core` and its wrappers; initial variances live in each filter's `process` method. `IGS` echoes the `GnssDataConfig` values into every run header, so keep new constants there rather than inline if you want them recorded.
 
-**Reducing duplication.** The five variants share most of their code, and the layout classes were an early step toward consolidation. `EKF_PPP_DF` and `EKF_PPP_LowCostRx` still use inline index arithmetic where a layout class would do; unifying them is the highest-value cleanup available in this package.
+> [!TIP]
+> **Reducing duplication.** The five variants share most of their code, and the layout classes were an early step toward consolidation. `EKF_PPP_DF` and `EKF_PPP_LowCostRx` still use inline index arithmetic where a layout class would do; unifying them is the highest-value cleanup available in this package.
 
 ## See also
 

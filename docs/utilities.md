@@ -76,13 +76,21 @@ The single most-imported class in the package. It owns the WGS-84 constants (`a`
 **Conversions.** `ecef2lla` is an iterative solution — three fixed Bowring-style iterations on the
 reduced latitude — with explicit longitude quadrant handling. `lla2ecef` is the closed-form inverse.
 Both take a boolean controlling degrees versus radians, and the defaults differ between them
-(`ecef2lla` returns degrees by default; `lla2ecef` requires you to say). Mixing these up is the most
-likely source of a silent order-of-magnitude error when using this class, so read the flag at every
-call site.
+(`ecef2lla` returns degrees by default; `lla2ecef` requires you to say).
+
+> [!WARNING]
+> Mixing up the degrees/radians flag between `ecef2lla` and `lla2ecef` is the most likely source
+> of a silent order-of-magnitude error when using this class — read the flag at every call site,
+> don't assume it matches the sibling function.
 
 **Local frames.** `enu2ecef` / `ecef2enu` / `ned2ecef` / `ecef2ned` all take a reference ECEF position
 and an `isPos` flag distinguishing a *point* (translate by the reference) from a *vector* (rotate
-only). Getting `isPos` wrong on a displacement vector adds an Earth radius to your answer. The NED
+only).
+
+> [!WARNING]
+> Getting `isPos` wrong on a displacement vector adds an Earth radius to your answer.
+
+The NED
 variants are thin wrappers that flip axes via `enu_ned_convert` — the direction cosine matrix is its
 own inverse for that swap, which is why one method handles both directions. `getEnu2EcefRotMat` and
 `getEcef2EnuRotMat` expose the rotation alone, which is what the error-analysis and plotting code
@@ -99,8 +107,9 @@ ionosphere thin-shell geometry (the IONEX path passes geocentric latitude, not g
 `lonAddDD` adds a longitude increment with wraparound to (−180, 180], used by the IONEX time
 interpolation.
 
-One naming trap to be aware of: the private field `e` is the first eccentricity while the public
-`e2` is the *second* eccentricity (not `e` squared), despite the name.
+> [!WARNING]
+> Naming trap: the private field `e` is the first eccentricity while the public `e2` is the
+> *second* eccentricity (not `e` squared), despite the name.
 
 ## Time — `Time`
 
@@ -108,12 +117,17 @@ GPS time handling is where GNSS codebases usually accumulate bugs, and this clas
 why. Java's `Calendar` and `Date` do not model leap seconds, so `getGPSTime(...)` computes the
 offset from the GPS epoch (1980-01-06) using millisecond arithmetic that is *deliberately* not
 leap-second aware — the input is already on the GPS timescale, so no leap-second handling is wanted.
-The source comments say so; do not "fix" this by introducing a UTC conversion.
+
+> [!WARNING]
+> The source comments explicitly say so — do not "fix" `getGPSTime` by introducing a UTC
+> conversion, it would break the deliberately leap-second-blind GPS timescale arithmetic.
 
 The genuinely leap-second-aware path is separate: `convertToZonedDateTime(week, secondsOfWeek)`
 adds the total GPS seconds to the epoch and then subtracts a `LEAP_SECONDS` constant to land on UTC.
-That constant is hard-coded and must be updated if a new leap second is ever introduced — it is the
-one piece of this class that goes stale with time.
+
+> [!NOTE]
+> `LEAP_SECONDS` is a hard-coded constant and must be updated if a new leap second is ever
+> introduced — it is the one piece of this class that goes stale with time.
 
 Beyond that, the class is a set of conversions covering the formats the parsers and models actually
 produce: `getGPSTime(String[])` for RINEX/SP3 timestamp tokens, `getGPSTimeFromYDOY` for the
@@ -208,9 +222,13 @@ reading configuration values and previously-logged vectors.
 ## Plotting — `GraphPlotter`
 
 `GraphPlotter extends ApplicationFrame` and is the project's complete visualisation layer, built on
-JFreeChart. **Constructing one opens a Swing window**; there is no headless mode, and the
-`ChartUtils.saveChartAsJPEG` calls are present but commented out throughout, so plots are viewed
-interactively rather than written to disk. Use `MakeCSV` if you want persisted output.
+JFreeChart.
+
+> [!WARNING]
+> **Constructing one opens a Swing window** — there is no headless mode, and the
+> `ChartUtils.saveChartAsJPEG` calls are present but commented out throughout, so plots are viewed
+> interactively rather than written to disk. Use `MakeCSV` if you want persisted output, or a
+> CI/headless run will hang or fail.
 
 The class is large — roughly two dozen constructors and forty-odd static `graph*` methods — because
 it uses constructor overloading as its dispatch mechanism: the shape of the data you pass determines
@@ -259,8 +277,12 @@ residuals against truth, and the resulting statistics. Its output populates the 
 `GraphPlotter` then renders, and it drives the plotting calls directly.
 
 `getVel` and `getOriginalVel` derive velocity by differencing successive positions (`getVel` also
-produces acceleration). Note that they difference position without dividing by the time step, so the
-result is a per-epoch displacement — correct as a velocity only at a 1 Hz sampling rate.
+produces acceleration).
+
+> [!WARNING]
+> These difference position without dividing by the time step, so the result is a per-epoch
+> displacement — correct as a velocity only at a 1 Hz sampling rate. At any other rate, divide by
+> `Δt` yourself before treating the output as a velocity.
 
 `MakeCSV` is the persisted-output counterpart to `GraphPlotter`, and unlike the plotting layer it
 writes files you can keep:

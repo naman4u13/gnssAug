@@ -66,9 +66,9 @@ For where these packages stand *today* (which may have moved on since the thesis
 
 ## License & citation
 
-Licensed under the [PolyForm Noncommercial License 1.0.0](../../LICENSE) — free for research, academic, and personal use; commercial use requires a separate agreement with the author. If you use this code or its methods in academic work, please cite the thesis — see [CITATION.md](../../CITATION.md) for the full reference, BibTeX entry, and the list of peer-reviewed papers each module is drawn from.
+Licensed under the [PolyForm Noncommercial License 1.0.0](../../LICENSE) — free for research, academic, and personal use; commercial use requires a separate agreement with the author. If you use this code or its methods in academic work, please cite the thesis (DOI: [10.11575/PRISM/51108](https://doi.org/10.11575/PRISM/51108)) — see [CITATION.md](../../CITATION.md) for the full reference, BibTeX entry, and the list of peer-reviewed papers each module is drawn from.
 
 ## Author
 
 Naman Agarwal — PhD, Department of Geomatics Engineering, University of Calgary.
-[Thesis](https://ucalgary.scholaris.ca/items/e9b24a29-0d68-4f5d-ab0f-6a401eef1c9d) · naman4u13@gmail.com
+[Thesis](https://ucalgary.scholaris.ca/items/e9b24a29-0d68-4f5d-ab0f-6a401eef1c9d) · [DOI](https://doi.org/10.11575/PRISM/51108) · naman4u13@gmail.com
