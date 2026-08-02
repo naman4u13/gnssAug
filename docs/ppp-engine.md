@@ -25,14 +25,31 @@ Each PPP class instantiates two independent `KFconfig` objects and runs them in 
 
 ```mermaid
 flowchart TD
-    A["vel_kfObj — velocity/TDCP filter\nstate: vel(3) | clkDrift | driftRate"] -->|"1. Doppler pass\n(velocity + clock drift update)"| B[Doppler-updated state]
-    B -->|"2. TDCP detection pass\nstatistical test flags slips on CycleSlipDetect"| C[Slip-flagged satellites]
-    C -->|"3. TDCP update + repair pass\naugment with float slip states, LAMBDA fix"| D[CycleSlipDetect list\nslip flags + repaired integers]
-    D -->|only hand-off between the two filters| E["pos_kfObj — position/PPP filter\nstate: pos | clk | vel | tropo | amb | iono"]
-    E --> F[Per-epoch position estimate]
+    subgraph VEL["vel_kfObj — velocity/TDCP filter (small, full-rank, re-estimated every epoch)"]
+        direction TB
+        V1["1. Doppler pass\nupdate vel + clock drift from Doppler delta-range\noptional chi-squared/w-test outlier pruning"]
+        V2["2. TDCP detection pass\nstatistical test on TDCP residuals\nflags slips on CycleSlipDetect"]
+        V3["3. TDCP update + repair pass\naugment with a float slip state per flagged satellite\nLAMBDA integer fix when repairCS is on"]
+        V1 --> V2 --> V3
+    end
+
+    CSD[["CycleSlipDetect list\nslip flags + repaired integers\n— the only hand-off between the two filters —"]]
+    V3 --> CSD
+
+    subgraph POS["pos_kfObj — position/PPP filter (large, resized every epoch)"]
+        direction TB
+        P1["Per-epoch state rebuild\nambIndexMap / ionoIndexMap carry continuity\ncross-covariances copied, not just diagonals"]
+        P2["Float update\nstate: pos | clk | vel | tropo | amb | iono"]
+        P3["Ambiguity resolution, only if fixAmb\nBSD single-differencing + LAMBDA (PAR)\nconditional mean/covariance update"]
+        P1 --> P2 --> P3
+    end
+
+    CSD --> P1
+    P2 --> OUT[Epoch position estimate]
+    P3 -.->|"when fixed"| OUT
 ```
 
-*The two filters are deliberately decoupled: the velocity filter is small, always full-rank, and re-estimated every epoch — a stable place to run slip detection. The position filter is large and resized every epoch as satellites come and go. Only the `CycleSlipDetect` list crosses between them.*
+*The two filters are deliberately decoupled: the velocity filter is small, always full-rank, and re-estimated every epoch — a stable place to run slip detection. The position filter is large and resized every epoch as satellites come and go. Only the `CycleSlipDetect` list crosses between them. Ambiguity resolution (`fixAmb`) is drawn as optional because it isn't validated in any variant yet — see the warning below.*
 
 **`vel_kfObj` — the velocity / TDCP filter.** State vector `[ vel(3) | clkDrift(nSys) | driftRate(nSys) ]`. It is updated in three passes per epoch (documented in detail on `runFilter_vel`):
 
@@ -113,6 +130,11 @@ Repair happens inside the velocity filter's third pass, via LAMBDA in PAR-FFRT m
 The theory and the validated detection/repair performance are covered in [thesis/05-cycle-slip-detection.md](thesis/05-cycle-slip-detection.md).
 
 ## Ambiguity resolution
+
+> [!WARNING]
+> No PPP variant has `fixAmb`/PPP-AR validated in practice yet — it's architecturally present
+> but still under development. Don't rely on this part of the code; treat every variant as a
+> float-only (PPP-Float) solution for now.
 
 When `fixAmb` is set, the position filter attempts integer resolution after every float update:
 

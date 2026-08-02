@@ -24,6 +24,13 @@ for the filter structure around it, and
 [thesis/05-cycle-slip-detection.md](thesis/05-cycle-slip-detection.md) for the cycle-slip
 side of the same problem.
 
+> [!NOTE]
+> `EKF_TDCP_ambFix2` and `EKF_TDCP_ambFix_allEst` are experimental filters built to test the
+> cycle-slip detection/repair theory, not finished production paths — see
+> [kalman-filters.md](kalman-filters.md#ekf_tdcp_ambfix2). The PPP filters' `fixAmb`/PPP-AR
+> path is architecturally present but not yet validated in any variant — see
+> [ppp-engine.md](ppp-engine.md#ambiguity-resolution).
+
 ## Class inventory (`helper/lambdaNew/`)
 
 | Class | Responsibility |
@@ -210,9 +217,10 @@ searching call sites rather than assumed:
   the package that imports it. It constructs `Lambda` with method `6` (`ILS_SSEARCH_RT`,
   ILS with a ratio test) and falls back to method `5` (`PAR`) when nothing gets fixed. That
   class is the least-squares (non-Kalman) TDCP velocity and cycle-slip path, reached from
-  `Android/Android.java` and `Android/Android_Static.java`. The Kalman-filter TDCP path
-  (`EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst`) uses `lambdaNew` instead — see
-  [android-pipeline.md](android-pipeline.md).
+  `Android/Android.java` and `Android/Android_Static.java` — **experimental, built to test a
+  theory, not intended for reliable use** (see [android-pipeline.md](android-pipeline.md)).
+  The Kalman-filter TDCP path (`EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst`, also
+  experimental) uses `lambdaNew` instead — see [android-pipeline.md](android-pipeline.md).
 - **`lambdaNew` does not depend on it.** `LAMBDA.java` still carries
   `import com.gnssAug.helper.lambda.Decorrel;`, but the only reference to `Decorrel` in that
   file is inside a commented-out block preserved as a cross-check against `DecorrelateVC`.

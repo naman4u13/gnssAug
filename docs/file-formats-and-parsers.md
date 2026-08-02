@@ -309,7 +309,7 @@ they are not interchangeable, and the column meanings differ.
 |---|---|---|---|
 | `IGS.IGS` | RINEX 3 obs + nav | SP3, CLK, ANTEX, IONEX, DCB/OSB, SINEX | SINEX ARP |
 | `Android.Android` | Android raw log (+ optional `derived.csv`) | SP3, CLK, ANTEX, IONEX, DCB | `GroundTruth` or `GroundTruth_GSA` |
-| `Android.Android_Static_Rinex` | RINEX 3 obs + nav (Android RINEX export) | SP3, CLK, ANTEX, IONEX, DCB/OSB | configured |
+| `Android.Android_Static_Rinex` | RINEX 3 obs + nav (Android RINEX export) | SP3, CLK, ANTEX, IONEX, DCB/OSB | configured *(pipeline not yet properly validated)* |
 
 ## Extending this
 

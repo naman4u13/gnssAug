@@ -112,12 +112,15 @@ the whole analysis pipeline for free.
 `EKFDoppler`, `AKFDoppler`, `AKFDoppler_Static`, `EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst`
 and the PPP filters extend it.
 
-> [!WARNING]
-> **`EKF` does not extend `EKFParent`.** It predates the base class and keeps its own maps
-> keyed by `(time, Measurement)` and `(time, State)` because it can estimate from two
-> measurement types simultaneously, which the flat `EKFParent` maps cannot express. This is
-> the main structural inconsistency in the package — don't assume every filter in this
-> package shares the `EKFParent` diagnostic-map contract without checking.
+> [!NOTE]
+> **`EKF` does not extend `EKFParent`.** It was the first Kalman filter written in this
+> codebase and predates `EKFParent`, keeping its own maps keyed by `(time, Measurement)` and
+> `(time, State)` because it can estimate from two measurement types simultaneously (position
+> and velocity, pseudorange and Doppler), which the flat `EKFParent` maps cannot express.
+> Despite predating the later blueprint, `EKF` is a solid, actively-used SPP filter, not a
+> deprecated one — a future refactor is planned to bring it in line with `EKFParent`, but
+> until then, don't assume every filter in this package shares the `EKFParent`
+> diagnostic-map contract without checking.
 
 ### `Models.State`, `Models.Covariance`, `Models.Flag`
 
@@ -222,6 +225,11 @@ process noise and applies clock noise without the position/drift cross-coupling 
 
 ### `EKF_TDCP_ambFix2`
 
+> [!WARNING]
+> Experimental — built to test the cycle-slip detection/repair theory, not a finished
+> production filter. Reached through `EstimatorMode.EKF_TDCP` / `EKF_TDCP_PHASE_RATE` /
+> `EKF_TDCP_DOPPLER_ONLY`.
+
 The most involved of the non-PPP filters, and the one that carries the cycle-slip detection
 and repair logic. Its state is `[vel(3) | Doppler drift(m) | TDCP drift(m)]` where `m` is the
 number of *constellations* (derived from the first character of each observation code and
@@ -261,13 +269,20 @@ next epoch. This keeps the state dimension bounded: ambiguities exist only for t
 which a slip occurs.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Steady: state dim = 3 + m
-    Steady --> Steady: Doppler update, TDCP update (no slip flagged)
-    Steady --> Augmented: slip flagged on one or more satellites
-    Augmented --> Augmented: grow x/P by ambCount, large variance on new diagonal, H column = wavelength
-    Augmented --> Resolved: augmented update, LAMBDA.computeLambda (BIE)
-    Resolved --> Steady: conditional-solution correction, drop ambiguity states
+flowchart TD
+    A["Match satellites common to\ncurrent & previous epoch"] --> B["Build CycleSlipDetect per match\ndopplerDR + phaseDR"]
+    B --> C["1. Doppler update\nz = Doppler delta-range, H = [-unitLOS | constellation]\noptional outlier testing"]
+    C --> D{"2. TDCP update\ndetection strategy per mode"}
+    D -->|"EKF_TDCP: performTesting\n(chi-squared on residuals)"| E{Slip flagged?}
+    D -->|"EKF_TDCP_PHASE_RATE:\ninnovation > 1 wavelength"| E
+    D -->|"EKF_TDCP_DOPPLER_ONLY:\nstage 2 skipped entirely"| G
+    E -->|no| G["State stays steady\ndim = 3 + m"]
+    E -->|yes, one or more satellites| F["Augment: grow x/P by ambCount\nlarge variance on new diagonal\nH column = wavelength"]
+    F --> H["Augmented update, then\nLAMBDA.computeLambda (BIE)"]
+    H --> I["If fixed: conditional-solution\ncorrection b_caron = b_hat - Cba*Caa^-1*(a_hat - a_caron)"]
+    I --> J["Drop ambiguity states\nshrink back to dim = 3 + m"]
+    J --> G
+    G --> A
 ```
 
 *The ambiguity state only exists for the epoch in which a slip occurs — it's added and removed every time, never carried forward. This is what keeps the filter's steady-state dimension fixed regardless of how many slips have happened over a run.*
@@ -282,6 +297,10 @@ and a `csdListMap` of the full `CycleSlipDetect` records for analysis. Theory ba
 [thesis/05-cycle-slip-detection.md](thesis/05-cycle-slip-detection.md).
 
 ### `EKF_TDCP_ambFix_allEst`
+
+> [!WARNING]
+> Experimental — like `EKF_TDCP_ambFix2`, this exists to test a theory (here, comparing
+> LAMBDA estimators against each other), not as a finished production filter.
 
 A benchmarking variant of `EKF_TDCP_ambFix2`. The state model, two-stage update and slip
 detection are the same; what changes is what happens after the float ambiguities are formed.
@@ -298,6 +317,10 @@ only through `EstimatorMode.EKF_TDCP_ALL_ESTIMATORS` in `Android_Static`. See
 themselves.
 
 ### `INSfusion`
+
+> [!WARNING]
+> GNSS/INS fusion is still under development and not yet functional. Treat this class and
+> `EstimatorMode.GNSS_INS` as work in progress, not a validated estimator.
 
 The loosely-coupled GNSS/INS filter, and the odd one out in the package: it is a static
 utility class, does not extend `EKFParent`, and does not use `KFconfig` — it builds `phi` and

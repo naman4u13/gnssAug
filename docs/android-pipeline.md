@@ -6,17 +6,19 @@ three top-level driver classes that `MainApp` dispatches to, the per-epoch satel
 assembly step that turns raw logs plus orbit/clock products into `Satellite` objects, the
 tuning constants that every estimator reads, the snapshot (non-Kalman) least-squares
 estimators, the Android-specific file parsers and data models, and the IMU/magnetometer
-support classes used by the GNSS/INS fusion mode. The recursive filters live in a
-sub-package and are documented separately in [kalman-filters.md](kalman-filters.md);
-the PPP filters are documented in [ppp-engine.md](ppp-engine.md).
+support classes used by the GNSS/INS fusion mode. The recursive filters — including the
+shared filter mechanics `Models.KF` and `Models.KFconfig` that all of them build on — live
+in the `estimation.KalmanFilter` sub-package and are documented separately in
+[kalman-filters.md](kalman-filters.md); the PPP filters are documented in
+[ppp-engine.md](ppp-engine.md).
 
 ## Classes
 
 | Class | Responsibility |
 | --- | --- |
 | `Android` | Kinematic driver: runs an Android log against a time-series ground truth track and every non-RINEX estimator mode. |
-| `Android_Static` | Static driver: same pipeline against a single fixed reference ECEF, plus the ambiguity-estimator comparison and PPP-AR modes. |
-| `Android_Static_Rinex` | Driver for Android data already converted to RINEX; routes through the RINEX/IGS parsers and estimators instead of the Android ones. |
+| `Android_Static` | Static driver: same pipeline against a single fixed reference ECEF, plus the ambiguity-estimator comparison mode *(experimental)* and PPP-AR mode *(not yet validated)*. |
+| `Android_Static_Rinex` | Driver for Android data already converted to RINEX; routes through the RINEX/IGS parsers and estimators instead of the Android ones. *(Not yet properly validated.)* |
 | `SingleFreq` | Per-epoch satellite assembly: pairs raw observations with broadcast (derived CSV) or precise (IGS) orbits/clocks and emits corrected `Satellite` objects. |
 | `constants.EstimatorMode` | Enum naming every supported estimator configuration; carries the legacy integer code and mode-family predicates. |
 | `constants.GnssDataConfig` | Prior variances of unit weight per measurement type and ENU process-noise (random-walk) vectors. |
@@ -28,7 +30,7 @@ the PPP filters are documented in [ppp-engine.md](ppp-engine.md).
 | `constants.ImuDataSheets` | Per-device IMU noise parameters (bias, random walk, correlation time) taken from vendor datasheets. |
 | `estimation.LinearLeastSquare` | Snapshot LS/WLS position from pseudorange and velocity from Doppler, with statistical testing and quality control. |
 | `estimation.LLS_TDCP` | Snapshot velocity from time-differenced carrier phase between two consecutive epochs. |
-| `estimation.LLS_TDCP_ambFix` | Same as `LLS_TDCP` but detects cycle slips and repairs them by integer ambiguity resolution. |
+| `estimation.LLS_TDCP_ambFix` | Same as `LLS_TDCP` but detects cycle slips and repairs them by integer ambiguity resolution. *(Experimental — built to test a theory, not for reliable use.)* |
 | `fileParser.GNSS_Log` | Parses a `gnss_log.txt` into per-epoch raw GNSS records and a time-ordered IMU list. |
 | `fileParser.DerivedCSV` | Parses Google's `device_gnss.csv` / derived CSV (broadcast satellite states and correction terms). |
 | `fileParser.GroundTruth` | Parses the Google Decimeter Challenge ground-truth CSV (lat/lon/alt). |
@@ -80,7 +82,16 @@ It prints a reproducibility header (`printRunHeader`, including the current git 
 It also substitutes `AKFDoppler_Static` for `AKFDoppler` when the mode is `AKF_DBP`, since
 the static case has no meaningful Doppler-driven state propagation.
 
+> [!WARNING]
+> `EKF_TDCP_ALL_ESTIMATORS` (`EKF_TDCP_ambFix_allEst`) is experimental — built to test the
+> cycle-slip detection/repair theory, not a finished production path. `EKF_PPP3`'s ambiguity
+> resolution (`fixAmb`) is architecturally present but not yet validated in any variant; see
+> [ppp-engine.md](ppp-engine.md#ambiguity-resolution).
+
 ### `Android_Static_Rinex`
+
+> [!WARNING]
+> This pipeline has not been properly validated yet — treat its results cautiously.
 
 A bridge rather than a variant. When Android data has already been converted to RINEX
 (newer phones and third-party loggers emit RINEX directly), this driver reads it with
@@ -185,6 +196,10 @@ absolutely, the ambiguity cancels — provided no cycle slip occurred. Reached t
 
 ### `LLS_TDCP_ambFix`
 
+> [!WARNING]
+> Experimental — built to test a cycle-slip theory, not intended as a reliable production
+> estimator. Don't depend on it.
+
 Extends the `LLS_TDCP` idea with cycle-slip detection and repair, and is reached through
 `EstimatorMode.TDCP_CSDR`. Instead of `TDCP` records it builds `CycleSlipDetect` records,
 which hold both the Doppler-derived and phase-derived delta ranges for the same satellite;
@@ -223,6 +238,11 @@ Covered in depth in [file-formats-and-parsers.md](file-formats-and-parsers.md); 
   its float and fixed ambiguity, and one inertial/magnetic sample.
 
 ## INS and sensor fusion support
+
+> [!WARNING]
+> GNSS/INS fusion is still under development and not yet functional. Treat
+> `EstimatorMode.GNSS_INS` and everything in this section as work in progress, not a
+> validated estimator.
 
 Three classes prepare the inputs that `INSfusion` (see [kalman-filters.md](kalman-filters.md))
 consumes. They are only exercised by `EstimatorMode.GNSS_INS`, which is reachable from

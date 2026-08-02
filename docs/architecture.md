@@ -54,10 +54,13 @@ Living, package-by-package documentation for each of these areas:
 |---|---|---|---|
 | `Android.Android` | Raw `GnssLogger` log + Google Decimeter Challenge `derived.csv` | Per-epoch ground-truth CSV | Kinematic (walking/driving) |
 | `Android.Android_Static` | Raw `GnssLogger` log | Fixed surveyed ECEF | Static smartphone benchmark |
-| `Android.Android_Static_Rinex` | RINEX 3 obs (from an Android RINEX export) | Fixed surveyed ECEF | Static smartphone data via the RINEX/PPP pipeline |
+| `Android.Android_Static_Rinex` | RINEX 3 obs (from an Android RINEX export) | Fixed surveyed ECEF | Static smartphone data via the RINEX/PPP pipeline *(not yet properly validated)* |
 | `IGS.IGS` | RINEX 3 obs + MGEX products | SINEX-derived ARP | Geodetic IGS reference station |
 
 `MainApp` selects one of six pre-wired `RUN` scenarios; each owns its own file paths, observable set, and estimator flags, and dispatches into one of the four pipelines above.
+
+> [!WARNING]
+> `Android.Android_Static_Rinex` has not been properly validated yet — treat its results cautiously. See [android-pipeline.md](android-pipeline.md#android_static_rinex) and [rinex-igs-pipeline.md](rinex-igs-pipeline.md).
 
 ## Processing pipeline (all four entry points)
 
@@ -91,17 +94,22 @@ flowchart TD
 | Mode | Code | Implementation |
 |---|---|---|
 | `LLS_CODE`, `WLS_CODE`, `LLS_WLS_BOTH` | 1–3 | Single-epoch (weighted) least squares, code-only |
-| `GNSS_INS` | 4 | `INSfusion` — loose GNSS/INS fusion |
+| `GNSS_INS` | 4 | `INSfusion` — loose GNSS/INS fusion *(under development, not yet functional)* |
 | `EKF_POS_RW`, `EKF_VEL_RW`, `EKF_VEL_RW_DOPPLER`, `EKF_VEL_RW_ESTVEL`, `EKF_VEL_RW_ESTVEL_COMP`, `EKF_BASIC_MULTI` | 5–7, 12–13, 9 | `EKF` — PRW / VRW / VRWD conventional filter variants |
 | `EKF_DBP`, `AKF_DBP` | 10, 14 | `EKFDoppler`, `AKFDoppler`/`AKFDoppler_Static` |
-| `LLS_TDCP_VEL`, `TDCP_CSDR` | 16, 17 | `LLS_TDCP`, `LLS_TDCP_ambFix` |
-| `EKF_TDCP`, `EKF_TDCP_PHASE_RATE`, `EKF_TDCP_DOPPLER_ONLY`, `EKF_TDCP_ALL_ESTIMATORS` | 18–21 | `EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst` |
+| `LLS_TDCP_VEL` | 16 | `LLS_TDCP` |
+| `TDCP_CSDR` | 17 | `LLS_TDCP_ambFix` *(experimental — built to test a theory, not for reliable use)* |
+| `EKF_TDCP`, `EKF_TDCP_PHASE_RATE`, `EKF_TDCP_DOPPLER_ONLY`, `EKF_TDCP_ALL_ESTIMATORS` | 18–21 | `EKF_TDCP_ambFix2`, `EKF_TDCP_ambFix_allEst` *(experimental — built to test the cycle-slip detection/repair theory)* |
 | `PPP_FLOAT` | 22 | `Android.estimation.KalmanFilter.EKF_PPP` / `EKF_PPP3` |
 | `ALL_ANALYSIS` | 11 | Runs several sub-modes together for comparative plotting |
 | `RINEX_EKF_CODE`, `RINEX_PPP_LOWCOST`, `RINEX_PPP_DF` | 104–106 | `Rinex.estimation.EKF`, `EKF_PPP_LowCostRx`, `EKF_PPP_DF` |
-| `IGS_PPP_FLOAT`, `IGS_PPP_AR` | 201–202 | `Rinex.estimation.EKF_PPP` |
+| `IGS_PPP_FLOAT` | 201 | `Rinex.estimation.EKF_PPP`, float solution |
+| `IGS_PPP_AR` | 202 | `Rinex.estimation.EKF_PPP` with `fixAmb = true` *(not yet validated in any variant — see [ppp-engine.md](ppp-engine.md#ambiguity-resolution))* |
 
 See [kalman-filters.md](kalman-filters.md) and [ppp-engine.md](ppp-engine.md) for what distinguishes each filter's state/measurement model.
+
+> [!NOTE]
+> A few modes above are experimental or under active development rather than finished, validated features — the table calls each one out individually, and the corresponding doc section has more detail and a matching callout.
 
 ## See also
 

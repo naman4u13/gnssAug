@@ -18,7 +18,7 @@ The `com.gnssAug.IGS` package is the entry point for positioning a geodetic (IGS
 | `com.gnssAug.Rinex.estimation.EKF` | Pseudorange-only Extended Kalman Filter producing a smoothed code solution. |
 | `com.gnssAug.Rinex.models.*` | Plain data carriers for parsed RINEX and product content — see the table further down. |
 | `com.gnssAug.Rinex.fileParser.*` | RINEX/product readers that populate the model classes — see [file-formats-and-parsers.md](file-formats-and-parsers.md). |
-| `com.gnssAug.Android.Android_Static_Rinex` | Variant of the same pipeline for consumer receivers that log RINEX; reuses the entire `Rinex.*` stack. |
+| `com.gnssAug.Android.Android_Static_Rinex` | Variant of the same pipeline for consumer receivers that log RINEX; reuses the entire `Rinex.*` stack. *(Not yet properly validated.)* |
 
 ## `IGS.IGS` — the run orchestrator
 
@@ -51,7 +51,7 @@ flowchart TD
 
 - `LLS_CODE` / `WLS_CODE` / `LLS_WLS_BOTH` — per-epoch `LinearLeastSquare` for both position (pseudorange) and velocity (Doppler).
 - `RINEX_EKF_CODE` (and, historically, `LLS_WLS_BOTH`) — `Rinex.estimation.EKF` over the full session.
-- `IGS_PPP_FLOAT` / `IGS_PPP_AR` — `Rinex.estimation.EKF_PPP`; the only difference between the two is that `IGS_PPP_AR` sets `fixAmb = true`.
+- `IGS_PPP_FLOAT` / `IGS_PPP_AR` — `Rinex.estimation.EKF_PPP`; the only difference between the two is that `IGS_PPP_AR` sets `fixAmb = true`. **`IGS_PPP_AR` is not yet validated in practice** — see [ppp-engine.md](ppp-engine.md#ambiguity-resolution).
 
 **7. Analysis and output.** When `doAnalyze` is set, `IGS` pulls the estimator's per-epoch diagnostic maps (residuals, innovations, post-variance of unit weight, redundancy numbers, DOP, satellite counts) and reshapes them into the per-satellite `SatResidual` structures that `GraphPlotter` expects. It prints ENU error statistics against the ARP, cycle-slip statistics, and a data summary; renders the plot set (`graphENU`, `graphSatRes`, `graphPostUnitW`, `graphDOP`, `graphRedundancyPPP`, `createPPPplots`); and optionally writes a per-epoch JSONL file and CSV exports. In PPP mode the output `.txt` is renamed at the end to embed the session's UTC start–end tag.
 
@@ -113,6 +113,9 @@ A pseudorange-only Extended Kalman Filter with state vector `[pos(3) | clkOff(m)
 The parser classes in `Rinex.fileParser` that produce these are covered in depth in [file-formats-and-parsers.md](file-formats-and-parsers.md); briefly: `ObservationRNX` reads RINEX 3 OBS files, `NavigationRNX` reads mixed NAV files, `Orbit` reads and interpolates SP3, `Clock` reads CLK (folding in DCBs), `Antenna` reads the ANTEX/CSV antenna tables and computes satellite PCO and phase wind-up, `OSB_Bias` and `DCB_Bias` read SINEX-BIAS observable-specific and differential code biases, `IONEX` reads global ionosphere maps and interpolates slant delay, and `SINEX` reads station solutions for the precise ARP.
 
 ## Reuse by `Android.Android_Static_Rinex`
+
+> [!WARNING]
+> This pipeline has not been properly validated yet — treat its results cautiously.
 
 Some consumer devices and low-cost receivers can log RINEX rather than platform-specific raw measurements. `com.gnssAug.Android.Android_Static_Rinex` exists for exactly that case: it is structurally a copy of `IGS.posEstimate` — same parse order, same `SingleFreq`-equivalent pre-processing, same `filterSat` masking and atmospheric handling, same `Rinex.models.Satellite` objects — but with the ground truth supplied as an explicit ECEF array instead of read from SINEX, and with a different set of estimator modes: `RINEX_EKF_CODE` (`Rinex.estimation.EKF`), `RINEX_PPP_LOWCOST` (`EKF_PPP_LowCostRx`), and `RINEX_PPP_DF` (`EKF_PPP_DF`). The practical consequence is that the `Rinex.*` stack is receiver-agnostic: the only thing that changes between an IGS station and a low-cost receiver is which estimator variant you select and which stochastic constants it uses. The Android-native entry points that consume raw GNSS logs rather than RINEX — `Android.Android`, `Android.Android_Static` — are described in [android-pipeline.md](android-pipeline.md).
 
