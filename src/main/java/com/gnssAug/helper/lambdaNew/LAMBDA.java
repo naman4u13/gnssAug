@@ -261,7 +261,7 @@ public class LAMBDA {
 		switch (method) {
 
 		case ILS: // Compute ILS (shrink-and-search) [DEFAULT]
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(zHat, lzMat, dzVec, nCands);
+			ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(zHat, lzMat, dzVec, nCands);
 			zFix = ilsResult.getAFix().extractVector(false, 0);
 			sqNorm = ilsResult.getSqNorm()[0];
 			if (estimateVar) {
@@ -344,17 +344,20 @@ public class LAMBDA {
 		SimpleMatrix QaFix = iZtMat.mult(QzFix).mult(iZtMat.transpose());
 		
 
-		// Squared norm of ambiguity residuals (invariant to any Z-transformations)
+		// Squared norm of ambiguity residuals (Mahalanobis distance, invariant to Z-transformations)
+		// Formula: Δz^T Q_z^{-1} Δz  via  back-substitution L^T·Dz = Δz,  then Σ Dz[i]²/d[i]
 		if (method == EstimatorType.PAR || method == EstimatorType.BIE || method == EstimatorType.PAR_FFRT) {
-			SimpleMatrix dzInverse = new SimpleMatrix(dzVec.length, dzVec.length);
-			for (int i = 0; i < dzVec.length; i++) {
-				dzInverse.set(i, 0, 1.0 / dzVec[i]);
+			double[] Dz = new double[dzVec.length];
+			for (int i = dzVec.length - 1; i >= 0; i--) {
+				double sum = zHat.get(i, 0) - zFix.get(i, 0);
+				for (int j = i + 1; j < dzVec.length; j++) {
+					sum -= lzMat.get(j, i) * Dz[j];
+				}
+				Dz[i] = sum;
 			}
-			SimpleMatrix dzDiv = dzInverse;
-
 			double residual = 0.0;
 			for (int i = 0; i < dzVec.length; i++) {
-				residual += Math.pow(dzDiv.get(i, 0) * (zHat.get(i, 0) - zFix.get(i, 0)), 2);
+				residual += Dz[i] * Dz[i] / dzVec[i];
 			}
 			sqNorm = residual;
 		}
@@ -362,8 +365,10 @@ public class LAMBDA {
 		{
 			double approxSR = (double) stats[1];
 			double approxFR = (double) stats[2];
+			double approxAbstain = (double) stats[3];
 //			System.out.println("Approximate Success Rate : " + approxSR*100);
 //			System.out.println("Approximate Failure Rate : " + approxFR*100);
+//			System.out.println("Approximate Abstain Rate : " + approxAbstain*100);
 		}
 
 		return new LambdaResult(aFix, QaFix, sqNorm, nFixed, sr, zMat, QzHat);

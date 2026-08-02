@@ -30,29 +30,36 @@ public class OptimizedVarCalc {
 		}
 		double failRate = 0;
 		double successRate = 0;
+		double abstainRate = 0;
 
 		for (int jj = 0; jj < nSamples; jj++) {
-			SimpleMatrix sample = aFixAll.extractVector(false, jj); // Extract column vector
-            double sum =sample.elementSum();
-            if(Double.isNaN(sum)) {
-            	continue;
-            }
-			variance = variance.plus(sample.mult(sample.transpose()).scale((1.0) / nSamples));
+			SimpleMatrix sample = aFixAll.extractVector(false, jj);
+			double sum = sample.elementSum();
+			if (Double.isNaN(sum)) {
+				abstainRate++;
+				continue;
+			}
+			variance = variance.plus(sample.mult(sample.transpose()).scale(1.0 / nSamples));
 			if (areAllElementsIntegers(sample)) {
-				if (sum == 0.0) {
+				if (isZeroVector(sample)) {
 					successRate++;
 				} else {
 					failRate++;
 				}
 			}
-
 		}
-		// Step 3: Enforce symmetry on the variance matrix (optional but useful for
-		// numerical stability)
 		variance = enforceSymmetry(variance);
 		failRate = failRate / nSamples;
-		successRate = successRate/nSamples;
-		return new Object[] { variance, successRate, failRate };
+		successRate = successRate / nSamples;
+		abstainRate = abstainRate / nSamples;
+		return new Object[] { variance, successRate, failRate, abstainRate };
+	}
+
+	private static boolean isZeroVector(SimpleMatrix v) {
+		for (int i = 0; i < v.numRows(); i++) {
+			if (v.get(i) != 0.0) return false;
+		}
+		return true;
 	}
 
 	/**

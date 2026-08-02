@@ -1,6 +1,5 @@
 package com.gnssAug.helper.lambdaNew;
 
-import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.special.Erf;
 
 public class ComputeSR_IBexact {
@@ -83,16 +82,6 @@ public class ComputeSR_IBexact {
 
 		// Success-rate for the Full AR (FAR)
 		double SR = SR_cumul[0];
-		
-		
-		
-		
-		double Ps = 1;
-        NormalDistribution normalDistribution = new NormalDistribution();
-        for (int i = 0;i < dVec.length;i++){
-            double cdf = normalDistribution.probability(-Double.MAX_VALUE, 0.5/Math.sqrt(dVec[i]));
-            Ps *= (2 * cdf - 1);
-        }
 
 		return new SR_IB(SR, SR_cumul, SR_vect);
 	}

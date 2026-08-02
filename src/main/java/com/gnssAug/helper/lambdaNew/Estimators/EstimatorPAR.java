@@ -120,7 +120,7 @@ public class EstimatorPAR {
 				nFixed = 0;
 				SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
 						.mult(LMat);
-				return new PARResult(aPAR, nFixed, SR_PAR, new Object[] {qMat,0.0,1.0});
+				return new PARResult(aPAR, nFixed, SR_PAR, new Object[] {qMat, 0.0, 0.0, 1.0});
 			}
 		}
 
@@ -148,7 +148,7 @@ public class EstimatorPAR {
 			SimpleMatrix aHat_subset = aHat.extractMatrix(kk_PAR - 1, nn, 0, 1);
 			SimpleMatrix LMat_subset = LMat.extractMatrix(kk_PAR - 1, nn, kk_PAR - 1, nn);
 			double[] dVec_subset = Arrays.copyOfRange(dVec, kk_PAR - 1, nn);
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
+			ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat_subset, LMat_subset, dVec_subset, nCands);
 			SimpleMatrix qMat_subset = LMat_subset.transpose().mult(SimpleMatrix.diag(dVec_subset)).mult(LMat_subset);
 			if (estimateVar) {
 				stats = ComputeVariance.computeVariance(qMat_subset, 1, 0, null, (int) GnssDataConfig.nSamplesMC,
@@ -168,10 +168,11 @@ public class EstimatorPAR {
 		SimpleMatrix QMat_21 = QMat_12.transpose();
 		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : SimpleMatrix.identity(nn - (kk_PAR-1)).scale(1e-16);
 
-		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
+		SimpleMatrix QMat_22_inv = QMat_22.invert();
+		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22_inv).mult(aHat2.minus(a_fix_PAR)));
 
-		SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
-		SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
+		SimpleMatrix term1 = QMat_12.mult(QMat_22_inv).mult(QMat_21);
+		SimpleMatrix term2 = QMat_12.mult(QMat_22_inv).mult(Q_fix_PAR).mult(QMat_22_inv).mult(QMat_21);
 		SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
 		// Concatenate a_cond_PAR and a_fix_PAR vertically
 		aPAR = new SimpleMatrix(nn, 1);
@@ -189,11 +190,11 @@ public class EstimatorPAR {
 		// aPAR now contains the vertically concatenated result
 		if(stats==null)
 		{
-			stats = new Object[] {QPAR,0.0,1.0};
+			stats = new Object[] {QPAR, 0.0, 1.0, 0.0};
 		}
 		else
 		{
-			stats = new Object[] {QPAR,stats[1],stats[2]};
+			stats = new Object[] {QPAR, stats[1], stats[2], stats[3]};
 		}
 		return new PARResult(aPAR, nFixed, SR_PAR, stats);
 	}

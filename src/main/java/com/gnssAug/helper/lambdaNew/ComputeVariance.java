@@ -11,6 +11,7 @@ import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorIA_FFRT.IAFFRTResult;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS;
 import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS.ILSResult;
+import com.gnssAug.helper.lambdaNew.Estimators.EstimatorILS_GHAH;
 import com.gnssAug.utility.Matrix;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +91,7 @@ public class ComputeVariance {
 		case 1: // Use ILS
 			for (int ii = 0; ii < nSamples; ii++) {
 				SimpleMatrix aHat = aHatAll.extractVector(false, ii);
-				ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
+				ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat, LMat, dVec, 1);
 				SimpleMatrix aFix = ilsResult.getAFix();
 				aFixAll.insertIntoThis(0, ii, aFix);
 
@@ -174,6 +175,7 @@ public class ComputeVariance {
 
 	        futures[t] = executor.submit(() -> {
 	            SimpleMatrix localFix = new SimpleMatrix(nn, end - start);
+	            for (int k = 0; k < localFix.getNumElements(); k++) localFix.set(k, Double.NaN);
 
 	            for (int i = start; i < end; i++) {
 	                SimpleMatrix aHat = aHatAll.extractVector(false, i);
@@ -181,7 +183,7 @@ public class ComputeVariance {
 
 	                switch (estimator) {
 	                    case 1:
-	                        aFix = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1).getAFix();
+	                        aFix = new EstimatorILS_GHAH().estimatorILS(aHat, LMat, dVec, 1).getAFix();
 	                        break;
 	                    case 2:
 	                        IAFFRTResult iaResult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
@@ -275,7 +277,7 @@ public class ComputeVariance {
 
 		for (int ii = 0; ii < nSamples; ii++) {
 			SimpleMatrix aHat = aHatAll.extractVector(false, ii);
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1);
+			ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat, LMat, dVec, 1);
 			IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
 			EstimatorBIEResult bieResult = new EstimatorBIE().estimatorBIE(aHat, LMat, dVec, chi2BIE, null, QMat);
 
@@ -297,7 +299,7 @@ public class ComputeVariance {
 			varCalResMap.put(est, varCalRes);
 		}
 		if ((double)varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double)varCalResMap.get(EstimatorType.IA_FFRT)[2] == 0.0) {
-			varCalResMap.put(EstimatorType.IA_FFRT, new Object[] {QMat,0.0,1.0});
+			varCalResMap.put(EstimatorType.IA_FFRT, new Object[] {QMat, 0.0, 0.0, 1.0});
 		}
 		return varCalResMap;
 	}
@@ -335,7 +337,7 @@ public class ComputeVariance {
 		SimpleMatrix aHatAll = cholQMat.transpose().mult(generateRandn(nn, nSamples, rand));
 
 		HashMap<EstimatorType, SimpleMatrix> aFixAllMap = new HashMap<>();
-		for (EstimatorType est : EstimatorType.values()) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE }) {
 			SimpleMatrix aFixAll = new SimpleMatrix(nn, nSamples);
 			for (int i = 0; i < aFixAll.getNumElements(); i++) {
 				aFixAll.set(i, Double.NaN);
@@ -355,7 +357,7 @@ public class ComputeVariance {
 				for (int ii = start; ii < end; ii++) {
 					SimpleMatrix aHat = aHatAll.extractVector(false, ii);
 
-					SimpleMatrix aFix = new EstimatorILS().estimatorILS(aHat, LMat, dVec, 1).getAFix();
+					SimpleMatrix aFix = new EstimatorILS_GHAH().estimatorILS(aHat, LMat, dVec, 1).getAFix();
 					aFixAllMap.get(EstimatorType.ILS).insertIntoThis(0, ii, new SimpleMatrix(aFix));
 
 					IAFFRTResult IAFFRTresult = new EstimatorIA_FFRT().estimatorIA_FFRT(aHat, LMat, dVec, maxFR, muRatio);
@@ -374,13 +376,13 @@ public class ComputeVariance {
 		for (Future<Void> f : futures) f.get();
 
 		HashMap<EstimatorType, Object[]> varCalResMap = new HashMap<>();
-		for (EstimatorType est : EstimatorType.values()) {
+		for (EstimatorType est : new EstimatorType[] { EstimatorType.ILS, EstimatorType.IA_FFRT, EstimatorType.BIE }) {
 			Object[] varCalRes = OptimizedVarCalc.calculateVariance(aFixAllMap.get(est), nSamples);
 			varCalResMap.put(est, varCalRes);
 		}
 
 		if ((double) varCalResMap.get(EstimatorType.IA_FFRT)[1] == 0.0 && (double) varCalResMap.get(EstimatorType.IA_FFRT)[2] == 0.0) {
-			varCalResMap.put(EstimatorType.IA_FFRT, new Object[]{QMat, 0.0, 1.0});
+			varCalResMap.put(EstimatorType.IA_FFRT, new Object[]{QMat, 0.0, 0.0, 1.0});
 		}
 
 		return varCalResMap;

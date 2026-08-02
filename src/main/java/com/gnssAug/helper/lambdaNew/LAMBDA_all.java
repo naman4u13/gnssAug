@@ -200,7 +200,7 @@ public class LAMBDA_all {
 		double maxFR = 1 / 100.0;
 		double alphaBIE = 1e-6;
 
-		ILSResult ilsResult = new EstimatorILS().estimatorILS(zHat, lzMat, dzVec, nCands);
+		ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(zHat, lzMat, dzVec, nCands);
 		PARResult parResult = EstimatorPAR.estimatorPAR(zHat, lzMat, dzVec, nCands, minSR, null, estimateVar);
 		IAFFRTResult iaFfrtResult = new EstimatorIA_FFRT().estimatorIA_FFRT(zHat, lzMat, dzVec, maxFR, null);
 		EstimatorBIE estBIE = new EstimatorBIE();

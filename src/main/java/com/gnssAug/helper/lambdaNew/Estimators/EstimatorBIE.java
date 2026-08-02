@@ -122,22 +122,26 @@ public class EstimatorBIE {
 			int nIntegers = (int) (1 + (2 * (Math.pow(2, nn) - 1))); // More efficient in high dimensions
 
 			// Call ILS estimator to find closest "nIntegers" candidates
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, LMat, dVec, nIntegers);
+			ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat, LMat, dVec, nIntegers);
 			for(int i=0;i<nIntegers;i++)
 			{
 				SimpleMatrix zVecttemp = new SimpleMatrix(ilsResult.getAFix().extractVector(false, i));
 				allIntCandidates.add(zVecttemp);
 				
 			}
-			// Define BIE weights (for Gaussian distribution)
-			SimpleMatrix wBIE = new SimpleMatrix(ilsResult.getSqNorm().length, 1);
-			for (int i = 0; i < ilsResult.getSqNorm().length; i++) {
-				double sumExp = 0.0;
-				for (int j = 0; j < ilsResult.getSqNorm().length; j++) {
-					sumExp += Math.exp(-0.5 * (ilsResult.getSqNorm()[i] - ilsResult.getSqNorm()[j]));
-				}
-				wBIE.set(i, 0, 1.0 / sumExp);
-				expTlist.add(1/sumExp);
+			// Define BIE weights: w_i ∝ exp(-0.5*sq[i]), normalised relative to best
+			// candidate (sq[0] = minimum) for numerical stability.
+			double[] sqNorms = ilsResult.getSqNorm();
+			int nCands = sqNorms.length;
+			SimpleMatrix wBIE = new SimpleMatrix(nCands, 1);
+			double denom = 0.0;
+			for (int j = 0; j < nCands; j++) {
+				denom += Math.exp(-0.5 * (sqNorms[j] - sqNorms[0]));
+			}
+			for (int i = 0; i < nCands; i++) {
+				double w = Math.exp(-0.5 * (sqNorms[i] - sqNorms[0])) / denom;
+				wBIE.set(i, 0, w);
+				expTlist.add(w);
 			}
 
 			// Return BIE solution

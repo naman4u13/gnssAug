@@ -154,7 +154,7 @@ public class EstimatorILS {
         return new ILSResult(afixed, sqnorm);
     }
 
-    private static int[] arraySort(double[] arr) {
+    protected static int[] arraySort(double[] arr) {
         double temp;
         int index;
         int k=arr.length;

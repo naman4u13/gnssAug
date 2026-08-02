@@ -95,7 +95,7 @@ public class EstimatorPAR_FFRT {
 			// No AR
 			SimpleMatrix qMat = LMat.transpose().mult(SimpleMatrix.diag(dVec))
 					.mult(LMat);
-			return new PARResult_FFRT(aHat, 0, SR_IB, new Object[] {qMat,0.0,1.0});
+			return new PARResult_FFRT(aHat, 0, SR_IB, new Object[] {qMat, 0.0, 0.0, 1.0});
 		}
 		ILSResult ilsResult = (ILSResult) findFirstRes[0];
 		Object[] stats = (Object[]) findFirstRes[1];
@@ -119,10 +119,11 @@ public class EstimatorPAR_FFRT {
 		SimpleMatrix QMat_21 = QMat_12.transpose();
 		SimpleMatrix Q_fix_PAR = stats != null ? (SimpleMatrix)stats[0] : SimpleMatrix.identity(nn - kk_PAR).scale(1e-10);
 
-		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22.invert()).mult(aHat2.minus(a_fix_PAR)));
+		SimpleMatrix QMat_22_inv = QMat_22.invert();
+		SimpleMatrix a_cond_PAR = aHat1.minus(QMat_12.mult(QMat_22_inv).mult(aHat2.minus(a_fix_PAR)));
 
-		SimpleMatrix term1 = QMat_12.mult(QMat_22.invert()).mult(QMat_21);
-		SimpleMatrix term2 = QMat_12.mult(QMat_22.invert()).mult(Q_fix_PAR).mult(QMat_22.invert()).mult(QMat_21);
+		SimpleMatrix term1 = QMat_12.mult(QMat_22_inv).mult(QMat_21);
+		SimpleMatrix term2 = QMat_12.mult(QMat_22_inv).mult(Q_fix_PAR).mult(QMat_22_inv).mult(QMat_21);
 		SimpleMatrix Q_cond_PAR = QMat_11.minus(term1).plus(term2);
 		// Concatenate a_cond_PAR and a_fix_PAR vertically
 		aPAR = new SimpleMatrix(nn, 1);
@@ -140,11 +141,11 @@ public class EstimatorPAR_FFRT {
 		// aPAR now contains the vertically concatenated result
 		if(stats==null)
 		{
-			stats = new Object[] {QPAR,0.0,1.0};
+			stats = new Object[] {QPAR, 0.0, 1.0, 0.0};
 		}
 		else
 		{
-			stats = new Object[] {QPAR,stats[1],stats[2]};
+			stats = new Object[] {QPAR, stats[1], stats[2], stats[3]};
 		}
 		return new PARResult_FFRT(aPAR, nFixed, SR_PAR, stats);
 	}
@@ -157,9 +158,10 @@ public class EstimatorPAR_FFRT {
 		boolean flag = false;
 		double muRatio = 1;
 		for (int i = 0; i < n; i++) {
-			ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat.extractMatrix(i, n, 0, 1),
-					LMat.extractMatrix(i, n, i, n), Arrays.copyOfRange(dVec, i, n), 2);
-			if (srCumul[i] >= minSR) {
+			boolean srGateFires = srCumul[i] >= minSR;
+			ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat.extractMatrix(i, n, 0, 1),
+					LMat.extractMatrix(i, n, i, n), Arrays.copyOfRange(dVec, i, n), srGateFires ? 1 : 2);
+			if (srGateFires) {
 				flag = true;
 
 			}
@@ -186,7 +188,7 @@ public class EstimatorPAR_FFRT {
 
 				Object[] stats = null;
 				if (estimateVar) {
-					stats = ComputeVariance.computeVariance(qMat_subset, 2, 0, 1 / 100.0,
+					stats = ComputeVariance.computeVariance(qMat_subset, 2, 0, GnssDataConfig.PAR_FFRT_MAX_FR,
 							(int) GnssDataConfig.nSamplesMC, null);
 				}
 //				if ((double)stats[1] == 0.0 && (double)stats[2] == 0.0) {

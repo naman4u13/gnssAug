@@ -126,7 +126,7 @@ public class EstimatorIA_FFRT {
 		}
 
 		// Compute two best solutions used for the Fixed Failure-rate Ratio Test
-		ILSResult ilsResult = new EstimatorILS().estimatorILS(aHat, lMat, dVec, 2);
+		ILSResult ilsResult = new EstimatorILS_GHAH().estimatorILS(aHat, lMat, dVec, 2);
 		SimpleMatrix aFixTemp = ilsResult.getAFix();
 		double[] sqNormTemp = ilsResult.getSqNorm();
 
